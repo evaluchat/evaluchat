@@ -1,0 +1,21 @@
+appId: com.evaluchat.canvas
+productName: Evaluchat Canvas
+electronVersion: 33.4.11
+directories:
+  output: release
+files:
+  - out/**
+asar: true
+win:
+  target:
+    - nsis
+    - portable
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity

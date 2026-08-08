@@ -124,3 +124,27 @@ jobs:
         run: yarn install --immutable
       - name: Build all packages
         run: yarn build
+
+  desktop:
+    name: Desktop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: "yarn"
+      - name: Install dependencies
+        # Electron postinstall must download the binary — do not skip-build
+        run: yarn install --immutable
+      - name: Typecheck desktop
+        run: yarn workspace @opencanvas/desktop typecheck
+      - name: Test desktop
+        run: yarn workspace @opencanvas/desktop test
+      - name: Build desktop
+        run: yarn workspace @opencanvas/desktop build
+      - name: Package desktop (dir)
+        run: yarn workspace @opencanvas/desktop package:linux --dir
