@@ -99,3 +99,10 @@ body {
   min-height: 100%;
   padding-inline: 1.5rem;
 }
+
+/* PrintView stays in the DOM for window.print(); hide on screen. */
+@media screen {
+  .print-only-host {
+    display: none;
+  }
+}
