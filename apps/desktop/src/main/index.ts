@@ -5,7 +5,10 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import { join } from "path";
+import { registerIpcHandlers } from "./ipc";
 import { isSmokeTest } from "./utils";
+import { loadWindowState, manageWindowState } from "./window-state";
+import type { WindowState } from "./window-state";
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -65,15 +68,27 @@ if (!gotTheLock) {
   }
 
   function createWindow(): void {
-    mainWindow = new BrowserWindow({
+    const defaults: WindowState = {
       width: 1280,
       height: 800,
+      isMaximized: false,
+    };
+    const stateFilePath = join(app.getPath("userData"), "window-state.json");
+    const state = loadWindowState(stateFilePath, defaults);
+
+    mainWindow = new BrowserWindow({
+      width: state.width,
+      height: state.height,
+      ...(state.x !== undefined ? { x: state.x } : {}),
+      ...(state.y !== undefined ? { y: state.y } : {}),
       webPreferences: {
         preload: join(__dirname, "../preload/index.js"),
         contextIsolation: true,
         nodeIntegration: false,
       },
     });
+
+    manageWindowState(mainWindow, stateFilePath, defaults);
 
     if (process.env.ELECTRON_RENDERER_URL) {
       void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -93,6 +108,7 @@ if (!gotTheLock) {
       return;
     }
 
+    registerIpcHandlers();
     createMenu();
     createWindow();
 

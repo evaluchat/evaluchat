@@ -1,6 +1,6 @@
 export interface ElectronAPI {
   versions: NodeJS.ProcessVersions;
-  ping: () => string;
+  ping: () => Promise<string>;
 }
 
 declare global {
