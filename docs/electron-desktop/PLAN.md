@@ -1,6 +1,6 @@
 # Evaluchat Canvas — Electron Desktop App (Long-Horizon Plan)
 
-> Branch: `feat/electron-desktop` · Repo: `evaluchat/canvas` (public OSS) · Status: **Phase 0 in progress**
+> Branch: `feat/electron-desktop` · Repo: `evaluchat/canvas` (public OSS) · Status: **AI-off MVP landed (2026-08-09); Phase 2+ pending**
 > Companion files: `PROGRESS.md` (iteration log) · `RUNBOOK.md` (exact commands for the daily cron iteration)
 
 ## Goal
@@ -32,19 +32,19 @@ Migration is incremental: Phase 0 ships a standalone shell; Phase 1 extracts the
 
 ### Phase 0 — Desktop shell (iteration target: app launches, packages)
 
-- [ ] **T0.1** Scaffold `apps/desktop`: electron-vite + React renderer, TS strict, electron-builder config (win NSIS/portable, linux AppImage/deb, mac dmg config-only), vitest smoke test, `--smoke-test` launch flag (xvfb-runnable on WSL), CI job (ubuntu + windows) building + packaging. — *in progress (2026-08-08)*
-- [ ] T0.2 Electron shell: native menu (File/Edit/View), single-instance lock, window state persistence, IPC skeleton (`versions`, placeholder `ping`), CSP in renderer.
-- [ ] T0.3 Markdown file plumbing: `dialog.showOpenDialog`/`showSaveDialog` + fs in main, IPC `file:open`/`file:save`/`file:read`, recent-files list in menu, unsaved-changes guard.
-- [ ] T0.4 Autosave + first-run window: new-document template (front-matter-free), autosave timer, dirty indicator.
+- [x] **T0.1** Scaffold `apps/desktop`: electron-vite + React renderer, TS strict, electron-builder config (win NSIS/portable, linux AppImage/deb, mac dmg config-only), vitest smoke test, `--smoke-test` launch flag (xvfb-runnable on WSL), CI job (ubuntu + windows) building + packaging. — *done 2026-08-08 (dd90d2a)*
+- [x] T0.2 Electron shell: native menu (File/Edit/View), single-instance lock, window state persistence, IPC skeleton (`versions`, placeholder `ping`), CSP in renderer. — *done 2026-08-09 (cfde9c1)*
+- [x] T0.3 Markdown file plumbing: `dialog.showOpenDialog`/`showSaveDialog` + fs in main, IPC `file:open`/`file:save`/`file:read`, recent-files list in menu, unsaved-changes guard. — *done 2026-08-09 MVP W1 (53f4962)*
+- [x] T0.4 Autosave + first-run window: new-document template (front-matter-free), autosave timer, dirty indicator. — *done 2026-08-09 MVP W3 (54dee32)*
 
 ### Phase 1 — Pure WYSIWYG Markdown editor (AI fully disabled)
 
-- [ ] T1.1 Port the BlockNote canvas: editor + formatting toolbar from `apps/web` into the renderer (strip Next-only imports: `next/image`, `next/navigation`, server actions; replace with Vite-safe equivalents). Local document state (no Supabase, no LangGraph).
-- [ ] T1.2 Mermaid rendering in the editor (port `beautiful-mermaid` integration from `apps/web`).
-- [ ] T1.3 LaTeX rendering (port `rehype-katex`/math handling; `$...$` and `$$...$$` incl. LaTeX-delimiter behavior).
-- [ ] T1.4 Raw/preview toggle + printer-friendly print view (port from `apps/web` artifacts).
-- [ ] T1.5 AI-gating architecture: settings store (electron-store or main-process JSON), `ai.enabled` flag (default **false**), chat/AI components only imported via dynamic `import()` when enabled; E2E proves zero AI network calls when disabled (Playwright Electron).
-- [ ] T1.6 E2E suite (Playwright `_electron`): new doc → type markdown → Mermaid renders → LaTeX renders → save → reopen → content identical.
+- [x] T1.1 Port the BlockNote canvas: editor + formatting toolbar from `apps/web` into the renderer (strip Next-only imports: `next/image`, `next/navigation`, server actions; replace with Vite-safe equivalents). Local document state (no Supabase, no LangGraph). — *done 2026-08-09 MVP W2 (6167e9b)*
+- [x] T1.2 Mermaid rendering in the editor (port `beautiful-mermaid` integration from `apps/web`). — *done 2026-08-09 MVP W2 (6167e9b)*
+- [x] T1.3 LaTeX rendering (port `rehype-katex`/math handling; `$...$` and `$$...$$` incl. LaTeX-delimiter behavior). — *done 2026-08-09 MVP W2 (6167e9b)*
+- [x] T1.4 Raw/preview toggle + printer-friendly print view (port from `apps/web` artifacts). — *done 2026-08-09 MVP W3 (54dee32)*
+- [ ] T1.5 AI-gating architecture: settings store (electron-store or main-process JSON), `ai.enabled` flag (default **false**), chat/AI components only imported via dynamic `import()` when enabled; E2E proves zero AI network calls when disabled (Playwright Electron). — *deferred (Phase 2+; AI absent in MVP)*
+- [ ] T1.6 E2E suite (Playwright `_electron`): new doc → type markdown → Mermaid renders → LaTeX renders → save → reopen → content identical. — *deferred (Phase 2+; MVP used FS unit round-trip + code-level Raw/Print checks)*
 
 ### Phase 2 — Opt-in BYOK AI assistant
 

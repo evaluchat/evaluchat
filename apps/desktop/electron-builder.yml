@@ -15,6 +15,11 @@ linux:
     - AppImage
     - deb
   category: Office
+  maintainer: Evaluchat <noreply@users.noreply.github.com>
+  executableName: evaluchat-canvas
+deb:
+  packageName: evaluchat-canvas
+artifactName: ${productName}-${version}-${arch}.${ext}
 mac:
   target:
     - dmg

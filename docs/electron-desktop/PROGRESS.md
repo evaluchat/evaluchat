@@ -8,12 +8,17 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 |-------|------|-------|---------------|----------|
 | 0 | T0.1 Scaffold apps/desktop | done (2026-08-08, iter 1) | dd90d2a | typecheck/test/build/smoke `SMOKE_OK`/format all exit 0 |
 | 0 | T0.2 Shell/menu/IPC | done (2026-08-09, iter 2) | cfde9c1 | typecheck 0 · test 9/9 · build 0 · smoke `SMOKE_OK` exit 0 · format:check 0 |
-| 0 | T0.3 File plumbing | pending | | |
-| 0 | T0.4 Autosave + first-run | pending | | |
-| 1 | T1.1–T1.6 Canvas extraction (AI off) | pending | | |
-| 2 | T2.1–T2.5 BYOK AI | pending | | |
-| 3 | T3.1–T3.3 Packaging/releases | pending | | |
-| 4 | T4.1–T4.3 OSS identity | pending | | |
+| 0 | T0.3 File plumbing | done (2026-08-09, MVP W1) | 53f4962 | IPC open/save/saveAs/recent + unsaved close guard; covered by desktop gate |
+| 0 | T0.4 Autosave + first-run | done (2026-08-09, MVP W3) | 54dee32 | Untitled first-run + dirty indicator + 2s path autosave in DocumentStore |
+| 1 | T1.1 BlockNote canvas port | done (2026-08-09, MVP W2) | 6167e9b | DocumentEditor + schema/toolbar (no GraphContext/AI) |
+| 1 | T1.2 Mermaid rendering | done (2026-08-09, MVP W2) | 6167e9b | MermaidBlock + mermaid-markdown helpers/tests |
+| 1 | T1.3 LaTeX rendering | done (2026-08-09, MVP W2) | 6167e9b | math-markdown + MathInlineExtension + KaTeX |
+| 1 | T1.4 Raw toggle + PrintView | done (2026-08-09, MVP W3) | 54dee32 | App Raw mode + PrintView host; Print via `window.print` |
+| 1 | T1.5 AI-gating architecture | deferred (Phase 2+) | | Out of MVP scope — AI stays off/absent |
+| 1 | T1.6 Playwright E2E suite | deferred (Phase 2+) | | FS round-trip unit test + code-level Raw/Print checks for MVP; GUI E2E later |
+| 2 | T2.1–T2.5 BYOK AI | pending (deferred) | | |
+| 3 | T3.1–T3.3 Packaging/releases | pending (deferred) | | Linux AppImage/deb/unpacked verified in MVP gate; icons/auto-update/release later |
+| 4 | T4.1–T4.3 OSS identity | pending (deferred) | | |
 
 ## Log
 
@@ -35,3 +40,20 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 - Verified (real output): typecheck exit 0 · `Test Files 2 passed (2) / Tests 9 passed (9)` · build exit 0 (out/main 6.07 kB + preload + renderer) · smoke `SMOKE_OK` exit 0 (xvfb) · format:check 0.
 - Shipped: cfde9c1 (feat) + ff7d7c4 (docs screenshot) (pushed).
 - Next: T0.3 file plumbing — `dialog.showOpenDialog`/`showSaveDialog` + fs in main, IPC `file:open`/`file:save`/`file:read`, recent-files menu list, unsaved-changes guard.
+
+### 2026-08-09 — intensive MVP sprint (W1–W4) ✅
+- Collapsed remaining Phase 0–1 editor MVP into four workstreams (AI out of scope; no `apps/web` edits; no shared-package extraction).
+- **W1** `53f4962` — file IPC (`file:open`/`save`/`saveAs`/`openPath`), recent-files.json, File menu accelerators, unsaved close/discard guard.
+- **W2** `6167e9b` — BlockNote DocumentEditor port (schema, Mermaid, math/KaTeX, toolbar, PrintView leaves) without GraphContext/AI.
+- **W3** `54dee32` — DocumentStore + App shell (dirty indicator, path title, Raw toggle, Print, menu/electronAPI wiring, path autosave).
+- **W4** MVP gate (this entry) — verification + packaging metadata fix (`author`/`homepage`/`maintainer`, deb `packageName`/`artifactName` so scoped npm name does not break fpm paths) + `file-ops` Mermaid/LaTeX save→reopen unit test.
+- Verified (real output, repo root):
+  - `yarn workspace @opencanvas/desktop typecheck` → exit 0
+  - `yarn workspace @opencanvas/desktop test` → 8 files / 35 tests passed, exit 0
+  - `yarn workspace @opencanvas/desktop build` → exit 0 (`out/main` + preload + renderer)
+  - `yarn workspace @opencanvas/desktop smoke` → `SMOKE_OK`, exit 0
+  - `yarn workspace @opencanvas/desktop package:linux` → exit 0
+- Package artifacts: `apps/desktop/release/linux-unpacked/`, `apps/desktop/release/Evaluchat Canvas-0.1.0-x86_64.AppImage`, `apps/desktop/release/Evaluchat Canvas-0.1.0-amd64.deb`
+- Functional: FS write/read round-trip preserves Mermaid fence + `$`/`$$` LaTeX sample; App code has Raw toggle + PrintView (GUI automation under xvfb deferred with T1.6).
+- Deferred: T1.5–T1.6, Phase 2 BYOK AI, Phase 3 polish (icons/auto-update/tagged release), Phase 4 OSS identity.
+- Next: resume long-horizon plan at T1.5 / Phase 2+ when ready; daily cron can resume.
