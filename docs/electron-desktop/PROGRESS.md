@@ -7,7 +7,7 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 | Phase | Task | State | Shipped (sha) | Verified |
 |-------|------|-------|---------------|----------|
 | 0 | T0.1 Scaffold apps/desktop | done (2026-08-08, iter 1) | dd90d2a | typecheck/test/build/smoke `SMOKE_OK`/format all exit 0 |
-| 0 | T0.2 Shell/menu/IPC | pending | | |
+| 0 | T0.2 Shell/menu/IPC | in progress (2026-08-09, iter 2) | | |
 | 0 | T0.3 File plumbing | pending | | |
 | 0 | T0.4 Autosave + first-run | pending | | |
 | 1 | T1.1–T1.6 Canvas extraction (AI off) | pending | | |
