@@ -4,25 +4,36 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 
 ## Status
 
-| Phase | Task | State | Shipped (sha) | Verified |
-|-------|------|-------|---------------|----------|
-| 0 | T0.1 Scaffold apps/desktop | done (2026-08-08, iter 1) | dd90d2a | typecheck/test/build/smoke `SMOKE_OK`/format all exit 0 |
-| 0 | T0.2 Shell/menu/IPC | done (2026-08-09, iter 2) | cfde9c1 | typecheck 0 · test 9/9 · build 0 · smoke `SMOKE_OK` exit 0 · format:check 0 |
-| 0 | T0.3 File plumbing | done (2026-08-09, MVP W1) | 53f4962 | IPC open/save/saveAs/recent + unsaved close guard; covered by desktop gate |
-| 0 | T0.4 Autosave + first-run | done (2026-08-09, MVP W3) | 54dee32 | Untitled first-run + dirty indicator + 2s path autosave in DocumentStore |
-| 1 | T1.1 BlockNote canvas port | done (2026-08-09, MVP W2) | 6167e9b | DocumentEditor + schema/toolbar (no GraphContext/AI) |
-| 1 | T1.2 Mermaid rendering | done (2026-08-09, MVP W2) | 6167e9b | MermaidBlock + mermaid-markdown helpers/tests |
-| 1 | T1.3 LaTeX rendering | done (2026-08-09, MVP W2) | 6167e9b | math-markdown + MathInlineExtension + KaTeX |
-| 1 | T1.4 Raw toggle + PrintView | done (2026-08-09, MVP W3) | 54dee32 | App Raw mode + PrintView host; Print via `window.print` |
-| 1 | T1.5 AI-gating architecture | deferred (Phase 2+) | | Out of MVP scope — AI stays off/absent |
-| 1 | T1.6 Playwright E2E suite | deferred (Phase 2+) | | FS round-trip unit test + code-level Raw/Print checks for MVP; GUI E2E later |
-| 2 | T2.1–T2.5 BYOK AI | pending (deferred) | | |
-| 3 | T3.1–T3.3 Packaging/releases | pending (deferred) | | Linux AppImage/deb/unpacked verified in MVP gate; icons/auto-update/release later |
-| 4 | T4.1–T4.3 OSS identity | pending (deferred) | | |
+
+| Phase | Task                                 | State                     | Shipped (sha) | Verified                                                                    |
+| ----- | ------------------------------------ | ------------------------- | ------------- | --------------------------------------------------------------------------- |
+| 0     | T0.1 Scaffold apps/desktop           | done (2026-08-08, iter 1) | dd90d2a       | typecheck/test/build/smoke `SMOKE_OK`/format all exit 0                     |
+| 0     | T0.2 Shell/menu/IPC                  | done (2026-08-09, iter 2) | cfde9c1       | typecheck 0 · test 9/9 · build 0 · smoke `SMOKE_OK` exit 0 · format:check 0 |
+| 0     | T0.3 File plumbing                   | done (2026-08-09, MVP W1) | 53f4962       | IPC open/save/saveAs/recent + unsaved close guard; covered by desktop gate  |
+| 0     | T0.4 Autosave + first-run            | done (2026-08-09, MVP W3) | 54dee32       | Untitled first-run + dirty indicator + 2s path autosave in DocumentStore    |
+| 1     | T1.1 BlockNote canvas port           | done (2026-08-09, MVP W2) | 6167e9b       | DocumentEditor + schema/toolbar (no GraphContext/AI)                        |
+| 1     | T1.2 Mermaid rendering               | done (2026-08-09, MVP W2) | 6167e9b       | MermaidBlock + mermaid-markdown helpers/tests                               |
+| 1     | T1.3 LaTeX rendering                 | done (2026-08-09, MVP W2) | 6167e9b       | math-markdown + MathInlineExtension + KaTeX                                 |
+| 1     | T1.4 Raw toggle + PrintView          | done (2026-08-09, MVP W3) | 54dee32       | App Raw mode + PrintView host; Print via `window.print`                     |
+| 1     | T1.5 AI-gating architecture          | pending (after T3.1a)     |               | Gate for Phase 2 — keep AI absent until then                                |
+| 1     | T1.6 Playwright E2E suite            | pending (after T3.1a)     |               | MVP used FS unit round-trip; GUI E2E next after Win packaging               |
+| 2     | T2.1–T2.5 BYOK AI                    | pending                   |               | Starts after T1.5                                                           |
+| 3     | T3.1a Win host packaging path        | in progress (2026-08-09)  | (uncommitted) | `win dir` from WSL; host run at `C:\Users\Public\EvaluchatCanvas`; see log  |
+| 3     | T3.1b Icons + CI win/linux artifacts | pending                   |               | Next packaging slice after T3.1a lands                                      |
+| 3     | T3.2 Auto-update                     | pending                   |               |                                                                             |
+| 3     | T3.3 Tagged v0.1.0 release           | pending                   |               | After T3.1b                                                                 |
+| 4     | T4.1–T4.3 OSS identity               | pending                   |               | After first tagged release                                                  |
+
+
+**MVP (AI-off WYSIWYG):** done 2026-08-09 — Phase 0 + T1.1–T1.4.  
+**Next:** finish **T3.1a** (commit Win packaging/runbook/launcher), then **T3.1b** (icons + CI artifacts), then **T1.6** E2E, then **T1.5 → Phase 2** BYOK.
 
 ## Log
 
+
+
 ### 2026-08-08 — iter 1 (T0.1 scaffold) ✅
+
 - Branch `feat/electron-desktop` created from `origin/main` (841159b).
 - Plan/progress/runbook committed (0d1474a).
 - Cursor Agent scaffolded `apps/desktop`: electron-vite + React + TS strict, electron-builder (win NSIS/portable, linux AppImage/deb, mac dmg config), vitest (`isSmokeTest`), `--smoke-test` launch flag, CI `desktop` job (ubuntu: typecheck→test→build→package:linux --dir), electron pinned 33.4.11 (hoisting fix).
@@ -30,7 +41,10 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 - Shipped: dd90d2a (pushed).
 - Next: T0.2 native shell (menu, single-instance already in scaffold — extend: window-state persistence, IPC skeleton).
 
+
+
 ### 2026-08-09 — iter 2 (T0.2 shell/menu/IPC) ✅
+
 - Sync: merged `origin/main` (c90e1ec track-changes UI #10) — yarn.lock-only conflict resolved (theirs + yarn install), merge commit 8000901.
 - Cursor Agent (cursor-grok-4.5-high; sonnet-4/codex/gpt-5.2 blocked by monthly usage limit) implemented:
   - `src/main/window-state.ts`: `validateWindowState`/`loadWindowState`/`saveWindowState` (atomic tmp+rename, silent fs errors) + `manageWindowState` (debounced 500ms resize/move save, maximize flag, flush on close, `getNormalBounds`), type-only electron import.
@@ -41,12 +55,15 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 - Shipped: cfde9c1 (feat) + ff7d7c4 (docs screenshot) (pushed).
 - Next: T0.3 file plumbing — `dialog.showOpenDialog`/`showSaveDialog` + fs in main, IPC `file:open`/`file:save`/`file:read`, recent-files menu list, unsaved-changes guard.
 
+
+
 ### 2026-08-09 — intensive MVP sprint (W1–W4) ✅
+
 - Collapsed remaining Phase 0–1 editor MVP into four workstreams (AI out of scope; no `apps/web` edits; no shared-package extraction).
 - **W1** `53f4962` — file IPC (`file:open`/`save`/`saveAs`/`openPath`), recent-files.json, File menu accelerators, unsaved close/discard guard.
 - **W2** `6167e9b` — BlockNote DocumentEditor port (schema, Mermaid, math/KaTeX, toolbar, PrintView leaves) without GraphContext/AI.
 - **W3** `54dee32` — DocumentStore + App shell (dirty indicator, path title, Raw toggle, Print, menu/electronAPI wiring, path autosave).
-- **W4** MVP gate (this entry) — verification + packaging metadata fix (`author`/`homepage`/`maintainer`, deb `packageName`/`artifactName` so scoped npm name does not break fpm paths) + `file-ops` Mermaid/LaTeX save→reopen unit test.
+- **W4** MVP gate — verification + packaging metadata fix (`author`/`homepage`/`maintainer`, deb `packageName`/`artifactName` so scoped npm name does not break fpm paths) + `file-ops` Mermaid/LaTeX save→reopen unit test.
 - Verified (real output, repo root):
   - `yarn workspace @opencanvas/desktop typecheck` → exit 0
   - `yarn workspace @opencanvas/desktop test` → 8 files / 35 tests passed, exit 0
@@ -55,5 +72,20 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
   - `yarn workspace @opencanvas/desktop package:linux` → exit 0
 - Package artifacts: `apps/desktop/release/linux-unpacked/`, `apps/desktop/release/Evaluchat Canvas-0.1.0-x86_64.AppImage`, `apps/desktop/release/Evaluchat Canvas-0.1.0-amd64.deb`
 - Functional: FS write/read round-trip preserves Mermaid fence + `$`/`$$` LaTeX sample; App code has Raw toggle + PrintView (GUI automation under xvfb deferred with T1.6).
-- Deferred: T1.5–T1.6, Phase 2 BYOK AI, Phase 3 polish (icons/auto-update/tagged release), Phase 4 OSS identity.
-- Next: resume long-horizon plan at T1.5 / Phase 2+ when ready; daily cron can resume.
+- Shipped docs gate: `68a885d`.
+- Next (at time): T1.5 / Phase 2+ — **superseded** by Windows-host packaging priority below.
+
+
+
+### 2026-08-09 — Windows host run (T3.1a, in progress)
+
+- Problem: Linux AppImage/deb do not run on the Windows host; WSL `package:win` without Wine failed on code-sign/rcedit; launching from IDE/agent shells exited immediately with `bad option: --…`.
+- Root causes + fixes:
+  - Cross-build: `CSC_IDENTITY_AUTO_DISCOVERY=false` + `win.signAndEditExecutable: false` → `electron-builder --win dir --x64` produces `release/win-unpacked/`.
+  - Host path: copy unpacked tree to a **native** Windows directory (e.g. `C:\Users\Public\EvaluchatCanvas`) — do not launch from `\\wsl$\…`.
+  - Env trap: unset `ELECTRON_RUN_AS_NODE` (set by some IDE/agent terminals) or use `apps/desktop/scripts/Launch Canvas.cmd`.
+- Verified: Windows process stays up with main window title `Untitled — Evaluchat Canvas`.
+- Working tree (not yet committed): `electron-builder.yml` (win `dir`/`portable` + `signAndEditExecutable: false`), `package.json` `package:win` env, `RUNBOOK.md` §0b, `scripts/Launch Canvas.cmd`.
+- **Caveat:** electron-builder can strip `scripts`/`devDependencies` from `apps/desktop/package.json` during pack — restore from git if that happens before committing.
+- Next: commit T3.1a → T3.1b icons + CI win/linux artifacts → T1.6 Playwright E2E → T1.5 / Phase 2 BYOK.
+

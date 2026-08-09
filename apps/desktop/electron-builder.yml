@@ -7,8 +7,10 @@ files:
   - out/**
 asar: true
 win:
+  # Cross-builds from Linux/WSL cannot sign/rcedit without Wine.
+  signAndEditExecutable: false
   target:
-    - nsis
+    - dir
     - portable
 linux:
   target:

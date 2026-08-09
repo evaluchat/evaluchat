@@ -1,6 +1,6 @@
 # Evaluchat Canvas — Electron Desktop App (Long-Horizon Plan)
 
-> Branch: `feat/electron-desktop` · Repo: `evaluchat/canvas` (public OSS) · Status: **AI-off MVP landed (2026-08-09); Phase 2+ pending**
+> Branch: `feat/electron-desktop` · Repo: `evaluchat/canvas` (public OSS) · Status: **AI-off MVP landed (2026-08-09); next = Windows packaging path (T3.1a→T3.1b), then E2E, then BYOK**
 > Companion files: `PROGRESS.md` (iteration log) · `RUNBOOK.md` (exact commands for the daily cron iteration)
 
 ## Goal
@@ -28,7 +28,27 @@ Rejected: wrapping the Next.js app (heavy runtime, auth gate, AI tied to LangGra
 
 Migration is incremental: Phase 0 ships a standalone shell; Phase 1 extracts the canvas with AI fully off; Phase 2 adds the opt-in BYOK AI layer.
 
-## Phases & tasks (each task = one cron iteration, see RUNBOOK.md)
+**MVP extraction note (2026-08-09):** Phase 1 shipped as a **copy/port into `apps/desktop`** (no `packages/canvas-editor`, no `apps/web` edits). Shared-package extraction remains optional post-MVP cleanup, not a gate for BYOK or packaging.
+
+## What's next (priority order)
+
+Do **not** resume daily cron on T1.5 first — packaging/host-run is the bottleneck for a usable Win+Linux product.
+
+1. **T3.1a — Windows host packaging path (current)**  
+   Commit/stabilize: `win.signAndEditExecutable: false`, `package:win`, `RUNBOOK.md` §0b, `Launch Canvas.cmd`. Document: build `win dir` from WSL → copy to native `C:\…` path → launch with `ELECTRON_RUN_AS_NODE` unset. Guard against electron-builder stripping `apps/desktop/package.json` scripts during pack.
+
+2. **T3.1b — Icons + CI artifacts**  
+   App icons; CI produces linux AppImage/deb **and** windows unpacked/portable (or NSIS once Wine/signing story is settled); keep metadata already fixed for deb/fpm.
+
+3. **T1.6 — Playwright Electron E2E**  
+   new → edit (Mermaid + LaTeX) → save → reopen identity; Raw + Print smoke. Replaces “deferred GUI E2E” from MVP.
+
+4. **T1.5 → Phase 2 (T2.1–T2.5) — AI gating + BYOK**  
+   Settings/`ai.enabled` (default false), dynamic import of AI UI, `safeStorage` keys, OpenAI-compatible streaming, track-changes accept/reject, stubbed SSE E2E.
+
+5. **T3.2–T3.3 → Phase 4** — auto-update, tagged v0.1.0, OSS README/samples/measurement.
+
+## Phases & tasks (cron may still take one task per run; prefer the order above)
 
 ### Phase 0 — Desktop shell (iteration target: app launches, packages)
 
@@ -43,8 +63,8 @@ Migration is incremental: Phase 0 ships a standalone shell; Phase 1 extracts the
 - [x] T1.2 Mermaid rendering in the editor (port `beautiful-mermaid` integration from `apps/web`). — *done 2026-08-09 MVP W2 (6167e9b)*
 - [x] T1.3 LaTeX rendering (port `rehype-katex`/math handling; `$...$` and `$$...$$` incl. LaTeX-delimiter behavior). — *done 2026-08-09 MVP W2 (6167e9b)*
 - [x] T1.4 Raw/preview toggle + printer-friendly print view (port from `apps/web` artifacts). — *done 2026-08-09 MVP W3 (54dee32)*
-- [ ] T1.5 AI-gating architecture: settings store (electron-store or main-process JSON), `ai.enabled` flag (default **false**), chat/AI components only imported via dynamic `import()` when enabled; E2E proves zero AI network calls when disabled (Playwright Electron). — *deferred (Phase 2+; AI absent in MVP)*
-- [ ] T1.6 E2E suite (Playwright `_electron`): new doc → type markdown → Mermaid renders → LaTeX renders → save → reopen → content identical. — *deferred (Phase 2+; MVP used FS unit round-trip + code-level Raw/Print checks)*
+- [ ] T1.5 AI-gating architecture: settings store (electron-store or main-process JSON), `ai.enabled` flag (default **false**), chat/AI components only imported via dynamic `import()` when enabled; E2E proves zero AI network calls when disabled (Playwright Electron). — *after T3.1a/b + T1.6*
+- [ ] T1.6 E2E suite (Playwright `_electron`): new doc → type markdown → Mermaid renders → LaTeX renders → save → reopen → content identical. — *next after T3.1b*
 
 ### Phase 2 — Opt-in BYOK AI assistant
 
@@ -56,7 +76,8 @@ Migration is incremental: Phase 0 ships a standalone shell; Phase 1 extracts the
 
 ### Phase 3 — Packaging & distribution
 
-- [ ] T3.1 electron-builder polish: icons, product metadata, NSIS (win) + AppImage/deb (linux) verified via CI artifacts; dmg config present (untested).
+- [ ] **T3.1a** Windows host packaging path: WSL cross-build `win dir` without Wine (`signAndEditExecutable: false`), native `C:\` install copy, `Launch Canvas.cmd` clearing `ELECTRON_RUN_AS_NODE`, RUNBOOK §0b. — *in progress 2026-08-09 (working tree)*
+- [ ] **T3.1b** electron-builder polish: icons, CI artifacts for linux AppImage/deb + windows unpacked/portable (NSIS when signing/Wine available); dmg config present (untested).
 - [ ] T3.2 Auto-update via GitHub Releases (electron-updater), signed later; manual "Check for updates".
 - [ ] T3.3 First tagged release (v0.1.0) with installers + release notes.
 
@@ -69,7 +90,8 @@ Migration is incremental: Phase 0 ships a standalone shell; Phase 1 extracts the
 ## Non-goals (for now)
 
 - No Evaluchat Essays/SaaS features, no LangGraph in the desktop app, no cloud sync, no telemetry without consent, no mobile.
+- No shared `packages/canvas-editor` extraction until after Win+Linux packaging + E2E (optional cleanup).
 
 ## Iteration cadence
 
-Daily cron (`evaluchat canvas desktop iteration`, 07:00 UTC+2): pull `origin/main` → merge into `feat/electron-desktop` → execute next task via Cursor Agent → verify → commit/push → update `PROGRESS.md`. Full protocol: `RUNBOOK.md`.
+Daily cron (`evaluchat canvas desktop iteration`, 07:00 UTC+2): pull `origin/main` → merge into `feat/electron-desktop` → execute **next task from “What's next”** (not merely the first unchecked box out of order) via Cursor Agent → verify → commit/push → update `PROGRESS.md`. Full protocol: `RUNBOOK.md`.

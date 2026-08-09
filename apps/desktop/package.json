@@ -13,7 +13,7 @@
     "test": "vitest run",
     "smoke": "xvfb-run -a electron out/main/index.js --smoke-test",
     "package:linux": "electron-builder --linux",
-    "package:win": "electron-builder --win",
+    "package:win": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
     "format": "prettier --config .prettierrc --write \"src\" \"*.ts\" \"*.yml\"",
     "format:check": "prettier --config .prettierrc --check \"src\" \"*.ts\" \"*.yml\""
   },

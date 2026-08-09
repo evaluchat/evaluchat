@@ -12,6 +12,22 @@ Orchestrator-only: **you never edit source files — Cursor Agent does.** You ve
 - Cursor Agent CLI: `agent` (auth at `~/.config/cursor/auth.json`; if it reports authentication required → **report and stop**, do not re-login).
 - Git auth: credential store (works headless).
 
+## 0b. Run on the Windows host (WSL2)
+
+Linux AppImage/deb **will not** run on Windows. Build a Windows tree from WSL (no Wine needed for `dir` target):
+
+```bash
+cd /home/cronjev/canvas-public/apps/desktop
+yarn build
+CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win dir --x64
+```
+
+Copy `apps/desktop/release/win-unpacked/` to a **native Windows path** (not `\\wsl$\\...`), e.g. `C:\Users\Public\EvaluchatCanvas`, then double-click `Evaluchat Canvas.exe` **or** `scripts/Launch Canvas.cmd` (clears `ELECTRON_RUN_AS_NODE`).
+
+If the window never appears and the process exits immediately with `bad option: --…`, the shell inherited `ELECTRON_RUN_AS_NODE=1` (common in IDE/agent terminals). Unset it before launch, or use the `.cmd` launcher from Explorer.
+
+Dev from WSL with WSLg: `yarn workspace @opencanvas/desktop dev` (needs a working `DISPLAY`).
+
 ## 1. Sync with main
 
 ```bash
