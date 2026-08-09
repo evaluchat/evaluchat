@@ -14,7 +14,7 @@ import MathInlineExtension from "./MathInlineExtension";
 import { isArtifactMarkdownContent } from "@opencanvas/shared/utils/artifacts";
 import { CopyText } from "./components/CopyText";
 import { getArtifactContent } from "@opencanvas/shared/utils/artifacts";
-import { useGraphContext } from "@/contexts/GraphContext";
+import { useGraphContext, PendingEditState } from "@/contexts/GraphContext";
 import React from "react";
 import { TooltipIconButton } from "../ui/assistant-ui/tooltip-icon-button";
 import { Eye, EyeOff } from "lucide-react";
@@ -22,6 +22,12 @@ import { motion } from "framer-motion";
 import { Textarea } from "../ui/textarea";
 import { cn } from "@/lib/utils";
 import { canvasSchema } from "./canvas-schema";
+import TrackChangesExtension, {
+  setTrackChangesRanges,
+  clearTrackChangesRanges,
+} from "./TrackChangesExtension";
+import { EditActionBar } from "./EditActionBar";
+import { computeDiffRanges } from "@/lib/diffing";
 
 import "katex/dist/katex.min.css";
 import {
@@ -32,6 +38,9 @@ import {
 const cleanText = (text: string) => {
   return text.replaceAll("\\\n", "\n");
 };
+
+// Suppresses onChange while an undo restores the pre-edit document.
+let bnSuppressOnChange = false;
 
 /**
  * Checks whether a single cell in a table row is "empty" — i.e. contains no
@@ -124,7 +133,7 @@ export function TextRendererComponent(props: TextRendererProps) {
   const editor = useCreateBlockNote({
     schema: canvasSchema,
     _tiptapOptions: {
-      extensions: [MathInlineExtension],
+      extensions: [TrackChangesExtension, MathInlineExtension],
     },
   });
   const { graphData } = useGraphContext();
@@ -136,6 +145,9 @@ export function TextRendererComponent(props: TextRendererProps) {
     setArtifact,
     setSelectedBlocks,
     setUpdateRenderedArtifactRequired,
+    pendingEdit,
+    setPendingEdit,
+    setEditorTextContent,
   } = graphData;
 
   const [rawMarkdown, setRawMarkdown] = useState("");
@@ -217,6 +229,20 @@ export function TextRendererComponent(props: TextRendererProps) {
           editor.document,
           filterEmptyTableRows(markdownAsBlocks)
         );
+        setEditorTextContent(editor._tiptapEditor.state.doc.textContent);
+
+        if (pendingEdit?.isActive && pendingEdit.preEditText) {
+          const postEditText = editor._tiptapEditor.state.doc.textContent;
+          const ranges = computeDiffRanges(
+            pendingEdit.preEditText,
+            postEditText
+          );
+          if (ranges.length > 0) {
+            setPendingEdit((prev: PendingEditState | null) =>
+              prev ? { ...prev, diffRanges: ranges } : null
+            );
+          }
+        }
         setUpdateRenderedArtifactRequired(false);
         setManuallyUpdatingArtifact(false);
       })();
@@ -235,6 +261,47 @@ export function TextRendererComponent(props: TextRendererProps) {
       setManuallyUpdatingArtifact(false);
     };
   }, [artifact, updateRenderedArtifactRequired]);
+
+  const refreshTrackChangeDecorations = () => {
+    const view = editor._tiptapEditor?.view;
+    if (!view) return;
+    view.dispatch(view.state.tr);
+  };
+
+  useEffect(() => {
+    if (pendingEdit?.isActive && pendingEdit.diffRanges.length > 0) {
+      setTrackChangesRanges(pendingEdit.diffRanges);
+    } else {
+      clearTrackChangesRanges();
+    }
+    refreshTrackChangeDecorations();
+  }, [pendingEdit, editor]);
+
+  const handleKeep = () => {
+    clearTrackChangesRanges();
+    refreshTrackChangeDecorations();
+    setPendingEdit(null);
+  };
+
+  const handleUndo = async () => {
+    if (!editor || !pendingEdit) return;
+    clearTrackChangesRanges();
+    refreshTrackChangeDecorations();
+
+    // Restore pre-edit markdown
+    bnSuppressOnChange = true;
+    try {
+      const blocks = await parseMarkdownToCanvasBlocks(
+        editor,
+        pendingEdit.preEditMarkdown
+      );
+      const cleanedBlocks = filterEmptyTableRows(blocks);
+      editor.replaceBlocks(editor.document, cleanedBlocks);
+    } finally {
+      bnSuppressOnChange = false;
+      setPendingEdit(null);
+    }
+  };
 
   useEffect(() => {
     if (isRawView) {
@@ -264,10 +331,14 @@ export function TextRendererComponent(props: TextRendererProps) {
   const isComposition = useRef(false);
 
   const onChange = async () => {
+    // Always keep the editor text ref current regardless of streaming/update state
+    setEditorTextContent(editor._tiptapEditor.state.doc.textContent);
+
     if (
       isStreaming ||
       manuallyUpdatingArtifact ||
-      updateRenderedArtifactRequired
+      updateRenderedArtifactRequired ||
+      bnSuppressOnChange
     )
       return;
 
@@ -340,6 +411,11 @@ export function TextRendererComponent(props: TextRendererProps) {
 
   return (
     <div className="w-full h-full mt-2 flex flex-col border-t-[1px] border-gray-200 overflow-y-auto py-5 relative">
+      <EditActionBar
+        isActive={pendingEdit?.isActive ?? false}
+        onKeep={handleKeep}
+        onUndo={handleUndo}
+      />
       {props.isHovering && artifact && (
         <div className="absolute flex gap-2 top-2 right-4 z-10">
           <CopyText currentArtifactContent={getArtifactContent(artifact)} />
@@ -377,7 +453,8 @@ export function TextRendererComponent(props: TextRendererProps) {
             onCompositionEndCapture={() => (isComposition.current = false)}
             onChange={onChange}
             editable={
-              !isStreaming || props.isEditing || !manuallyUpdatingArtifact
+              (!isStreaming || props.isEditing || !manuallyUpdatingArtifact) &&
+              !pendingEdit?.isActive
             }
             editor={editor}
             className={cn(
