@@ -26,5 +26,17 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, "src/renderer"),
     plugins: [react()],
+    css: {
+      postcss: resolve(__dirname, "postcss.config.js"),
+    },
+    optimizeDeps: {
+      include: [
+        "@blocknote/core",
+        "@blocknote/react",
+        "@blocknote/shadcn",
+        "katex",
+        "beautiful-mermaid",
+      ],
+    },
   },
 });
