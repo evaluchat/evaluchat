@@ -7,6 +7,7 @@ import {
 } from "@opencanvas/shared/utils/artifacts";
 import { reverseCleanContent } from "@/lib/normalize_string";
 import {
+  ArtifactMarkdownV3,
   ArtifactType,
   ArtifactV3,
   CustomModelConfig,
@@ -62,6 +63,14 @@ import { useThreadContext } from "./ThreadProvider";
 import { useAssistantContext } from "./AssistantContext";
 import { StreamWorkerService } from "@/workers/graph-stream/streamWorker";
 import { useQueryState } from "nuqs";
+import type { DiffRange } from "@/lib/diffing";
+
+export interface PendingEditState {
+  isActive: boolean;
+  preEditMarkdown: string;
+  preEditText: string;
+  diffRanges: DiffRange[];
+}
 
 interface GraphData {
   runId: string | undefined;
@@ -90,6 +99,9 @@ interface GraphData {
   clearState: () => void;
   switchSelectedThread: (thread: Thread) => void;
   setUpdateRenderedArtifactRequired: Dispatch<SetStateAction<boolean>>;
+  pendingEdit: PendingEditState | null;
+  setPendingEdit: Dispatch<SetStateAction<PendingEditState | null>>;
+  setEditorTextContent: (text: string) => void;
 }
 
 type GraphContentType = {
@@ -127,6 +139,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [updateRenderedArtifactRequired, setUpdateRenderedArtifactRequired] =
     useState(false);
   const lastSavedArtifact = useRef<ArtifactV3 | undefined>(undefined);
+  const artifactRef = useRef<ArtifactV3 | undefined>(undefined);
+  const editorTextContentRef = useRef<string>("");
+  const [pendingEdit, setPendingEdit] = useState<PendingEditState | null>(null);
   const debouncedAPIUpdate = useRef(
     debounce(
       (artifact: ArtifactV3, threadId: string) =>
@@ -159,6 +174,12 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       assistantsData.getOrCreateAssistant(userData.user.id);
     }
   }, [userData.user]);
+
+  // Keep artifactRef in sync so async closures (streamMessageV2) can
+  // read the latest artifact after a stream finishes.
+  useEffect(() => {
+    artifactRef.current = artifact;
+  }, [artifact]);
 
   // Very hacky way of ensuring updateState is not called when a thread is switched
   useEffect(() => {
@@ -264,6 +285,10 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     setFirstTokenReceived(true);
   };
 
+  const setEditorTextContent = (text: string) => {
+    editorTextContentRef.current = text;
+  };
+
   const streamMessageV2 = async (params: GraphInput) => {
     setFirstTokenReceived(false);
     setError(false);
@@ -337,6 +362,18 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
+
+    // Snapshot pre-edit state for track changes
+    const preEditMarkdown =
+      artifact?.contents.find((c) => c.index === artifact.currentIndex)
+        ?.type === "text"
+        ? (
+            artifact.contents.find(
+              (c) => c.index === artifact.currentIndex
+            ) as ArtifactMarkdownV3
+          ).fullMarkdown
+        : "";
+    const preEditText = editorTextContentRef.current;
 
     setIsStreaming(true);
     setRunId(undefined);
@@ -1257,6 +1294,40 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     } finally {
       setSelectedBlocks(undefined);
       setIsStreaming(false);
+
+      // Store pendingEdit with pre-edit snapshots, defer diff computation to TextRenderer
+      try {
+        const latestArtifact = artifactRef.current;
+        const postEditMarkdown =
+          latestArtifact?.contents.find(
+            (c) => c.index === latestArtifact.currentIndex
+          )?.type === "text"
+            ? (
+                latestArtifact.contents.find(
+                  (c) => c.index === latestArtifact.currentIndex
+                ) as ArtifactMarkdownV3
+              ).fullMarkdown
+            : "";
+
+        if (
+          preEditMarkdown &&
+          postEditMarkdown &&
+          preEditMarkdown !== postEditMarkdown
+        ) {
+          setUpdateRenderedArtifactRequired(true);
+
+          if (preEditText) {
+            setPendingEdit({
+              isActive: true,
+              preEditMarkdown,
+              preEditText,
+              diffRanges: [],
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[track-changes] Failed to compute diff:", e);
+      }
     }
 
     if (runId) {
@@ -1441,6 +1512,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       clearState,
       switchSelectedThread,
       setUpdateRenderedArtifactRequired,
+      pendingEdit,
+      setPendingEdit,
+      setEditorTextContent,
     },
   };
 
