@@ -12,8 +12,7 @@ Evaluchat Canvas is an independent, open-source continuation of
 grateful for the original project — see [Acknowledgments](#acknowledgments).
 
 Try the hosted version at [evaluchat.com](https://evaluchat.com), or run it yourself
-(local or self-hosted — see [Setup locally](#setup-locally)). A desktop app
-(Electron) is in development under [`apps/desktop`](apps/desktop).
+(local or self-hosted — see [Setup locally](#setup-locally)).
 
 ## Features
 
@@ -26,16 +25,14 @@ Try the hosted version at [evaluchat.com](https://evaluchat.com), or run it your
 - **Custom & pre-built quick actions** — one-click prompts for common writing and coding tasks
 - **Code, Markdown, or both** — switch between code and markdown artifacts in the same session
 - **Printer-friendly export / PDF** — clean output styling for print and PDF
-- **Desktop app (in development)** — Electron shell in `apps/desktop`
 
 ## Repo layout
 
-| Path | What it is |
-|---|---|
-| `apps/web` | Next.js web app (UI + API routes) — `@opencanvas/web` |
-| `apps/agents` | LangGraph agent graphs (generation, reflection, routing) — `@opencanvas/agents` |
-| `apps/desktop` | Electron desktop app (in development) — `@opencanvas/desktop` |
-| `packages/shared` | Shared types and utilities — `@opencanvas/shared` |
+| Path              | What it is                                                                      |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `apps/web`        | Next.js web app (UI + API routes) — `@opencanvas/web`                           |
+| `apps/agents`     | LangGraph agent graphs (generation, reflection, routing) — `@opencanvas/agents` |
+| `packages/shared` | Shared types and utilities — `@opencanvas/shared`                               |
 
 ## Setup locally
 
@@ -71,13 +68,6 @@ yarn workspace @opencanvas/web dev
 ```
 
 Open http://localhost:3000.
-
-### Desktop app (optional)
-
-```bash
-cd apps/desktop
-yarn dev
-```
 
 ## Checks
 

@@ -19,9 +19,10 @@ cd canvas
 yarn install
 ```
 
-Environment: copy `.env.example` → `.env` (root, for the LangGraph agents) and
-`apps/web/.env.example` → `apps/web/.env` (for the web app: Supabase keys for
-auth/persistence plus at least one model provider key). See the README for details.
+Environment: copy `.env.example` → `.env` (root — model provider keys, loaded by
+the LangGraph agents) and `apps/web/.env.example` → `apps/web/.env` (the web app:
+Supabase keys for auth/persistence, model feature flags, optional transcription /
+URL-scraping keys). See the README for details.
 
 ## Development
 
