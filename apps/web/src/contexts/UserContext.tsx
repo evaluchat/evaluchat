@@ -23,6 +23,8 @@ function e2eMockUser(): User {
 
 function isE2ETestMode(): boolean {
   if (typeof window === "undefined") return false;
+  // Build-time flag — unset in deployments so a forged cookie is inert.
+  if (process.env.NEXT_PUBLIC_E2E_TEST_MODE !== "true") return false;
   return document.cookie.includes("__e2e_test__=true");
 }
 

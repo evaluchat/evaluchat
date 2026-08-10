@@ -5,10 +5,11 @@ import { cookies } from "next/headers";
 export async function verifyUserAuthenticated(): Promise<
   { user: User; session: Session } | undefined
 > {
-  // E2E test mode: return mock user/session
+  // E2E test mode: return mock user/session only when explicitly enabled.
+  // Deployed envs leave E2E_TEST_MODE unset so the cookie alone cannot bypass auth.
   const cookieStore = await cookies();
   const e2eCookie = cookieStore.get("__e2e_test__");
-  if (e2eCookie?.value === "true") {
+  if (process.env.E2E_TEST_MODE === "true" && e2eCookie?.value === "true") {
     return {
       user: {
         id: "e2e-test-user-id",

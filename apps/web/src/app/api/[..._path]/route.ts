@@ -2,6 +2,13 @@ import { LANGGRAPH_API_URL } from "../../../constants";
 import { NextRequest, NextResponse } from "next/server";
 import { Session, User } from "@supabase/supabase-js";
 import { verifyUserAuthenticated } from "../../../lib/supabase/verify_user_server";
+import {
+  classifyProxyPath,
+  isThreadCreate,
+  isThreadListGet,
+  threadOwnerMatches,
+  withOwnedThreadMetadata,
+} from "../../../lib/thread-ownership";
 
 function getCorsHeaders() {
   return {
@@ -9,6 +16,33 @@ function getCorsHeaders() {
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "*",
   };
+}
+
+async function assertThreadOwnership(
+  threadId: string,
+  authenticatedUserId: string
+): Promise<NextResponse | null> {
+  const res = await fetch(`${LANGGRAPH_API_URL}/threads/${threadId}`, {
+    headers: {
+      "x-api-key": process.env.LANGCHAIN_API_KEY || "",
+    },
+  });
+
+  if (res.status === 404) {
+    return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  if (!res.ok) {
+    console.error("Failed to fetch thread for ownership check", res.status);
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const thread = await res.json();
+  if (!threadOwnerMatches(thread?.metadata, authenticatedUserId)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  return null;
 }
 
 async function handleRequest(req: NextRequest, method: string) {
@@ -28,10 +62,35 @@ async function handleRequest(req: NextRequest, method: string) {
 
   try {
     const path = req.nextUrl.pathname.replace(/^\/?api\//, "");
+    const classification = classifyProxyPath(path);
+
+    // Store must go through dedicated /api/store/* routes with namespace scoping.
+    if (classification.kind === "store") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Ownership gate for any threads/{id}/... path.
+    if (classification.kind === "thread_by_id") {
+      const denied = await assertThreadOwnership(
+        classification.threadId,
+        user.id
+      );
+      if (denied) return denied;
+    }
+
     const url = new URL(req.url);
     const searchParams = new URLSearchParams(url.search);
     searchParams.delete("_path");
     searchParams.delete("nxtP_path");
+
+    // GET /threads — scope list to the authenticated user.
+    if (isThreadListGet(method, classification)) {
+      searchParams.set(
+        "metadata",
+        JSON.stringify({ user_id: user.id })
+      );
+    }
+
     const queryString = searchParams.toString()
       ? `?${searchParams.toString()}`
       : "";
@@ -58,6 +117,35 @@ async function handleRequest(req: NextRequest, method: string) {
           supabase_session: session,
           supabase_user_id: user.id,
         };
+
+        // POST /threads — stamp ownership metadata.
+        if (isThreadCreate(method, classification)) {
+          parsedBody.metadata = withOwnedThreadMetadata(
+            parsedBody.metadata,
+            user.id
+          );
+        }
+
+        // POST /threads/search — force metadata filter to this user.
+        if (classification.kind === "thread_search") {
+          parsedBody.metadata = withOwnedThreadMetadata(
+            parsedBody.metadata,
+            user.id
+          );
+        }
+
+        // PATCH thread metadata — prevent ownership reassignment.
+        if (
+          method === "PATCH" &&
+          classification.kind === "thread_by_id" &&
+          parsedBody.metadata
+        ) {
+          parsedBody.metadata = withOwnedThreadMetadata(
+            parsedBody.metadata,
+            user.id
+          );
+        }
+
         options.body = JSON.stringify(parsedBody);
       } else {
         options.body = bodyText;

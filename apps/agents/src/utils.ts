@@ -636,11 +636,16 @@ async function getContextDocuments(
 ): Promise<ContextDocument[]> {
   const store = config.store;
   const assistantId = config.configurable?.assistant_id;
-  if (!store || !assistantId) {
+  const userId = config.configurable?.supabase_user_id;
+  if (!store || !assistantId || !userId) {
     return [];
   }
 
-  const result = await store.get(CONTEXT_DOCUMENTS_NAMESPACE, assistantId);
+  // Must match web store API scoping: ["context_documents", userId]
+  const result = await store.get(
+    [...CONTEXT_DOCUMENTS_NAMESPACE, userId],
+    assistantId
+  );
   return result?.value?.documents || [];
 }
 

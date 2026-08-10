@@ -1,0 +1,20 @@
+# CodeRabbit configuration — evaluchat/canvas
+# Triage policy: security/data-integrity findings are actioned before merge;
+# everything else is tracked as debt on the Canvas Board, not fixed inline.
+language: en-US
+early_access: false
+review:
+  # "chill" profile: fewer, higher-signal comments
+  profile: chill
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: false
+  auto_incremental_review: true
+checks:
+  # Disable pre-merge checks (docstring coverage threshold, etc.) — noise for
+  # an import-heavy repo; findings go through inline review instead.
+  enable: false
+code_review:
+  auto_resolve_outdated_comments: true
+  resolve_review_comments: false

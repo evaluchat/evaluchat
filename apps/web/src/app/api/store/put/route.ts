@@ -2,19 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { Client } from "@langchain/langgraph-sdk";
 import { LANGGRAPH_API_URL } from "@/constants";
 import { verifyUserAuthenticated } from "../../../../lib/supabase/verify_user_server";
+import { resolveStoreNamespace } from "@/lib/store-namespace";
 
 export async function POST(req: NextRequest) {
+  let userId: string;
   try {
     const authRes = await verifyUserAuthenticated();
     if (!authRes?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    userId = authRes.user.id;
   } catch (e) {
     console.error("Failed to fetch user", e);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { namespace, key, value } = await req.json();
+  const { namespace: clientNamespace, key, value } = await req.json();
+  const resolved = resolveStoreNamespace(clientNamespace, userId);
+  if (!resolved.ok) {
+    return NextResponse.json({ error: resolved.error }, { status: 400 });
+  }
 
   const lgClient = new Client({
     apiKey: process.env.LANGCHAIN_API_KEY,
@@ -22,7 +29,7 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    await lgClient.store.putItem(namespace, key, value);
+    await lgClient.store.putItem(resolved.namespace, key, value);
 
     return new NextResponse(JSON.stringify({ success: true }), {
       status: 200,

@@ -195,6 +195,8 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
       const thread = await client.threads.create({
         metadata: {
+          user_id: currentUser.id,
+          // Kept for agents/config that still read this key from thread metadata.
           supabase_user_id: currentUser.id,
           ...(assignmentId ? { assignment_id: assignmentId } : {}),
           customModelName: modelName,
@@ -245,7 +247,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
       const client = createClient();
       const results = await client.threads.search({
         metadata: {
-          supabase_user_id: currentUser.id,
+          user_id: currentUser.id,
           assignment_id: assignmentId,
         },
         limit: 100,
@@ -325,7 +327,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     try {
       const results = await client.threads.search({
         metadata: {
-          supabase_user_id: currentUser.id,
+          user_id: currentUser.id,
           assignment_id: assignmentId,
         },
         limit: 100,
@@ -391,7 +393,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
       const userThreads = await client.threads.search({
         metadata: {
-          supabase_user_id: currentUser.id,
+          user_id: currentUser.id,
         },
         limit: 100,
       });
