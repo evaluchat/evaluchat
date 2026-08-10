@@ -85,10 +85,7 @@ async function handleRequest(req: NextRequest, method: string) {
 
     // GET /threads — scope list to the authenticated user.
     if (isThreadListGet(method, classification)) {
-      searchParams.set(
-        "metadata",
-        JSON.stringify({ user_id: user.id })
-      );
+      searchParams.set("metadata", JSON.stringify({ user_id: user.id }));
     }
 
     const queryString = searchParams.toString()

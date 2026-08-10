@@ -5,7 +5,9 @@ describe("resolveStoreNamespace", () => {
   const userId = "auth-user-1";
 
   it("stamps authenticated user on custom_actions", () => {
-    expect(resolveStoreNamespace(["custom_actions", "evil-user"], userId)).toEqual({
+    expect(
+      resolveStoreNamespace(["custom_actions", "evil-user"], userId)
+    ).toEqual({
       ok: true,
       namespace: ["custom_actions", userId],
     });

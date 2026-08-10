@@ -39,12 +39,18 @@ export function classifyProxyPath(path: string): ProxyPathClassification {
 }
 
 /** Whether this request is an explicit thread create (POST /threads). */
-export function isThreadCreate(method: string, classification: ProxyPathClassification): boolean {
+export function isThreadCreate(
+  method: string,
+  classification: ProxyPathClassification
+): boolean {
   return method === "POST" && classification.kind === "thread_list";
 }
 
 /** Whether this request is a GET thread list (GET /threads). */
-export function isThreadListGet(method: string, classification: ProxyPathClassification): boolean {
+export function isThreadListGet(
+  method: string,
+  classification: ProxyPathClassification
+): boolean {
   return method === "GET" && classification.kind === "thread_list";
 }
 

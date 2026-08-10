@@ -205,8 +205,8 @@ export async function convertDocuments({
           title: "Converting video to audio",
           description: (
             <span className="flex items-center gap-2">
-              Converting video {doc.name} to audio. This may take a while. Please
-              wait <LoaderCircle className="animate-spin w-4 h-4" />
+              Converting video {doc.name} to audio. This may take a while.
+              Please wait <LoaderCircle className="animate-spin w-4 h-4" />
             </span>
           ),
           duration: 15000,
