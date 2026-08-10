@@ -13,7 +13,8 @@ import {
   TERMS_PATH,
 } from "./login-branding";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -40,9 +41,29 @@ function DocsLink({ className }: { className?: string }) {
 }
 
 export function Login() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
   const errorMessage = loginErrorMessage(errorParam);
+  const authCode = searchParams.get("code");
+
+  // Belt-and-suspenders with middleware: PKCE confirmation codes belong on
+  // /auth/confirm (SITE_URL often points at /auth/login).
+  useEffect(() => {
+    if (!authCode) return;
+    const next = searchParams.get("next");
+    const qs = new URLSearchParams({ code: authCode });
+    if (next) qs.set("next", next);
+    router.replace(`/auth/confirm?${qs.toString()}`);
+  }, [authCode, searchParams, router]);
+
+  if (authCode) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Confirming your email…
+      </div>
+    );
+  }
 
   const onLoginWithOauth = async (
     provider: "google" | "github"

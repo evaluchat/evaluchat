@@ -134,6 +134,9 @@ function ConfirmEmailContent() {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: resendEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent("/teacher")}`,
+        },
       });
       if (!error) {
         setResendMessage(

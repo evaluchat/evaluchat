@@ -22,7 +22,7 @@ export async function signup(input: SignupWithEmailInput, baseUrl: string) {
     email: input.email,
     password: input.password,
     options: {
-      emailRedirectTo: `${(baseUrl || getSiteUrl()).replace(/\/$/, "")}/auth/confirm`,
+      emailRedirectTo: `${(baseUrl || getSiteUrl()).replace(/\/$/, "")}/auth/confirm?next=${encodeURIComponent("/teacher")}`,
       data: metadata,
     },
   };
@@ -41,7 +41,10 @@ export async function signup(input: SignupWithEmailInput, baseUrl: string) {
         name: input.name?.trim() || input.email,
       });
     } catch (finalizeError) {
-      console.error("[auth/signup] failed to create organisation:", finalizeError);
+      console.error(
+        "[auth/signup] failed to create organisation:",
+        finalizeError
+      );
       redirect("/auth/signup?error=true");
     }
   }

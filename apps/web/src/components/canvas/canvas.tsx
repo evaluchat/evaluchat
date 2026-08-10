@@ -30,19 +30,34 @@ const ContentComposerChatInterface = React.lazy(() =>
 );
 import NoSSRWrapper from "../NoSSRWrapper";
 import { useThreadContext } from "@/contexts/ThreadProvider";
+import { createClient } from "@/hooks/utils";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { CHAT_COLLAPSED_QUERY_PARAM } from "@/constants";
+import { AssignmentWorkspaceBanner } from "@/components/teaching/assignment-workspace-banner";
+import { SubmitAssignmentDialog } from "@/components/teaching/submit-assignment-dialog";
+import { AbandonAssignmentDialog } from "@/components/teaching/abandon-assignment-dialog";
+import { useAssignmentCanvasBootstrap } from "@/hooks/use-assignment-canvas-bootstrap";
+import { useAssignmentKickoff } from "@/hooks/use-assignment-kickoff";
+import { CanvasLoading } from "@/components/canvas/canavas-loading";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 
 export function CanvasComponent() {
   const { graphData } = useGraphContext();
-  const { setModelName, setModelConfig } = useThreadContext();
-  const { setArtifact, chatStarted, setChatStarted } = graphData;
+  const { setModelName, setModelConfig, threadId } = useThreadContext();
+  const {
+    setArtifact,
+    chatStarted,
+    setChatStarted,
+    phaseState,
+    submitAssignment,
+    artifact,
+    messages,
+  } = graphData;
   const teachingAssignment = useTeachingAssignmentOptional();
   const aiAssistanceEnabled =
     teachingAssignment?.apparatusConfiguration?.ai_assistance !== false;
@@ -50,9 +65,33 @@ export function CanvasComponent() {
   const [isEditing, setIsEditing] = useState(false);
   const [webSearchResultsOpen, setWebSearchResultsOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{
+    wordCount: number;
+    messageCount: number;
+  } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [abandonDialogOpen, setAbandonDialogOpen] = useState(false);
+  const [isAbandoning, setIsAbandoning] = useState(false);
 
+  const activeAssignment = useAssignmentCanvasBootstrap();
+  useAssignmentKickoff();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const assignmentId = teachingAssignment?.assignmentId ?? null;
+
+  useEffect(() => {
+    if (activeAssignment) {
+      setIsEditing(true);
+      setChatCollapsed(false);
+      const queryParams = new URLSearchParams(searchParams.toString());
+      if (queryParams.has(CHAT_COLLAPSED_QUERY_PARAM)) {
+        queryParams.delete(CHAT_COLLAPSED_QUERY_PARAM);
+        router.replace(`?${queryParams.toString()}`, { scroll: false });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- assignment id only
+  }, [activeAssignment?.id]);
 
   useEffect(() => {
     if (aiAssistanceEnabled || chatStarted || graphData.artifact) return;
@@ -61,11 +100,19 @@ export function CanvasComponent() {
     // graph run.
     setArtifact({
       currentIndex: 1,
-      contents: [{ index: 1, type: "text", title: "Assignment", fullMarkdown: "" }],
+      contents: [
+        { index: 1, type: "text", title: "Assignment", fullMarkdown: "" },
+      ],
     });
     setChatStarted(true);
     setIsEditing(true);
-  }, [aiAssistanceEnabled, chatStarted, graphData.artifact, setArtifact, setChatStarted]);
+  }, [
+    aiAssistanceEnabled,
+    chatStarted,
+    graphData.artifact,
+    setArtifact,
+    setChatStarted,
+  ]);
 
   const chatCollapsedSearchParam = searchParams.get(CHAT_COLLAPSED_QUERY_PARAM);
   useEffect(() => {
@@ -80,6 +127,76 @@ export function CanvasComponent() {
       router.replace(`?${queryParams.toString()}`, { scroll: false });
     }
   }, [chatCollapsedSearchParam]);
+
+  // Prevent editing when assignment is submitted
+  useEffect(() => {
+    if (phaseState === "submitted") {
+      setIsEditing(false);
+    }
+  }, [phaseState]);
+
+  const handleSubmitClick = () => {
+    setSubmitDialogOpen(true);
+  };
+
+  const handleSubmitConfirm = async () => {
+    setIsSubmitting(true);
+    try {
+      const result = await submitAssignment();
+      setSubmitResult(result);
+      setSubmitDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Submission failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to submit assignment. Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAbandonConfirm = async () => {
+    setIsAbandoning(true);
+    try {
+      const client = createClient();
+      const threadIdVal = threadId;
+
+      if (threadIdVal) {
+        // Delete the thread entirely so abandoned data doesn't clutter storage
+        await client.threads.delete(threadIdVal);
+
+        // Clear the cached thread ID so we don't 404 on next load
+        try {
+          const cache = JSON.parse(
+            localStorage.getItem("oc_thread_cache") || "{}"
+          );
+          for (const key of Object.keys(cache)) {
+            if (cache[key] === threadIdVal) {
+              delete cache[key];
+            }
+          }
+          localStorage.setItem("oc_thread_cache", JSON.stringify(cache));
+        } catch (_) {}
+      }
+
+      setAbandonDialogOpen(false);
+      router.push("/student");
+    } catch (error) {
+      toast({
+        title: "Failed to abandon assignment",
+        description: "Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsAbandoning(false);
+    }
+  };
 
   const handleQuickStart = (
     type: "text" | "code",
@@ -126,8 +243,19 @@ export function CanvasComponent() {
 
   return (
     <div className="flex h-screen flex-col">
+      {activeAssignment && (
+        <>
+          <AssignmentWorkspaceBanner
+            assignment={activeAssignment}
+            phaseState={phaseState}
+            onSubmit={handleSubmitClick}
+            onAbandon={() => setAbandonDialogOpen(true)}
+          />
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
+        </>
+      )}
       <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
-        {!chatStarted && aiAssistanceEnabled && (
+        {!chatStarted && aiAssistanceEnabled && !assignmentId && (
           <NoSSRWrapper>
             <Suspense fallback={<div>Loading...</div>}>
               <ContentComposerChatInterface
@@ -182,6 +310,9 @@ export function CanvasComponent() {
               />
             </Suspense>
           </NoSSRWrapper>
+        )}
+        {!chatStarted && assignmentId && aiAssistanceEnabled && (
+          <CanvasLoading />
         )}
         {!chatCollapsed && chatStarted && aiAssistanceEnabled && (
           <ResizablePanel
@@ -253,7 +384,9 @@ export function CanvasComponent() {
           <>
             {aiAssistanceEnabled && <ResizableHandle />}
             <ResizablePanel
-              defaultSize={aiAssistanceEnabled ? (chatCollapsed ? 100 : 75) : 100}
+              defaultSize={
+                aiAssistanceEnabled ? (chatCollapsed ? 100 : 75) : 100
+              }
               maxSize={85}
               minSize={50}
               id="canvas-panel"
@@ -290,6 +423,46 @@ export function CanvasComponent() {
           </>
         )}
       </ResizablePanelGroup>
+
+      {activeAssignment &&
+        (() => {
+          let wordCount = 0;
+          if (artifact) {
+            const content = artifact.contents.find(
+              (c) => c.index === artifact.currentIndex
+            );
+            if (content?.type === "text" && content.fullMarkdown) {
+              wordCount = content.fullMarkdown
+                .split(/\s+/)
+                .filter(Boolean).length;
+            }
+          }
+          const messageCount = messages.filter(
+            (m) => (m as any).type === "human"
+          ).length;
+
+          return (
+            <>
+              <SubmitAssignmentDialog
+                open={submitDialogOpen}
+                onOpenChange={setSubmitDialogOpen}
+                onConfirm={handleSubmitConfirm}
+                assignmentTitle={activeAssignment.title}
+                wordCount={submitResult?.wordCount || wordCount}
+                wordTarget={activeAssignment.wordTarget}
+                messageCount={submitResult?.messageCount || messageCount}
+                isSubmitting={isSubmitting}
+              />
+              <AbandonAssignmentDialog
+                open={abandonDialogOpen}
+                onOpenChange={setAbandonDialogOpen}
+                onConfirm={handleAbandonConfirm}
+                assignmentTitle={activeAssignment.title}
+                isAbandoning={isAbandoning}
+              />
+            </>
+          );
+        })()}
     </div>
   );
 }
