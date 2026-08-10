@@ -19,14 +19,14 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 | 1     | T1.6 Playwright E2E suite            | pending (after T3.1a)     |               | MVP used FS unit round-trip; GUI E2E next after Win packaging               |
 | 2     | T2.1–T2.5 BYOK AI                    | pending                   |               | Starts after T1.5                                                           |
 | 3     | T3.1a Win host packaging path        | done (2026-08-10, iter 3) | c732e54       | `win dir` from WSL; host run at `C:\Users\Public\EvaluchatCanvas`; see log  |
-| 3     | T3.1b Icons + CI win/linux artifacts | in progress (2026-08-10)  |               | Icons + CI artifacts for linux AppImage/deb + windows unpacked/portable    |
+| 3     | T3.1b Icons + CI win/linux artifacts | done (2026-08-10, iter 3) | fc8d723       | icon.png 1024×1024; package:linux + package:win exit 0; smoke SMOKE_OK    |
 | 3     | T3.2 Auto-update                     | pending                   |               |                                                                             |
 | 3     | T3.3 Tagged v0.1.0 release           | pending                   |               | After T3.1b                                                                 |
 | 4     | T4.1–T4.3 OSS identity               | pending                   |               | After first tagged release                                                  |
 
 
 **MVP (AI-off WYSIWYG):** done 2026-08-09 — Phase 0 + T1.1–T1.4.  
-**Next:** **T3.1b** (icons + CI win/linux artifacts), then **T1.6** E2E, then **T1.5 → Phase 2** BYOK.
+**Next:** **T1.6** (Playwright Electron E2E), then **T1.5 → Phase 2** BYOK.
 
 ## Log
 
@@ -77,7 +77,23 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 
 
 
-### 2026-08-09 — Windows host run (T3.1a, in progress)
+### 2026-08-10 — iter 3 (T3.1b icons + CI artifacts) ✅
+
+- Sync: on `feat/electron-desktop`; `origin/main` already ancestor (0 behind) — no merge needed. Repo had drifted to `feat/title-save-status-icon` on disk; re-checked out `feat/electron-desktop`.
+- T3.1a (Win packaging path) found already committed as `c732e54`; table row was stale — flipped to done.
+- Cursor Agent implemented T3.1b:
+  - `apps/desktop/scripts/generate-icon.mjs` — dependency-free hand-rolled PNG encoder (node:zlib only), 4× supersampled rounded-rect gradient + document glyph with 3 lines; deterministic; writes `apps/desktop/build/icon.png` (1024×1024 RGBA).
+  - `apps/desktop/package.json` — format/format:check globs now include `scripts/**/*.mjs`.
+  - `.github/workflows/ci.yml` — desktop job: `package:linux` (AppImage+deb) + `package:win` (portable exe) + `upload-artifact@v4` from `apps/desktop/release/**` (excludes `builder-debug.yml`).
+- Verified (real output):
+  - `typecheck` exit 0 · `test` 35 passed (35) · `build` exit 0 · `format:check` "All matched files use Prettier code style!" · `file build/icon.png` → "PNG image data, 1024 x 1024, 8-bit/color RGBA, non-interlaced"
+  - `package:linux` exit 0 → `Evaluchat Canvas-0.1.0-x86_64.AppImage` (162 MB) + `Evaluchat Canvas-0.1.0-amd64.deb` (97 MB); deb embeds `usr/share/icons/hicolor/1024x1024/apps/evaluchat-canvas.png`
+  - `package:win` exit 0 → `win-unpacked/` + `Evaluchat Canvas-0.1.0-x64.exe` (96 MB portable; signing skipped as configured)
+  - `smoke` → `SMOKE_OK`, exit 0
+- Shipped: fc8d723 (pushed). No sidecar files touched.
+- Next: T1.6 Playwright Electron E2E (new → edit Mermaid/LaTeX → save → reopen identity; Raw + Print smoke).
+
+
 
 - Problem: Linux AppImage/deb do not run on the Windows host; WSL `package:win` without Wine failed on code-sign/rcedit; launching from IDE/agent shells exited immediately with `bad option: --…`.
 - Root causes + fixes:
