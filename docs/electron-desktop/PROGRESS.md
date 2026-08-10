@@ -18,15 +18,15 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 | 1     | T1.5 AI-gating architecture          | pending (after T3.1a)     |               | Gate for Phase 2 — keep AI absent until then                                |
 | 1     | T1.6 Playwright E2E suite            | pending (after T3.1a)     |               | MVP used FS unit round-trip; GUI E2E next after Win packaging               |
 | 2     | T2.1–T2.5 BYOK AI                    | pending                   |               | Starts after T1.5                                                           |
-| 3     | T3.1a Win host packaging path        | in progress (2026-08-09)  | (uncommitted) | `win dir` from WSL; host run at `C:\Users\Public\EvaluchatCanvas`; see log  |
-| 3     | T3.1b Icons + CI win/linux artifacts | pending                   |               | Next packaging slice after T3.1a lands                                      |
+| 3     | T3.1a Win host packaging path        | done (2026-08-10, iter 3) | c732e54       | `win dir` from WSL; host run at `C:\Users\Public\EvaluchatCanvas`; see log  |
+| 3     | T3.1b Icons + CI win/linux artifacts | in progress (2026-08-10)  |               | Icons + CI artifacts for linux AppImage/deb + windows unpacked/portable    |
 | 3     | T3.2 Auto-update                     | pending                   |               |                                                                             |
 | 3     | T3.3 Tagged v0.1.0 release           | pending                   |               | After T3.1b                                                                 |
 | 4     | T4.1–T4.3 OSS identity               | pending                   |               | After first tagged release                                                  |
 
 
 **MVP (AI-off WYSIWYG):** done 2026-08-09 — Phase 0 + T1.1–T1.4.  
-**Next:** finish **T3.1a** (commit Win packaging/runbook/launcher), then **T3.1b** (icons + CI artifacts), then **T1.6** E2E, then **T1.5 → Phase 2** BYOK.
+**Next:** **T3.1b** (icons + CI win/linux artifacts), then **T1.6** E2E, then **T1.5 → Phase 2** BYOK.
 
 ## Log
 
