@@ -45,3 +45,23 @@ credentials.json
 
 # LangGraph API
 .langgraph_api
+
+# Electron desktop
+apps/desktop/out/
+apps/desktop/release/
+
+# Internal tooling / dev artifacts (must never reach the public repo)
+codedb.snapshot
+.agents/
+.hermes/
+.superpowers/
+.code-review-graph/
+.demo-record/
+.kilo/
+.cursor/
+.cursorrules
+kilo.jsonc
+data/
+test-results/
+playwright-report/
+.env.drill
