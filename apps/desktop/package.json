@@ -14,8 +14,8 @@
     "smoke": "xvfb-run -a electron out/main/index.js --smoke-test",
     "package:linux": "electron-builder --linux",
     "package:win": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
-    "format": "prettier --config .prettierrc --write \"src\" \"*.ts\" \"*.yml\"",
-    "format:check": "prettier --config .prettierrc --check \"src\" \"*.ts\" \"*.yml\""
+    "format": "prettier --config .prettierrc --write \"src\" \"*.ts\" \"*.yml\" \"scripts/**/*.mjs\"",
+    "format:check": "prettier --config .prettierrc --check \"src\" \"*.ts\" \"*.yml\" \"scripts/**/*.mjs\""
   },
   "dependencies": {
     "@blocknote/core": "^0.17.1",

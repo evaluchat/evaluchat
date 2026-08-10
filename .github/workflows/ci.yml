@@ -146,5 +146,15 @@ jobs:
         run: yarn workspace @opencanvas/desktop test
       - name: Build desktop
         run: yarn workspace @opencanvas/desktop build
-      - name: Package desktop (dir)
-        run: yarn workspace @opencanvas/desktop package:linux --dir
+      - name: Package desktop (linux)
+        run: yarn workspace @opencanvas/desktop package:linux
+      - name: Package desktop (windows)
+        run: yarn workspace @opencanvas/desktop package:win
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-packages
+          path: |
+            apps/desktop/release/**
+            !apps/desktop/release/builder-debug.yml
+          if-no-files-found: error
