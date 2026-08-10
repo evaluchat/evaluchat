@@ -1,16 +1,16 @@
 /** Shared copy for the login brand panel / footer. */
-export const DOCS_URL = "https://docs.evaluchat.com";
+export const DOCS_URL = "https://docs.evaluchat.org";
 export const COPYRIGHT_NOTICE = "© 2026 Evaluchat. All rights reserved.";
-export const SUPPORT_EMAIL = "hello@evaluchat.com";
+export const SUPPORT_EMAIL = "hello@evaluchat.org";
 export const PRIVACY_PATH = "/privacy";
 export const TERMS_PATH = "/terms";
 
 /**
- * One-line commercial summary for the login landing.
- * Keep minimal — Terms sit directly below; free-tier detail lives on docs.
+ * One-line beta summary for the login landing.
+ * Keep minimal — Terms sit directly below; research details live on docs.
  */
 export const LOGIN_PRICING_SUMMARY =
-  "PRICING - Free tier, with premium options at US$5 for 50 assignments.";
+  "PUBLIC BETA - Open education research workspace; no billing in this release.";
 
 /** Login panel / docs `.site-header` brand blue (`docs/assets/style.css --brand`). */
 export const BRAND_PANEL_COLOR = "#2c3e56";

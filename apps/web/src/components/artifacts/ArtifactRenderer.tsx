@@ -35,6 +35,7 @@ import { useGraphContext } from "@/contexts/GraphContext";
 import { ArtifactHeader } from "./header";
 import { useUserContext } from "@/contexts/UserContext";
 import { useAssistantContext } from "@/contexts/AssistantContext";
+import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 
 export interface ArtifactRendererProps {
   isEditing: boolean;
@@ -52,6 +53,9 @@ interface SelectionBox {
 function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const { graphData } = useGraphContext();
   const { selectedAssistant } = useAssistantContext();
+  const teachingAssignment = useTeachingAssignmentOptional();
+  const aiCanvasActions =
+    teachingAssignment?.apparatusConfiguration?.ai_canvas_actions !== false;
   const { user } = useUserContext();
   const {
     artifact,
@@ -445,7 +449,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
             className="absolute top-0 left-0 w-full h-full pointer-events-none"
           />
         </div>
-        {selectionBox && isSelectionActive && isValidSelectionOrigin && (
+        {aiCanvasActions && selectionBox && isSelectionActive && isValidSelectionOrigin && (
           <AskOpenCanvas
             ref={selectionBoxRef}
             inputValue={inputValue}
@@ -461,27 +465,31 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           />
         )}
       </div>
-      <CustomQuickActions
-        streamMessage={streamMessage}
-        assistantId={selectedAssistant?.assistant_id}
-        user={user}
-        isTextSelected={isSelectionActive || selectedBlocks !== undefined}
-      />
-      {currentArtifactContent.type === "text" ? (
-        <ActionsToolbar
-          streamMessage={streamMessage}
-          isTextSelected={isSelectionActive || selectedBlocks !== undefined}
-        />
-      ) : null}
-      {currentArtifactContent.type === "code" ? (
-        <CodeToolBar
-          streamMessage={streamMessage}
-          isTextSelected={isSelectionActive || selectedBlocks !== undefined}
-          language={
-            currentArtifactContent.language as ProgrammingLanguageOptions
-          }
-        />
-      ) : null}
+      {aiCanvasActions && (
+        <>
+          <CustomQuickActions
+            streamMessage={streamMessage}
+            assistantId={selectedAssistant?.assistant_id}
+            user={user}
+            isTextSelected={isSelectionActive || selectedBlocks !== undefined}
+          />
+          {currentArtifactContent.type === "text" ? (
+            <ActionsToolbar
+              streamMessage={streamMessage}
+              isTextSelected={isSelectionActive || selectedBlocks !== undefined}
+            />
+          ) : null}
+          {currentArtifactContent.type === "code" ? (
+            <CodeToolBar
+              streamMessage={streamMessage}
+              isTextSelected={isSelectionActive || selectedBlocks !== undefined}
+              language={
+                currentArtifactContent.language as ProgrammingLanguageOptions
+              }
+            />
+          ) : null}
+        </>
+      )}
       {/* Print view portal */}
       {showPrintView &&
         currentArtifactContent.type === "text" &&

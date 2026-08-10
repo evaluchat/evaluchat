@@ -1,10 +1,10 @@
 /**
  * Swap docs nav CTA based on shared session marker cookie set by the app
- * (ec_authed on .evaluchat.com). Logged-in → "Dashboard"; else "Sign in".
- * Both link to https://evaluchat.com/ which middleware routes by role.
+ * (ec_authed on .evaluchat.org). Logged-in → "Dashboard"; else "Sign in".
+ * Both link to https://evaluchat.org/ which middleware routes by role.
  */
 (function () {
-  var APP_HOME = "https://evaluchat.com/";
+  var APP_HOME = "https://evaluchat.org/";
 
   function hasSessionMarker() {
     return document.cookie.split(";").some(function (part) {

@@ -3,15 +3,16 @@
 [![CI](https://github.com/evaluchat/canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/evaluchat/canvas/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**AI-native Markdown document workspace.** Write, edit, and iterate on documents
-side-by-side with an AI assistant — with live rendered preview, rich formatting,
-LaTeX and Mermaid support, and AI edits you review and approve inline.
+**Open-source AI writing and education research workspace.** Evaluchat combines
+an authoring canvas with reviewed, reproducible research apparatuses so
+educators, administrators, and researchers can run classroom writing workflows
+and inspect the evidence they produce.
 
 Evaluchat Canvas is an independent, open-source continuation of
 [LangChain Open Canvas](https://github.com/langchain-ai/open-canvas) (MIT). We're
 grateful for the original project — see [Acknowledgments](#acknowledgments).
 
-Try the hosted version at [evaluchat.com](https://evaluchat.com), or run it yourself
+Try the public beta at [evaluchat.org](https://evaluchat.org), or run it yourself
 (local or self-hosted — see [Setup locally](#setup-locally)).
 
 ## Features
@@ -25,6 +26,12 @@ Try the hosted version at [evaluchat.com](https://evaluchat.com), or run it your
 - **Custom & pre-built quick actions** — one-click prompts for common writing and coding tasks
 - **Code, Markdown, or both** — switch between code and markdown artifacts in the same session
 - **Printer-friendly export / PDF** — clean output styling for print and PDF
+- **Essays apparatus** — assignment context, immutable treatment profiles,
+  constrained dialogue, teacher review, and student submission
+- **Open research runtime** — apparatus specifications, configuration snapshots,
+  telemetry contracts, and reproducibility fixtures are public
+- **Organisation workspaces** — org admins invite teachers and students; route
+  authorization and organisation isolation are enforced server-side
 
 ## Repo layout
 
@@ -69,6 +76,16 @@ yarn workspace @opencanvas/web dev
 
 Open http://localhost:3000.
 
+### 3. Apparatus catalog
+
+The checked-in catalog is generated from the public Research OKF and validated
+strictly during the web build. With the Research repository checked out beside
+this one, regenerate it with:
+
+```bash
+RESEARCH_OKF_ROOT=../okf/research yarn generate:apparatus
+```
+
 ## Checks
 
 ```bash
@@ -88,8 +105,20 @@ before large changes.
 Evaluchat Canvas is one of Evaluchat's open surfaces. The same document workspace
 also powers:
 
-- **Evaluchat Essays** — AI-assisted essay workflows for education
-- **Evaluchat Research** — public research on AI in education and assessment
+- **Evaluchat Essays** — the built-in education apparatus and assignment workflow
+- **Evaluchat Research** — public GitHub-first research on AI in education and assessment
+
+## Beta scope
+
+Direct signup creates an isolated organisation-admin workspace at `/teacher`.
+Invited teachers manage classes, assignments, and student invitations; invited
+students see only assigned work. Research materials are public and there is no
+separate in-app researcher persona. The canonical Essays profile preserves the
+current four-message drafting escape hatch, with valid gate-off, no-AI, and
+no-tracking profiles available for comparison.
+
+Desktop/Electron work is paused. Self-hosting guidance is retained, but a
+turnkey self-host install and database migration are not launch deliverables.
 
 ## Acknowledgments
 

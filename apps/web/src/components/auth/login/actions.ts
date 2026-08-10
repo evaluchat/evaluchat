@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient, createActionClient } from "@/lib/supabase/server";
+import { postLoginPath } from "@/lib/teaching/config";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
@@ -38,5 +39,5 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/canvas");
+  redirect(postLoginPath(data.user));
 }

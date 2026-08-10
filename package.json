@@ -1,11 +1,12 @@
 {
   "name": "open_canvas",
   "author": "Evaluchat",
-  "homepage": "https://evaluchat.com",
+  "homepage": "https://evaluchat.org",
   "repository": "https://github.com/evaluchat/canvas",
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
+    "generate:apparatus": "tsx scripts/generate-apparatus-mirror.ts",
     "build": "turbo build",
     "turbo:command": "turbo",
     "format": "turbo format",
@@ -35,6 +36,7 @@
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-no-instanceof": "^1.0.1",
     "eslint-plugin-prettier": "^4.2.1",
+    "js-yaml": "^4.1.1",
     "prettier": "^3.3.3"
   }
 }

@@ -6,7 +6,7 @@ import { TermsOfServiceContent } from "@/components/legal/terms-of-service-conte
 export const metadata: Metadata = {
   title: "Terms of Service · Evaluchat",
   description:
-    "Terms for using Evaluchat, including credits, Creem payments, and AI assistance.",
+    "Terms for using the Evaluchat public education and research beta.",
 };
 
 export default function TermsPage() {

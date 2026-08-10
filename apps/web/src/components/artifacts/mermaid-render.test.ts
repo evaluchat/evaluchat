@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderMermaidSVG } from "beautiful-mermaid";
+import { normalizeMermaidSource } from "./mermaid-source";
 
 const MERMAID_THEME = {
   bg: "#ffffff",
@@ -22,7 +23,7 @@ describe("beautiful-mermaid forward node references", () => {
     VYG --> SRL
     SRL["SELF-REGULATED LEARNING (Zimmerman)<br/>Goal setting and strategic planning"]`;
 
-    const svg = renderMermaidSVG(code, MERMAID_THEME);
+    const svg = renderMermaidSVG(normalizeMermaidSource(code), MERMAID_THEME);
     const text = extractSvgText(svg);
 
     expect(text).toContain("SELF-REGULATED LEARNING (Zimmerman)");

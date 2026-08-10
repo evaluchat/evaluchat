@@ -17,7 +17,6 @@ interface UserAuthFormProps extends React.HTMLAttributes<HTMLDivElement> {
   defaultEmail?: string;
   emailReadOnly?: boolean;
   showNameField?: boolean;
-  showRoleToggle?: boolean;
 }
 
 export function UserAuthForm({
@@ -27,14 +26,12 @@ export function UserAuthForm({
   defaultEmail = "",
   emailReadOnly = false,
   showNameField = false,
-  showRoleToggle = true,
   ...props
 }: UserAuthFormProps) {
   const [isEmailPasswordLoading, setEmailPasswordIsLoading] = useState(false);
   const [isGoogleLoading, setGoogleIsLoading] = useState(false);
   const [isGithubLoading, setGithubIsLoading] = useState(false);
   const [showPasswordField, setShowPasswordField] = useState(showNameField);
-  const [isTeacher, setIsTeacher] = useState(false);
 
   const isLoading =
     isEmailPasswordLoading || isGoogleLoading || isGithubLoading;
@@ -54,7 +51,6 @@ export function UserAuthForm({
       email,
       password,
       name,
-      role: isTeacher ? "teacher" : undefined,
     });
     setEmailPasswordIsLoading(false);
   }
@@ -121,26 +117,6 @@ export function UserAuthForm({
               />
             </div>
           </div>
-          {showRoleToggle && (
-            <div className="px-1 pb-2">
-              <Label
-                className="flex items-center gap-2 cursor-pointer"
-                htmlFor="role-toggle"
-              >
-                <input
-                  id="role-toggle"
-                  type="checkbox"
-                  checked={isTeacher}
-                  onChange={(e) => setIsTeacher(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300"
-                  disabled={isLoading}
-                />
-                <span className="text-sm text-muted-foreground">
-                  I am a teacher
-                </span>
-              </Label>
-            </div>
-          )}
           <Button disabled={isLoading}>
             {isLoading && (
               <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />

@@ -18,6 +18,12 @@ vi.mock("./dynamic-determine-path.js", () => ({
     .mockResolvedValue({ route: "generateArtifact" }),
 }));
 
+const mockDetermineTeachingIntent = vi.fn();
+vi.mock("./determine-teaching-intent.js", () => ({
+  determineTeachingIntent: (...args: unknown[]) =>
+    mockDetermineTeachingIntent(...args),
+}));
+
 // Mock other dependencies
 vi.mock("./documents.js", () => ({
   convertContextDocumentToHumanMessage: vi.fn().mockResolvedValue(null),
@@ -31,11 +37,17 @@ vi.mock("./include-url-contents.js", () => ({
 describe("generatePath", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDetermineTeachingIntent.mockReset();
+    mockDetermineTeachingIntent.mockResolvedValue({
+      route: "replyToGeneralInput",
+      reasoning: "mock default coaching chat",
+    });
   });
 
   it("should honor explicit next route when provided", async () => {
     const state = createMockState({
       next: "replyToGeneralInput",
+      phase_state: "drafting", // Even with different phase, should honor explicit next
     });
     const config = createMockConfig();
 
@@ -52,6 +64,7 @@ describe("generatePath", () => {
         startCharIndex: 0,
         endCharIndex: 20,
       },
+      phase_state: "socratic", // Even in socratic phase, highlights should go through
     });
     const config = createMockConfig();
 
@@ -102,6 +115,120 @@ describe("generatePath", () => {
     expect(result.next).toBe("replyToGeneralInput");
   });
 
+  it("should route to replyToGeneralInput when phase_state is socratic (thesis development)", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [
+        new HumanMessage({
+          content: "Help me with my thesis",
+          id: "test-msg-1",
+        }),
+      ],
+    });
+    const config = createMockConfig();
+
+    const { dynamicDeterminePath } = await import(
+      "./dynamic-determine-path.js"
+    );
+
+    const result = await generatePath(state, config);
+
+    expect(mockDetermineTeachingIntent).toHaveBeenCalled();
+    expect(dynamicDeterminePath).not.toHaveBeenCalled();
+    expect(result.next).toBe("replyToGeneralInput");
+  });
+
+  it("should route to replyToGeneralInput when phase_state is undefined (initial state)", async () => {
+    const state = createMockState({
+      phase_state: undefined,
+      _messages: [
+        new HumanMessage({
+          content: "General question",
+          id: "test-msg-1",
+        }),
+      ],
+    });
+    const config = createMockConfig();
+
+    // When phase is undefined, treat as socratic — route to chat
+    const { dynamicDeterminePath } = await import(
+      "./dynamic-determine-path.js"
+    );
+
+    const result = await generatePath(state, config);
+
+    expect(dynamicDeterminePath).not.toHaveBeenCalled();
+    expect(result.next).toBe("replyToGeneralInput");
+  });
+
+  it("should route to generateArtifact when writing intent detected in drafting phase", async () => {
+    mockDetermineTeachingIntent.mockResolvedValueOnce({
+      route: "generateArtifact",
+      reasoning: "student asked to draft on canvas",
+    });
+
+    const state = createMockState({
+      phase_state: "drafting",
+      _messages: [
+        new HumanMessage({
+          content: "Can you write the next section about Pip in London?",
+          id: "test-msg-1",
+        }),
+      ],
+    });
+    const config = createMockConfig();
+
+    const { dynamicDeterminePath } = await import(
+      "./dynamic-determine-path.js"
+    );
+
+    const result = await generatePath(state, config);
+
+    expect(mockDetermineTeachingIntent).toHaveBeenCalled();
+    expect(dynamicDeterminePath).not.toHaveBeenCalled();
+    expect(result.next).toBe("generateArtifact");
+  });
+
+  it("should route conversational messages to replyToGeneralInput in drafting phase", async () => {
+    const state = createMockState({
+      phase_state: "drafting",
+      _messages: [
+        new HumanMessage({
+          content: "How is my essay looking so far?",
+          id: "test-msg-1",
+        }),
+      ],
+    });
+    const config = createMockConfig();
+
+    const { dynamicDeterminePath } = await import(
+      "./dynamic-determine-path.js"
+    );
+
+    const result = await generatePath(state, config);
+
+    expect(mockDetermineTeachingIntent).toHaveBeenCalled();
+    expect(dynamicDeterminePath).not.toHaveBeenCalled();
+    expect(result.next).toBe("replyToGeneralInput");
+  });
+
+  it("should route acknowledgments to replyToGeneralInput when phase_state is drafting", async () => {
+    const state = createMockState({
+      phase_state: "drafting",
+      _messages: [
+        new HumanMessage({
+          content: "ok",
+          id: "test-msg-1",
+        }),
+      ],
+    });
+    const config = createMockConfig();
+
+    const result = await generatePath(state, config);
+
+    expect(result.next).toBe("replyToGeneralInput");
+  });
+
   it("should route to rewriteArtifactTheme when theme options are set", async () => {
     const state = createMockState({
       language: "spanish",
@@ -144,5 +271,78 @@ describe("generatePath", () => {
     const result = await generatePath(state, config);
 
     expect(result.next).toBe("webSearch");
+  });
+
+  it("should NOT prioritize socratic phase over other routing options", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      // These should trigger their respective routes even in socratic phase
+      language: "spanish", // This should win since it comes first
+      addComments: true,
+      customQuickActionId: "test-action",
+      webSearchEnabled: true,
+    });
+    const config = createMockConfig();
+
+    const result = await generatePath(state, config);
+
+    // Language (rewriteArtifactTheme) should take precedence over socratic routing
+    expect(result.next).toBe("rewriteArtifactTheme");
+  });
+
+  it("should allow highlights through in socratic phase", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      highlightedCode: {
+        startCharIndex: 0,
+        endCharIndex: 20,
+      },
+    });
+    const config = createMockConfig();
+
+    const result = await generatePath(state, config);
+
+    // Highlights should go through even in socratic phase
+    expect(result.next).toBe("updateArtifact");
+  });
+
+  it("should route to replyToGeneralInput when student asks to write in socratic phase", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [
+        new HumanMessage({
+          content: "Please write an intro paragraph on the canvas",
+          id: "test-msg-1",
+        }),
+      ],
+    });
+    const config = createMockConfig();
+
+    const result = await generatePath(state, config);
+
+    expect(mockDetermineTeachingIntent).toHaveBeenCalled();
+    expect(result.next).toBe("replyToGeneralInput");
+  });
+
+  it("should route conversational messages to replyToGeneralInput in socratic phase", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [
+        new HumanMessage({
+          content: "I think Pip is a jerk",
+          id: "test-msg-1",
+        }),
+      ],
+    });
+    const config = createMockConfig();
+
+    const { dynamicDeterminePath } = await import(
+      "./dynamic-determine-path.js"
+    );
+
+    await generatePath(state, config);
+
+    expect(mockDetermineTeachingIntent).toHaveBeenCalled();
+    expect(dynamicDeterminePath).not.toHaveBeenCalled();
   });
 });

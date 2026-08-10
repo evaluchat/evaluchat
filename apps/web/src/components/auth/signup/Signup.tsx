@@ -11,7 +11,6 @@ import { useSearchParams, useRouter } from "next/navigation";
 export interface SignupWithEmailInput {
   email: string;
   password: string;
-  role?: string;
   name?: string;
   invitationToken?: string;
 }
@@ -102,6 +101,7 @@ export function Signup() {
           <UserAuthForm
             onSignupWithEmail={onSignupWithEmail}
             onSignupWithOauth={onSignupWithOauth}
+            showNameField
           />
           {isError && (
             <p className="text-red-500 text-sm text-center">

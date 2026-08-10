@@ -1,4 +1,4 @@
-/* Evaluchat Docs — brand-aligned with evaluchat.com login panel */
+/* Evaluchat Docs — brand-aligned with evaluchat.org login panel */
 @import url("https://fonts.googleapis.com/css2?family=Fira+Code&family=Inter:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap");
 
 :root {
@@ -65,7 +65,7 @@ body {
 }
 
 .logo a {
-  /* Match evaluchat.com login wordmark: Inter semibold, tracking-tight */
+  /* Match evaluchat.org login wordmark: Inter semibold, tracking-tight */
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;

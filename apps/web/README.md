@@ -1,6 +1,6 @@
 # Open Canvas
 
-[TRY IT OUT HERE](https://opencanvas.langchain.com/)
+[TRY IT OUT HERE](https://evaluchat.org/)
 
 ![Screenshot of app](./public/screenshot.png)
 
@@ -55,7 +55,7 @@ Open Canvas requires the following API keys and external services:
 First, clone the repository:
 
 ```bash
-git clone https://github.com/langchain-ai/open-canvas.git
+git clone https://github.com/evaluchat/canvas.git
 cd open-canvas
 ```
 
@@ -166,7 +166,7 @@ Below is a list of features we'd like to add to Open Canvas in the near future:
 - **Multiple assistants**: Users should be able to create multiple assistants, each having their own memory store.
 - **Give assistants custom 'tools'**: Once we've implemented `RemoteGraph` in LangGraph.js, users should be able to give assistants access to call their own graphs as tools. This means you could customize your assistant to have access to current events, your own personal knowledge graph, etc.
 
-Do you have a feature request? Please [open an issue](https://github.com/langchain-ai/open-canvas/issues/new)!
+Do you have a feature request? Please [open an issue](https://github.com/evaluchat/canvas/issues/new)!
 
 ### Contributing
 
@@ -179,4 +179,4 @@ There are three main labels:
 - `ai`: This label is added to issues which are focused on improving the LLM agent(s).
 - `fullstack`: This label is added to issues which require touching both the frontend and agent code.
 
-If you have questions about contributing, please reach out to me via email: `brace(at)langchain(dot)dev`. For general bugs/issues with the code, please [open an issue on GitHub](https://github.com/langchain-ai/open-canvas/issues/new).
+For contribution questions and bug reports, please [open an issue on GitHub](https://github.com/evaluchat/canvas/issues/new).

@@ -5,7 +5,8 @@ Guidance for AI coding agents (and humans) working in this repository.
 ## What this is
 
 Evaluchat Canvas is an open-source, AI-native Markdown document workspace — an
-independent continuation of LangChain Open Canvas (MIT). See [README.md](README.md)
+independent continuation of LangChain Open Canvas (MIT), and the public beta
+application for the Evaluchat education research platform. See [README.md](README.md)
 for the product story and setup, [CONTRIBUTING.md](CONTRIBUTING.md) for the
 contribution workflow.
 
@@ -15,7 +16,7 @@ contribution workflow.
 |---|---|---|
 | `apps/web` | `@opencanvas/web` | Next.js web app: UI + API routes |
 | `apps/agents` | `@opencanvas/agents` | LangGraph agent graphs (generation, reflection, routing) |
-| `apps/desktop` | `@opencanvas/desktop` | Electron desktop app (in development) |
+| `apps/desktop` | `@opencanvas/desktop` | Electron desktop app (paused) |
 | `packages/shared` | `@opencanvas/shared` | Shared types, constants, utilities |
 | `packages/evals` | `@opencanvas/evals` | Evaluation harness |
 
@@ -50,9 +51,20 @@ Unit tests: `cd apps/agents && npx vitest run` and `cd packages/shared && npx vi
 - One logical change per commit; conventional-commit prefixes (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`).
 - Don't reformat unrelated files — prettier debt in untouched files is documented, not fixed opportunistically.
 
-## Out of scope
+## Product boundaries
 
-Evaluchat's education-specific surfaces (Essays workflows, teacher analytics,
-research instrumentation) are closed-source and live in a private repository.
-This public repo contains only the generic canvas product. If a task requires
-those surfaces, stop and say so — do not rebuild them here.
+- Education workflows, role routes, assignment APIs, apparatus runtime, prompts,
+  routing, and instrumentation are open source in this repository.
+- The public beta is hosted at `https://evaluchat.org`; `dev.evaluchat.org` is
+  the pre-cutover environment. Credentials, production configuration, billing,
+  and identifiable classroom data must never be committed.
+- Research apparatus specifications and immutable profiles are authored through
+  public GitHub PRs in the Research/Knowledge repositories. The app executes
+  only reviewed built-in implementations mapped to known apparatus ids; it does
+  not execute code from repositories.
+- Self-hosting remains a design constraint and documentation target, but a
+  turnkey self-host package and a Postgres migration are deferred beyond the
+  beta. File-backed education data is acceptable when persistent storage and
+  backup/restore are configured.
+- Electron/Desktop work is paused. Preserve its documentation and code while
+  avoiding new desktop scope during the beta release.

@@ -9,3 +9,5 @@ export * from "./models.js";
 
 // Re-export cursor position utility
 export { calculateCursorPosition } from "./cursor-position.js";
+
+export * from "./apparatus.js";

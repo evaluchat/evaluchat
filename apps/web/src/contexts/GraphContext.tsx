@@ -38,6 +38,12 @@ import {
 import { Thread } from "@langchain/langgraph-sdk";
 import { useToast } from "@/hooks/use-toast";
 import {
+  isEmptyKickoffThread,
+  isSubmittedThread,
+  threadContentScore,
+  type ThreadLike,
+} from "@/lib/teaching/select-active-thread";
+import {
   createContext,
   Dispatch,
   ReactNode,
@@ -65,6 +71,7 @@ import {
 import { debounce } from "lodash";
 import { useThreadContext } from "./ThreadProvider";
 import { useAssistantContext } from "./AssistantContext";
+import { useTeachingAssignment } from "./TeachingAssignmentContext";
 import { useQueryState } from "nuqs";
 import {
   findBlockInMarkdown,
@@ -124,6 +131,9 @@ interface GraphData {
   clearState: () => void;
   switchSelectedThread: (thread: Thread) => void;
   setUpdateRenderedArtifactRequired: Dispatch<SetStateAction<boolean>>;
+  phaseState: string | undefined;
+  setPhaseState: Dispatch<SetStateAction<string | undefined>>;
+  submitAssignment: () => Promise<{ wordCount: number; messageCount: number }>;
   setCursorPosition: (pos: EditorCursorPosition | undefined) => void;
   setEditorHasFocus: (focused: boolean) => void;
   pendingEdit: PendingEditState | null;
@@ -155,6 +165,12 @@ function extractStreamDataOutput(output: any) {
 export function GraphProvider({ children }: { children: ReactNode }) {
   const userData = useUserContext();
   const assistantsData = useAssistantContext();
+  const {
+    systemPrompt: assignmentSystemPrompt,
+    assignmentId: assignmentIdParam,
+    assignment: teachingAssignment,
+    apparatusConfiguration,
+  } = useTeachingAssignment();
   const threadData = useThreadContext();
   const { toast } = useToast();
   const [chatStarted, setChatStarted] = useState(false);
@@ -182,6 +198,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState(false);
   const [artifactUpdateFailed, setArtifactUpdateFailed] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
+  const [phaseState, setPhaseState] = useState<string | undefined>(undefined);
+  const phaseStateRef = useRef<string | undefined>(undefined);
   const editorTextContentRef = useRef<string>("");
   const [pendingEdit, setPendingEdit] = useState<PendingEditState | null>(null);
 
@@ -196,6 +214,26 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       }
     };
   }, [setPendingEdit]);
+  // Keep ref in sync with state so the debounced closure always reads current value
+  useEffect(() => {
+    phaseStateRef.current = phaseState;
+  }, [phaseState]);
+
+  // A gate-off profile starts in drafting. The canonical Essays profile keeps
+  // the Socratic phase and its four-message escape hatch.
+  useEffect(() => {
+    if (!teachingAssignment || threadData.threadId) return;
+    const nextPhase =
+      apparatusConfiguration?.drafting_gate === "none"
+        ? "drafting"
+        : "socratic";
+    setPhaseState(nextPhase);
+    phaseStateRef.current = nextPhase;
+  }, [
+    teachingAssignment,
+    apparatusConfiguration?.drafting_gate,
+    threadData.threadId,
+  ]);
 
   // Keep artifactRef in sync so async closures (streamMessageV2) can
   // read the latest artifact value instead of the stale render snapshot.
@@ -363,25 +401,87 @@ export function GraphProvider({ children }: { children: ReactNode }) {
             }
           }
 
+          const scored = {
+            thread_id: thread.thread_id,
+            metadata: thread.metadata as Record<string, unknown>,
+            values: threadValues,
+          };
+          const emptyKickoff = isEmptyKickoffThread(scored);
+
           const hasContent =
             threadValues &&
             ((threadValues.messages &&
               (threadValues.messages as unknown[]).length > 0) ||
               threadValues.artifact);
 
-          if (hasContent) {
+          if (hasContent && !emptyKickoff) {
             lastLoadedThreadIdFromQuery.current = threadData.threadId;
             threadLoadRetries.current = 0;
+          } else if (emptyKickoff && assignmentIdParam && !isStreaming) {
+            // URL/cache pointed at an empty kickoff — resume richer *incomplete*
+            // sibling if any. Never jump to a submitted thread (read-only, no Send).
+            try {
+              const richer =
+                await threadData.getActiveThread(assignmentIdParam);
+              if (
+                richer &&
+                richer.thread_id !== currentThreadId &&
+                !isSubmittedThread(richer as ThreadLike) &&
+                threadContentScore(richer as ThreadLike) >
+                  threadContentScore(scored)
+              ) {
+                lastLoadedThreadIdFromQuery.current = null;
+                threadData.setThreadId(richer.thread_id);
+                return;
+              }
+            } catch (_) {
+              /* continue with empty handling */
+            }
+            if (hasContent) {
+              lastLoadedThreadIdFromQuery.current = threadData.threadId;
+              threadLoadRetries.current = 0;
+            } else if (attempt < MAX_THREAD_RETRIES) {
+              lastLoadedThreadIdFromQuery.current = null;
+              threadLoadRetries.current = attempt + 1;
+              await new Promise((r) => setTimeout(r, 3000));
+              continue;
+            } else {
+              lastLoadedThreadIdFromQuery.current = threadData.threadId;
+              threadLoadRetries.current = 0;
+              threadData.setThreadId(null);
+              return;
+            }
           } else if (attempt < MAX_THREAD_RETRIES) {
             // Thread exists but empty — allow retry on next attempt
             lastLoadedThreadIdFromQuery.current = null;
             threadLoadRetries.current = attempt + 1;
-            await new Promise((r) => setTimeout(r, 3000));
-            continue;
+            if (attempt < MAX_THREAD_RETRIES) {
+              await new Promise((r) => setTimeout(r, 3000));
+              continue;
+            }
           } else {
+            // Thread exists but empty after all retries — prefer a richer
+            // sibling for this assignment before treating as fresh kickoff.
             lastLoadedThreadIdFromQuery.current = threadData.threadId;
             threadLoadRetries.current = 0;
             if (!isStreaming) {
+              if (assignmentIdParam) {
+                try {
+                  const richer =
+                    await threadData.getActiveThread(assignmentIdParam);
+                  if (
+                    richer &&
+                    richer.thread_id !== currentThreadId &&
+                    !isSubmittedThread(richer as ThreadLike)
+                  ) {
+                    lastLoadedThreadIdFromQuery.current = null;
+                    threadData.setThreadId(richer.thread_id);
+                    return;
+                  }
+                } catch (_) {
+                  // fall through to clear threadId
+                }
+              }
               threadData.setThreadId(null);
             }
             return;
@@ -391,6 +491,24 @@ export function GraphProvider({ children }: { children: ReactNode }) {
             switchSelectedThread(thread);
           }
           return;
+        }
+
+        // Thread not found. Prefer a richer *incomplete* sibling before clearing URL.
+        if (assignmentIdParam && !isStreaming) {
+          try {
+            const richer = await threadData.getActiveThread(assignmentIdParam);
+            if (
+              richer &&
+              richer.thread_id !== currentThreadId &&
+              !isSubmittedThread(richer as ThreadLike)
+            ) {
+              lastLoadedThreadIdFromQuery.current = null;
+              threadData.setThreadId(richer.thread_id);
+              return;
+            }
+          } catch (_) {
+            /* retry / clear below */
+          }
         }
 
         // Thread not found. This can happen if the proxy auth check hasn't
@@ -422,6 +540,10 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       const values: Record<string, unknown> = {
         artifact: artifactToUpdate,
       };
+      // Always carry phase_state so a debounced save never clobbers it
+      if (phaseStateRef.current) {
+        values.phase_state = phaseStateRef.current;
+      }
       await client.threads.updateState(threadId, { values });
       setIsArtifactSaved(true);
       lastSavedArtifact.current = artifactToUpdate;
@@ -443,6 +565,68 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     setFirstTokenReceived(true);
   };
 
+  /**
+   * Calculate teaching completion percent and persist to thread metadata.
+   * Called after each graph run completes.
+   */
+  const updateTeachingProgress = async (
+    threadId: string,
+    currentPhaseState: string | undefined,
+    currentArtifact: ArtifactV3 | undefined,
+    currentMessages: BaseMessage[]
+  ) => {
+    try {
+      let completionPercent = 0;
+      const ESCAPE_HATCH_THRESHOLD = 4;
+
+      if (currentPhaseState === "submitted") {
+        completionPercent = 100;
+      } else if (currentPhaseState === "socratic") {
+        // Count human messages (user inputs) to estimate socratic progress
+        const humanMsgCount = currentMessages.filter(
+          (m: any) => m.type === "human"
+        ).length;
+        completionPercent = Math.min(
+          30,
+          Math.round(10 + (humanMsgCount / ESCAPE_HATCH_THRESHOLD) * 20)
+        );
+      } else if (currentPhaseState === "drafting") {
+        // Estimate word count from artifact content
+        let wordCount = 0;
+        if (currentArtifact) {
+          const content = currentArtifact.contents.find(
+            (c) => c.index === currentArtifact.currentIndex
+          );
+          if (content?.type === "text" && content.fullMarkdown) {
+            wordCount = content.fullMarkdown
+              .split(/\s+/)
+              .filter(Boolean).length;
+          }
+        }
+        const wordTarget = 500; // default word target
+        completionPercent = Math.min(
+          80,
+          Math.round(30 + (wordCount / wordTarget) * 50)
+        );
+      }
+
+      const client = createClient();
+      // Get current thread to merge metadata
+      const thread = await client.threads.get(threadId);
+      const existingMetadata =
+        (thread?.metadata as Record<string, unknown>) || {};
+
+      await client.threads.update(threadId, {
+        metadata: {
+          ...existingMetadata,
+          completionPercent,
+        },
+      });
+    } catch (e) {
+      console.error("Failed to update teaching progress", e);
+    }
+  };
+
   const streamMessageV2 = async (params: GraphInput) => {
     setFirstTokenReceived(false);
     setError(false);
@@ -452,6 +636,42 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         description: "No assistant ID found",
         variant: "destructive",
         duration: 5000,
+      });
+      return;
+    }
+
+    if (teachingAssignment && apparatusConfiguration?.ai_assistance === false) {
+      toast({
+        title: "AI assistance is disabled",
+        description:
+          "This assignment provides a local authoring surface and submission without agent calls.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const canvasActionRequested = Boolean(
+      params.highlightedCode ||
+        params.highlightedText ||
+        params.language ||
+        params.artifactLength ||
+        params.regenerateWithEmojis ||
+        params.readingLevel ||
+        params.addComments ||
+        params.addLogs ||
+        params.portLanguage ||
+        params.fixBugs ||
+        params.customQuickActionId
+    );
+    if (
+      teachingAssignment &&
+      apparatusConfiguration?.ai_canvas_actions === false &&
+      canvasActionRequested
+    ) {
+      toast({
+        title: "AI canvas actions are disabled",
+        description: "Edit the document directly or continue the assignment conversation.",
+        variant: "destructive",
       });
       return;
     }
@@ -466,7 +686,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
     let currentThreadId = threadData.threadId;
     if (!currentThreadId) {
-      const newThread = await threadData.createThread();
+      const newThread = await threadData.createThread(
+        assignmentIdParam ?? undefined
+      );
       if (!newThread) {
         setIsStreaming(false);
         toast({
@@ -524,6 +746,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       }),
       ...params,
       ...messagesInput,
+      ...(apparatusConfiguration
+        ? { apparatusConfiguration }
+        : {}),
       ...(highlightedTextForInput && {
         highlightedText: highlightedTextForInput,
       }),
@@ -600,6 +825,12 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                 threadData.modelConfigs[
                   threadData.modelName as keyof typeof threadData.modelConfigs
                 ],
+              ...(assignmentSystemPrompt
+                ? { systemPrompt: assignmentSystemPrompt }
+                : {}),
+              ...(apparatusConfiguration
+                ? { apparatusConfiguration }
+                : {}),
             },
           },
         }
@@ -1480,6 +1711,13 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               }
             }
 
+            if (langgraphNode === "assessThesis" && nodeOutput) {
+              const output = nodeOutput as Record<string, any>;
+              if (output.phase_state) {
+                setPhaseState(output.phase_state);
+              }
+            }
+
             if (langgraphNode === "applyTextEdits" && nodeOutput) {
               const output = extractStreamDataOutput(nodeOutput) as {
                 artifact?: ArtifactV3;
@@ -1615,6 +1853,20 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         console.warn("[track-changes] Failed to compute diff:", e);
       }
     }
+
+    // Persist teaching progress to thread metadata
+    if (
+      threadData.threadId &&
+      assignmentSystemPrompt &&
+      apparatusConfiguration?.tracking !== false
+    ) {
+      void updateTeachingProgress(
+        threadData.threadId,
+        phaseState,
+        artifact,
+        messages
+      );
+    }
   };
 
   const setSelectedArtifact = (index: number) => {
@@ -1668,6 +1920,69 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const submitAssignment = async (): Promise<{
+    wordCount: number;
+    messageCount: number;
+  }> => {
+    // Cancel any pending debounced artifact save so it doesn't race us
+    debouncedAPIUpdate.cancel();
+
+    // Calculate word count from artifact
+    let wordCount = 0;
+    if (artifact) {
+      const content = artifact.contents.find(
+        (c) => c.index === artifact.currentIndex
+      );
+      if (content?.type === "text" && content.fullMarkdown) {
+        wordCount = content.fullMarkdown.split(/\s+/).filter(Boolean).length;
+      }
+    }
+
+    const messageCount = messages.filter((m: any) => m.type === "human").length;
+
+    // Persist to thread
+    if (threadData.threadId) {
+      const client = createClient();
+
+      // 1. Save artifact to thread values (ensure canvas content is persisted)
+      if (artifact) {
+        try {
+          await client.threads.updateState(threadData.threadId, {
+            values: {
+              artifact,
+              phase_state: "submitted",
+            },
+          });
+          lastSavedArtifact.current = artifact;
+          try {
+            localStorage.setItem(
+              `canvas_backup_${threadData.threadId}`,
+              JSON.stringify({ artifact, timestamp: Date.now() })
+            );
+          } catch (_) {}
+        } catch (e) {
+          console.error("Failed to save artifact on submit", e);
+        }
+      }
+
+      // 2. Update thread metadata with completion info
+      const thread = await client.threads.get(threadData.threadId);
+      const existingMetadata =
+        (thread?.metadata as Record<string, unknown>) || {};
+      await client.threads.update(threadData.threadId, {
+        metadata: {
+          ...existingMetadata,
+          completionPercent: 100,
+          phaseState: "submitted",
+          submittedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    setPhaseState("submitted");
+    return { wordCount, messageCount };
+  };
+
   const switchSelectedThread = (thread: Thread) => {
     setUpdateRenderedArtifactRequired(true);
     setThreadSwitched(true);
@@ -1699,6 +2014,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       messages: (thread.values as Record<string, any>)?.messages || undefined,
     };
     const castThreadValues = thread.values as Record<string, any>;
+    if (castThreadValues?.phase_state) {
+      setPhaseState(castThreadValues.phase_state);
+    }
     if (castThreadValues?.artifact) {
       if (isDeprecatedArtifactType(castThreadValues.artifact)) {
         castValues.artifact = convertToArtifactV3(castThreadValues.artifact);
@@ -1708,13 +2026,11 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     } else {
       castValues.artifact = undefined;
     }
-    // If artifact is empty/missing, check localStorage backup for THIS thread.
-    // Use thread.thread_id — threadData.threadId may still be the previous id
-    // until React re-renders after setThreadId.
-    if (!castValues.artifact) {
+    // If artifact is empty/missing, check localStorage backup
+    if (!castValues.artifact && threadData.threadId) {
       try {
         const backupRaw = localStorage.getItem(
-          `canvas_backup_${thread.thread_id}`
+          `canvas_backup_${threadData.threadId}`
         );
         if (backupRaw) {
           const { artifact: backupArtifact, timestamp } = JSON.parse(backupRaw);
@@ -1727,7 +2043,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
             // Restore to server in the background
             const client = createClient();
             void client.threads
-              .updateState(thread.thread_id, {
+              .updateState(threadData.threadId, {
                 values: { artifact: backupArtifact },
               })
               .catch(console.warn);
@@ -1789,6 +2105,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       clearState,
       switchSelectedThread,
       setUpdateRenderedArtifactRequired,
+      phaseState,
+      setPhaseState,
+      submitAssignment,
       setCursorPosition,
       setEditorHasFocus,
       pendingEdit,

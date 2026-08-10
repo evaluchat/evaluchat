@@ -179,7 +179,7 @@ function applyReplace(
 }
 
 /**
- * Update one document section from substantive user direction.
+ * Update one document section from substantive student direction (drafting phase).
  * Avoids full-document rewriteArtifact, which can replace the canvas with chat text.
  */
 export const integrateCanvasDirection = async (

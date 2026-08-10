@@ -9,6 +9,9 @@ import {
   threadOwnerMatches,
   withOwnedThreadMetadata,
 } from "../../../lib/thread-ownership";
+import { getCustomAssignmentById } from "../../../lib/teaching/assignment-file-store";
+import { getSeedAssignmentById } from "../../../lib/teaching/seed-loader";
+import { resolveApparatusConfiguration } from "../../../lib/apparatuses/runtime";
 
 function getCorsHeaders() {
   return {
@@ -43,6 +46,23 @@ async function assertThreadOwnership(
   }
 
   return null;
+}
+
+async function getAssignmentTreatment(assignmentId: unknown) {
+  if (typeof assignmentId !== "string" || assignmentId.length === 0) {
+    return undefined;
+  }
+  const assignment =
+    (await getCustomAssignmentById(assignmentId)) ||
+    (await getSeedAssignmentById(assignmentId));
+  if (!assignment) return undefined;
+  return (
+    assignment.apparatusConfiguration ??
+    resolveApparatusConfiguration({
+      apparatusId: assignment.apparatusId,
+      profileId: assignment.apparatusProfileId,
+    }).apparatusConfiguration
+  );
 }
 
 async function handleRequest(req: NextRequest, method: string) {
@@ -114,6 +134,47 @@ async function handleRequest(req: NextRequest, method: string) {
           supabase_session: session,
           supabase_user_id: user.id,
         };
+
+        // Apparatus treatment is server-authoritative. Resolve the immutable
+        // snapshot from the assignment recorded on the owned thread and
+        // overwrite any browser-supplied knob values before forwarding.
+        if (
+          classification.kind === "thread_by_id" ||
+          isThreadCreate(method, classification)
+        ) {
+          try {
+            let assignmentId: unknown = parsedBody.metadata?.assignment_id;
+            if (classification.kind === "thread_by_id") {
+              const threadRes = await fetch(
+                `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
+                { headers: { "x-api-key": process.env.LANGCHAIN_API_KEY || "" } }
+              );
+              const thread = threadRes.ok ? await threadRes.json() : null;
+              assignmentId = thread?.metadata?.assignment_id;
+            }
+            const treatment = await getAssignmentTreatment(assignmentId);
+            if (treatment) {
+              if (parsedBody.input && typeof parsedBody.input === "object") {
+                parsedBody.input.apparatusConfiguration = treatment;
+              }
+              parsedBody.config.configurable.apparatusConfiguration = treatment;
+            } else {
+              if (parsedBody.input && typeof parsedBody.input === "object") {
+                delete parsedBody.input.apparatusConfiguration;
+              }
+              delete parsedBody.config.configurable.apparatusConfiguration;
+            }
+          } catch (apparatusError) {
+            console.error(
+              "Failed to resolve server apparatus snapshot",
+              apparatusError
+            );
+            return NextResponse.json(
+              { error: "Could not resolve assignment treatment" },
+              { status: 409 }
+            );
+          }
+        }
 
         // POST /threads — stamp ownership metadata.
         if (isThreadCreate(method, classification)) {

@@ -1,8 +1,10 @@
 /**
  * Integration test: verify generatePath routes mechanical text edits correctly.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HumanMessage } from "@langchain/core/messages";
+
+const mockDetermineTeachingIntent = vi.fn();
 
 vi.mock("../../utils.js", () => ({
   getModelConfig: () => ({ modelProvider: "openai", modelName: "gpt-4o" }),
@@ -19,6 +21,11 @@ vi.mock("../../utils.js", () => ({
 
 vi.mock("../../nodes/generate-path/dynamic-determine-path.js", () => ({
   dynamicDeterminePath: async () => ({ route: "generateArtifact" }),
+}));
+
+vi.mock("../../nodes/generate-path/determine-teaching-intent.js", () => ({
+  determineTeachingIntent: (...args: unknown[]) =>
+    mockDetermineTeachingIntent(...args),
 }));
 
 vi.mock("../../nodes/generate-path/documents.js", () => ({
@@ -44,9 +51,18 @@ function makeState(overrides: any = {}) {
       new HumanMessage("Replace all instances of CAIMLD with CAMDLE"),
     ],
     artifact: overrides.artifact || undefined,
+    phase_state: overrides.phase_state || "drafting",
     ...overrides,
   } as any;
 }
+
+beforeEach(() => {
+  mockDetermineTeachingIntent.mockReset();
+  mockDetermineTeachingIntent.mockResolvedValue({
+    route: "replyToGeneralInput",
+    reasoning: "mock default coaching chat",
+  });
+});
 
 describe("generatePath routing for 'replace all'", () => {
   it("routes to applyTextEdits when multiple artifact contents exist", async () => {
@@ -85,6 +101,11 @@ describe("generatePath routing for 'replace all'", () => {
   });
 
   it("does not route to applyTextEdits when no artifact exists", async () => {
+    mockDetermineTeachingIntent.mockResolvedValueOnce({
+      route: "generateArtifact",
+      reasoning: "blank canvas",
+    });
+
     const state = makeState({
       artifact: undefined,
     });
@@ -93,8 +114,9 @@ describe("generatePath routing for 'replace all'", () => {
     expect(result.next).toBe("generateArtifact");
   });
 
-  it("routes to applyTextEdits regardless of other state", async () => {
+  it("routes to applyTextEdits in socratic phase (mechanical replace allowed)", async () => {
     const state = makeState({
+      phase_state: "socratic",
       artifact: {
         currentIndex: 1,
         contents: [
@@ -107,7 +129,7 @@ describe("generatePath routing for 'replace all'", () => {
     expect(result.next).toBe("applyTextEdits");
   });
 
-  it("routes via dynamicDeterminePath when message is not a replace-all intent", async () => {
+  it("routes to replyToGeneralInput when message is not a replace-all intent", async () => {
     const state = makeState({
       _messages: [new HumanMessage("What do you think about CAIMLD?")],
       artifact: {
@@ -119,7 +141,7 @@ describe("generatePath routing for 'replace all'", () => {
     });
 
     const result = await generatePath(state, {} as any);
-    expect(result.next).toBe("generateArtifact");
+    expect(result.next).toBe("replyToGeneralInput");
   });
 });
 
@@ -195,6 +217,111 @@ describe("generatePath routing for selection literal replace", () => {
     });
 
     const result = await generatePath(state, {} as any);
+    expect(result.next).toBe("replyToGeneralInput");
+  });
+});
+
+describe("generatePath LLM intent routing in teaching phases", () => {
+  it("routes explicit rewrite to rewriteArtifact in socratic phase", async () => {
+    mockDetermineTeachingIntent.mockResolvedValueOnce({
+      route: "rewriteArtifact",
+      reasoning: "explicit full rewrite",
+    });
+
+    const state = makeState({
+      phase_state: "socratic",
+      _messages: [new HumanMessage("Rewrite the whole document to be shorter")],
+      artifact: {
+        currentIndex: 1,
+        contents: [
+          {
+            index: 1,
+            type: "text",
+            fullMarkdown: "This is a long paragraph with many words.",
+          },
+        ],
+      },
+    });
+
+    const result = await generatePath(state, {} as any);
+    expect(result.next).toBe("rewriteArtifact");
+  });
+
+  it("routes explicit rewrite to rewriteArtifact in drafting phase", async () => {
+    mockDetermineTeachingIntent.mockResolvedValueOnce({
+      route: "rewriteArtifact",
+      reasoning: "explicit full rewrite",
+    });
+
+    const state = makeState({
+      phase_state: "drafting",
+      _messages: [new HumanMessage("Make it shorter")],
+      artifact: {
+        currentIndex: 1,
+        contents: [
+          {
+            index: 1,
+            type: "text",
+            fullMarkdown: "This is a long paragraph with many words.",
+          },
+        ],
+      },
+    });
+
+    const result = await generatePath(state, {} as any);
+    expect(result.next).toBe("rewriteArtifact");
+  });
+
+  it("routes substantive content direction to integrateCanvasDirection in drafting", async () => {
+    mockDetermineTeachingIntent.mockResolvedValueOnce({
+      route: "integrateCanvasDirection",
+      reasoning: "declarative content for one section",
+    });
+
+    const state = makeState({
+      phase_state: "drafting",
+      _messages: [
+        new HumanMessage(
+          "What is novel is that language skills are needed to negotiate with LLMs effectively, and constraining the AI creates observable language engagement for teachers to assess."
+        ),
+      ],
+      artifact: {
+        currentIndex: 1,
+        contents: [
+          {
+            index: 1,
+            type: "text",
+            fullMarkdown: "## Section\n\nOld CAMDLE definition here.",
+          },
+        ],
+      },
+    });
+
+    const result = await generatePath(state, {} as any);
+    expect(result.next).toBe("integrateCanvasDirection");
+  });
+
+  it("delegates coaching messages to determineTeachingIntent", async () => {
+    const state = makeState({
+      _messages: [
+        new HumanMessage(
+          "That is a valid question - and I'm wondering if I should approach scholarship organisations directly."
+        ),
+      ],
+      artifact: {
+        currentIndex: 1,
+        contents: [
+          {
+            index: 1,
+            type: "text",
+            fullMarkdown: "## Section\n\nExisting research proposal content.",
+          },
+        ],
+      },
+    });
+
+    const result = await generatePath(state, {} as any);
+    expect(mockDetermineTeachingIntent).toHaveBeenCalled();
     expect(result.next).toBe("replyToGeneralInput");
   });
 });

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { postLoginPath } from "@/lib/teaching/config";
 
 function RegisterForm() {
   const router = useRouter();
@@ -26,7 +27,7 @@ function RegisterForm() {
     }
 
     if (user.user_metadata?.registrationComplete === true) {
-      router.replace("/canvas");
+      router.replace(postLoginPath(user));
     }
   }, [user, loading, router]);
 
@@ -51,7 +52,7 @@ function RegisterForm() {
         return;
       }
 
-      router.replace("/canvas");
+      router.replace(postLoginPath(user));
     } catch {
       setError("Failed to complete registration");
     } finally {

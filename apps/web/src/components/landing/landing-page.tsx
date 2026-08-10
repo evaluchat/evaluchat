@@ -1,7 +1,6 @@
 "use client";
 
 import { useUserContext } from "@/contexts/UserContext";
-import { PersonaSwitcher } from "@/components/persona/persona-switcher";
 import { Menu, X, ArrowUpRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -61,7 +60,6 @@ function LandingHeader() {
               <Link className="hlink" href="/auth/signout">
                 Sign out
               </Link>
-              <PersonaSwitcher />
             </>
           ) : (
             <Link className="hlink" href="/auth/login">

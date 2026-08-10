@@ -3,15 +3,14 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { getSiteUrl } from "@/lib/teaching/admin-client";
+import { finalizeSelfSignupAdmin } from "@/lib/teaching/invitation-accept";
 import { SignupWithEmailInput } from "./Signup";
 
 export async function signup(input: SignupWithEmailInput, baseUrl: string) {
   const supabase = await createClient();
 
-  const role = input.role || "student";
-  const metadata: Record<string, string> = {
-    role,
-  };
+  const metadata: Record<string, string> = {};
 
   if (input.name) {
     metadata.name = input.name;
@@ -23,16 +22,32 @@ export async function signup(input: SignupWithEmailInput, baseUrl: string) {
     email: input.email,
     password: input.password,
     options: {
-      emailRedirectTo: `${baseUrl}/auth/confirm`,
+      emailRedirectTo: `${(baseUrl || getSiteUrl()).replace(/\/$/, "")}/auth/confirm`,
       data: metadata,
     },
   };
 
-  const { error } = await supabase.auth.signUp(data);
+  const { data: signUpData, error } = await supabase.auth.signUp(data);
 
   if (error) {
     console.error(error);
     redirect("/auth/signup?error=true");
+  }
+
+  if (signUpData.user) {
+    try {
+      await finalizeSelfSignupAdmin({
+        user: signUpData.user,
+        name: input.name?.trim() || input.email,
+      });
+    } catch (finalizeError) {
+      console.error("[auth/signup] failed to create organisation:", finalizeError);
+      redirect("/auth/signup?error=true");
+    }
+  }
+
+  if (signUpData.session) {
+    redirect("/teacher");
   }
 
   redirect("/auth/signup/success");

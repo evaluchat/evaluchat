@@ -1,5 +1,7 @@
 import { DocumentInterface } from "@langchain/core/documents";
 
+export * from "./apparatus.js";
+
 export interface ModelConfigurationParams {
   name: string;
   label: string;
@@ -238,6 +240,13 @@ export interface GraphInput {
 
   webSearchEnabled?: boolean;
   webSearchResults?: SearchResult[];
+
+  // Teaching POC
+  phase_state?: TeachingPhase;
+  thesis?: ThesisAssessment;
+
+  /** Server-resolved immutable apparatus treatment snapshot. */
+  apparatusConfiguration?: import("./apparatus.js").ApparatusConfiguration;
 }
 
 // --- Text edit types (deterministic canvas edits) ---
@@ -273,3 +282,16 @@ export type TextEditSummary =
       op: "replace_in_selection";
       error: string;
     };
+
+// --- Teaching POC types ---
+
+export type TeachingPhase = "socratic" | "drafting" | "submitted";
+
+export interface ThesisAssessment {
+  /** Whether the thesis passed the quality gate */
+  passed: boolean;
+  /** Brief feedback for the student */
+  feedback: string;
+  /** The extracted thesis statement, if one was identified */
+  thesis?: string;
+}

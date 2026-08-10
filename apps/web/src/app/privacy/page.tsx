@@ -6,7 +6,7 @@ import { PrivacyPolicyContent } from "@/components/legal/privacy-policy-content"
 export const metadata: Metadata = {
   title: "Privacy Policy · Evaluchat",
   description:
-    "How Evaluchat collects and uses personal data, including AI providers and Creem payments.",
+    "How Evaluchat collects and uses personal data in the public beta.",
 };
 
 export default function PrivacyPage() {

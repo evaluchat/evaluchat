@@ -14,7 +14,7 @@ import {
 
 describe("login-branding", () => {
   it("points docs to the public docs site", () => {
-    expect(DOCS_URL).toBe("https://docs.evaluchat.com");
+    expect(DOCS_URL).toBe("https://docs.evaluchat.org");
   });
 
   it("uses the product copyright notice (pre-incorporation)", () => {
@@ -28,7 +28,7 @@ describe("login-branding", () => {
   it("exposes public legal paths and support contact", () => {
     expect(PRIVACY_PATH).toBe("/privacy");
     expect(TERMS_PATH).toBe("/terms");
-    expect(SUPPORT_EMAIL).toBe("hello@evaluchat.com");
+    expect(SUPPORT_EMAIL).toBe("hello@evaluchat.org");
     expect(LEGAL_OPERATOR_NAME).toBe("Abraham van Heerden");
   });
 
@@ -39,7 +39,7 @@ describe("login-branding", () => {
 
   it("summarizes login pricing in one short line", () => {
     expect(LOGIN_PRICING_SUMMARY).toBe(
-      "PRICING - Free tier, with premium options at US$5 for 50 assignments."
+      "PUBLIC BETA - Open education research workspace; no billing in this release."
     );
   });
 });

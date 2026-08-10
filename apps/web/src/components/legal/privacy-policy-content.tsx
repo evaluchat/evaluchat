@@ -51,18 +51,6 @@ export function PrivacyPolicyContent() {
             process that data to provide Evaluchat under their instructions and
             our <Link href={TERMS_PATH}>Terms of Service</Link>.
           </li>
-          <li>
-            <strong>Creem</strong> (Armitage Labs OÜ, Estonia) is an independent
-            controller for payment and billing data when you buy credits. See{" "}
-            <a
-              href="https://www.creem.io/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Creem’s Privacy Policy
-            </a>
-            .
-          </li>
         </ul>
       </section>
 
@@ -129,11 +117,8 @@ export function PrivacyPolicyContent() {
       <section className="space-y-3">
         <h2>Payments</h2>
         <p>
-          Credit purchases are processed by <strong>Creem</strong> (Armitage
-          Labs OÜ) as Merchant of Record. Creem collects billing details, issues
-          invoices, and handles tax on the purchase. We receive order
-          information we need to grant credits to your account (for example
-          teacher id, product, and order reference).
+          The public beta does not collect payment or billing data. If that
+          changes, this policy will be updated before paid access begins.
         </p>
       </section>
 

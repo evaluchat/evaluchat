@@ -107,7 +107,7 @@ function ConfirmEmailContent() {
         const path =
           (next && next.startsWith("/") && !next.startsWith("//")
             ? next
-            : null) ?? "/canvas";
+            : null) ?? "/teacher";
         router.replace(path);
         return;
       }

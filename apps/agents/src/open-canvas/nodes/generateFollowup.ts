@@ -85,10 +85,25 @@ export const generateFollowup = async (
       : currentArtifactContent.code
     : undefined;
 
-  const formattedPrompt = FOLLOWUP_ARTIFACT_PROMPT.replace(
-    "{artifactContent}",
-    artifactContent || "No artifacts generated yet."
-  )
+  // Add phase-specific instructions for teaching mode
+  let phaseInstructions = "";
+  if (state.phase_state === "drafting") {
+    phaseInstructions = `
+
+## Teaching Mode: Drafting Phase
+You just generated content on the canvas for a student. Your followup should:
+- Reference what you drafted (e.g., "I've drafted your introduction" or "Look at the canvas—I've taken your thoughts and written the first section")
+- Mention that they should review it and let you know if it captures their argument
+- Ask if they want to continue with the next section or make adjustments
+- Keep it conversational and encouraging (2-3 sentences max)
+- Match the tone from the Leo transcript: supportive but direct`;
+  }
+
+  const formattedPrompt = (FOLLOWUP_ARTIFACT_PROMPT + phaseInstructions)
+    .replace(
+      "{artifactContent}",
+      artifactContent || "No artifacts generated yet."
+    )
     .replace("{reflections}", memoriesAsString)
     .replace(
       "{conversation}",

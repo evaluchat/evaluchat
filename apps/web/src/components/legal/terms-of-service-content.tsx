@@ -30,12 +30,8 @@ export function TermsOfServiceContent() {
           the finished work.
         </p>
         <p>
-          Self-serve access is typically sold as <strong>credits</strong>. The
-          published Entry pack is about <strong>US$5 for 50 credits</strong>,
-          where one credit generally covers one student completing one
-          assignment (about &lt;1000 words) on the budget model tier, subject to
-          fair-use dialogue limits. Credits are consumed on assignment
-          submission.
+          The public beta is provided for education and research testing. There
+          is no billing, credit balance, or paid tier in this release.
         </p>
       </section>
 
@@ -63,38 +59,11 @@ export function TermsOfServiceContent() {
       </section>
 
       <section className="space-y-3">
-        <h2>Credits and payments</h2>
+        <h2>Beta access</h2>
         <p>
-          Credit purchases are sold by{" "}
-          <strong>Creem (Armitage Labs OÜ, Estonia)</strong> as Merchant of
-          Record. When you buy credits, you also agree to Creem’s{" "}
-          <a
-            href="https://www.creem.io/buyer-terms"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Buyer Terms
-          </a>
-          . Creem handles payment processing, invoicing, and applicable
-          transaction taxes for the purchase.
-        </p>
-        <p>
-          After a successful purchase, Evaluchat grants the purchased credits to
-          the relevant teacher or organisation account and provides the Service.
-          Credits are valid for <strong>12 months</strong> from purchase unless
-          a specific offer states otherwise. Unused credits do not earn interest
-          and are not a stored-value wallet beyond access to the Service.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2>Refunds</h2>
-        <p>
-          Evaluchat decides refund eligibility for the Service (for example
-          clear service failure, or unused credits where we agree a refund is
-          fair). Approved refunds are processed through Creem. Creem may also
-          issue refunds within its own chargeback-prevention windows under
-          Creem’s policies. Contact {SUPPORT_EMAIL} first for purchase issues.
+          Beta access may be limited, changed, or withdrawn while the platform
+          is evaluated. Any future commercial terms will be published before
+          paid access is introduced.
         </p>
       </section>
 
@@ -116,7 +85,8 @@ export function TermsOfServiceContent() {
           </strong>{" "}
           under their terms. See the{" "}
           <Link href={PRIVACY_PATH}>Privacy Policy</Link> for details. A
-          no-train / premium private tier is planned and is not available yet.
+          Research apparatus profiles may disable AI assistance entirely or
+          select a different reviewed treatment.
         </p>
       </section>
 
@@ -144,9 +114,8 @@ export function TermsOfServiceContent() {
         </p>
         <p>
           To the fullest extent permitted by law, Evaluchat’s total liability
-          arising out of or relating to the Service is limited to the greater of
-          (a) the amounts you paid for credits in the three months before the
-          claim, or (b) US$50. We are not liable for indirect, incidental, or
+          arising out of or relating to the Service is limited to US$50. We are
+          not liable for indirect, incidental, or
           consequential damages. Some jurisdictions do not allow certain
           limitations; in those cases, the limitation applies only to the extent
           allowed.
@@ -158,8 +127,8 @@ export function TermsOfServiceContent() {
         <p>
           These Terms (as between you and Evaluchat regarding the Service) are
           governed by the laws of South Africa, without regard to
-          conflict-of-law rules. Disputes about a credit purchase with Creem are
-          governed by Creem’s buyer terms and applicable law as Creem specifies.
+          conflict-of-law rules. The public beta has no paid access or billing
+          disputes.
         </p>
       </section>
 

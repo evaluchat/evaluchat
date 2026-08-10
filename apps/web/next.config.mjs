@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  allowedDevOrigins: ["dev.evaluchat.com"],
+  allowedDevOrigins: ["dev.evaluchat.org"],
   eslint: {
     // Disable ESLint during builds for now to allow warnings
     ignoreDuringBuilds: true,

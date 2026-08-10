@@ -911,5 +911,5 @@ platform’s role, data access arrangements, funding, and author affiliations.
 
 Evaluchat is a product prototype exploring how AI can be used in writing
 education without making the learner’s process invisible. Product information
-is available at [docs.evaluchat.com](https://docs.evaluchat.com/). Research
+is available at [docs.evaluchat.org](https://docs.evaluchat.org/). Research
 questions and claims in this paper remain open to independent scrutiny.

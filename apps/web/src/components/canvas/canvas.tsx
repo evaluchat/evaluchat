@@ -37,11 +37,15 @@ import {
 } from "@/components/ui/resizable";
 import { CHAT_COLLAPSED_QUERY_PARAM } from "@/constants";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 
 export function CanvasComponent() {
   const { graphData } = useGraphContext();
   const { setModelName, setModelConfig } = useThreadContext();
   const { setArtifact, chatStarted, setChatStarted } = graphData;
+  const teachingAssignment = useTeachingAssignmentOptional();
+  const aiAssistanceEnabled =
+    teachingAssignment?.apparatusConfiguration?.ai_assistance !== false;
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [webSearchResultsOpen, setWebSearchResultsOpen] = useState(false);
@@ -49,6 +53,19 @@ export function CanvasComponent() {
 
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  useEffect(() => {
+    if (aiAssistanceEnabled || chatStarted || graphData.artifact) return;
+    // AI-off profiles still need a first-class authoring surface. Seed an
+    // empty markdown artifact locally; submission remains available without a
+    // graph run.
+    setArtifact({
+      currentIndex: 1,
+      contents: [{ index: 1, type: "text", title: "Assignment", fullMarkdown: "" }],
+    });
+    setChatStarted(true);
+    setIsEditing(true);
+  }, [aiAssistanceEnabled, chatStarted, graphData.artifact, setArtifact, setChatStarted]);
 
   const chatCollapsedSearchParam = searchParams.get(CHAT_COLLAPSED_QUERY_PARAM);
   useEffect(() => {
@@ -110,7 +127,7 @@ export function CanvasComponent() {
   return (
     <div className="flex h-screen flex-col">
       <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
-        {!chatStarted && (
+        {!chatStarted && aiAssistanceEnabled && (
           <NoSSRWrapper>
             <Suspense fallback={<div>Loading...</div>}>
               <ContentComposerChatInterface
@@ -166,7 +183,7 @@ export function CanvasComponent() {
             </Suspense>
           </NoSSRWrapper>
         )}
-        {!chatCollapsed && chatStarted && (
+        {!chatCollapsed && chatStarted && aiAssistanceEnabled && (
           <ResizablePanel
             defaultSize={25}
             minSize={15}
@@ -234,9 +251,9 @@ export function CanvasComponent() {
 
         {chatStarted && (
           <>
-            <ResizableHandle />
+            {aiAssistanceEnabled && <ResizableHandle />}
             <ResizablePanel
-              defaultSize={chatCollapsed ? 100 : 75}
+              defaultSize={aiAssistanceEnabled ? (chatCollapsed ? 100 : 75) : 100}
               maxSize={85}
               minSize={50}
               id="canvas-panel"

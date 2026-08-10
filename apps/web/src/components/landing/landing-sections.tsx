@@ -233,9 +233,9 @@ export function BuildingSection() {
               </strong>
             </p>
             <div className="dark-ctas" style={{ marginTop: 18 }}>
-              <button type="button" className="btn btn-outline">
+              <a className="btn btn-outline" href="/auth/signup">
                 Explore Essays
-              </button>
+              </a>
             </div>
           </div>
           <div className="meas" id="research-build">
@@ -251,9 +251,14 @@ export function BuildingSection() {
               <strong>Questions first. Evidence when we have it.</strong>
             </p>
             <div className="dark-ctas" style={{ marginTop: 18 }}>
-              <button type="button" className="btn btn-outline">
+              <a
+                className="btn btn-outline"
+                href="https://github.com/evaluchat/research"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Read the research
-              </button>
+              </a>
             </div>
           </div>
         </div>
@@ -353,9 +358,14 @@ export function ResearchSection() {
           </strong>
         </p>
         <div className="dark-ctas" style={{ marginTop: 22 }}>
-          <button type="button" className="btn btn-outline">
+          <a
+            className="btn btn-outline"
+            href="https://github.com/evaluchat/research"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             Read the research
-          </button>
+          </a>
         </div>
       </div>
     </section>

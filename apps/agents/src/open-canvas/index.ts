@@ -9,6 +9,7 @@ import { rewriteArtifact } from "./nodes/rewrite-artifact/index.js";
 import { rewriteArtifactTheme } from "./nodes/rewriteArtifactTheme.js";
 import { updateArtifact } from "./nodes/updateArtifact.js";
 import { replyToGeneralInput } from "./nodes/replyToGeneralInput.js";
+import { assessThesis } from "./nodes/assess-thesis/index.js";
 import { rewriteCodeArtifactTheme } from "./nodes/rewriteCodeArtifactTheme.js";
 import { generateTitleNode } from "./nodes/generateTitle.js";
 import { updateHighlightedText } from "./nodes/updateHighlightedText.js";
@@ -18,6 +19,7 @@ import { OpenCanvasGraphAnnotation } from "./state.js";
 import { summarizer } from "./nodes/summarizer.js";
 import { graph as webSearchGraph } from "../web-search/index.js";
 import { createAIMessageFromWebResults } from "../utils.js";
+import { noAiAssignment } from "./nodes/noAiAssignment.js";
 
 const routeNode = (state: typeof OpenCanvasGraphAnnotation.State) => {
   if (!state.next) {
@@ -113,6 +115,8 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
   .addEdge(START, "generatePath")
   // Nodes
   .addNode("replyToGeneralInput", replyToGeneralInput)
+  .addNode("noAiAssignment", noAiAssignment)
+  .addNode("assessThesis", assessThesis)
   .addNode("rewriteArtifact", rewriteArtifact)
   .addNode("rewriteArtifactTheme", rewriteArtifactTheme)
   .addNode("rewriteCodeArtifactTheme", rewriteCodeArtifactTheme)
@@ -142,9 +146,11 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
     "applyTextEdits",
     "integrateCanvasDirection",
     "webSearch",
+    "noAiAssignment",
   ])
   // Edges
-  .addEdge("generateArtifact", "generateFollowup")
+  // Route generateArtifact through assessThesis to check for phase transitions
+  .addEdge("generateArtifact", "assessThesis")
   .addEdge("updateArtifact", "generateFollowup")
   .addEdge("updateHighlightedText", "generateFollowup")
   .addEdge("applyTextEdits", "generateFollowup")
@@ -154,8 +160,42 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
   .addEdge("rewriteCodeArtifactTheme", "generateFollowup")
   .addEdge("customAction", "generateFollowup")
   .addEdge("webSearch", "routePostWebSearch")
-  // End edges
-  .addEdge("replyToGeneralInput", "cleanState")
+  .addEdge("noAiAssignment", END)
+  // End edges — assess thesis only in socratic phase; otherwise go straight to cleanState
+  .addConditionalEdges(
+    "replyToGeneralInput",
+    (state) => {
+      if (state.apparatusConfiguration?.ai_assistance === false) {
+        return "cleanState";
+      }
+      const phase =
+        state.phase_state ||
+        (state.apparatusConfiguration?.drafting_gate === "none"
+          ? "drafting"
+          : "socratic");
+      if (phase === "socratic" && !state.thesis?.passed) {
+        return "assessThesis";
+      }
+      return "cleanState";
+    },
+    ["assessThesis", "cleanState"]
+  )
+  // Route assessThesis to generateFollowup if there's an artifact with content, otherwise cleanState.
+  // In socratic phase, skip generateFollowup — no canvas changes happened, so the
+  // followup message would be a redundant duplicate of replyToGeneralInput's response.
+  .addConditionalEdges(
+    "assessThesis",
+    (state) => {
+      if (state.phase_state === "socratic" || !state.phase_state) {
+        return "cleanState";
+      }
+      const hasContent = state.artifact?.contents?.some(
+        (c) => c.type === "text" && (c as any).fullMarkdown?.trim()
+      );
+      return hasContent ? "generateFollowup" : "cleanState";
+    },
+    ["generateFollowup", "cleanState"]
+  )
   // Only reflect if an artifact was generated/updated.
   .addEdge("generateFollowup", "reflect")
   .addEdge("reflect", "cleanState")

@@ -2,6 +2,17 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { getSupabasePublicKey, getSupabaseUrl } from "./env";
 
+export function isPublicPath(pathname: string): boolean {
+  const path = pathname.split("?")[0].replace(/\/+$/, "") || "/";
+  return (
+    path === "/" ||
+    path === "/privacy" ||
+    path === "/terms" ||
+    path.startsWith("/auth/") ||
+    path === "/invite/accept"
+  );
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,

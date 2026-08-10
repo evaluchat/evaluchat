@@ -44,9 +44,68 @@ describe("replyToGeneralInput", () => {
     utils.optionallyGetSystemPromptFromConfig.mockReturnValue(undefined);
   });
 
-  it("should respond to general questions with the generic assistant prompt", async () => {
+  it("should include socratic phase instructions when phase_state is socratic", async () => {
     const state = createMockState({
-      _messages: [new HumanMessage({ content: "General question", id: "1" })],
+      phase_state: "socratic",
+      _messages: [
+        new HumanMessage({ content: "Help me with my thesis", id: "1" }),
+      ],
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    // Check that the model was called with socratic instructions
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("Current phase: Socratic"),
+      }),
+      ...state._messages,
+    ]);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("NEVER blocked from using the canvas"),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("should include drafting phase instructions when phase_state is drafting", async () => {
+    const state = createMockState({
+      phase_state: "drafting",
+      _messages: [
+        new HumanMessage({ content: "Help me write my introduction", id: "1" }),
+      ],
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    // Check that the model was called with drafting instructions
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("Current phase: Drafting"),
+      }),
+      ...state._messages,
+    ]);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("Collaborative review"),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("should include submitted phase instructions when phase_state is submitted", async () => {
+    const state = createMockState({
+      phase_state: "submitted",
+      _messages: [new HumanMessage({ content: "How did I do?", id: "1" })],
     });
     const config = createMockConfig({ assistant_id: "test-123" });
 
@@ -55,37 +114,61 @@ describe("replyToGeneralInput", () => {
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
         role: "system",
-        content: expect.stringContaining(
-          "AI assistant tasked with responding to the users question"
-        ),
+        content: expect.stringContaining("Current phase: Submitted"),
+      }),
+      ...state._messages,
+    ]);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("assignment is complete"),
       }),
       ...state._messages,
     ]);
   });
 
-  it("should combine custom system prompt with the reply prompt", async () => {
-    const customPrompt = "Prefer concise answers";
+  it("should default to socratic phase when phase_state is undefined", async () => {
     const state = createMockState({
+      phase_state: undefined, // No phase set
+      _messages: [new HumanMessage({ content: "General question", id: "1" })],
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    // Should default to socratic behavior
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("Current phase: Socratic"),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("should combine assignment system prompt with phase instructions", async () => {
+    const assignmentPrompt = "Write a 5-paragraph essay about Romeo and Juliet";
+    const state = createMockState({
+      phase_state: "socratic",
       _messages: [new HumanMessage({ content: "I need help", id: "1" })],
     });
     const config = createMockConfig({
       assistant_id: "test-123",
-      systemPrompt: customPrompt,
+      systemPrompt: assignmentPrompt,
     });
 
     const utils = vi.mocked(await import("../../utils.js"));
-    utils.optionallyGetSystemPromptFromConfig.mockReturnValue(customPrompt);
+    utils.optionallyGetSystemPromptFromConfig.mockReturnValue(assignmentPrompt);
 
     await replyToGeneralInput(state, config);
 
+    // Should include both the assignment prompt and phase instructions
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
         role: "system",
         content: expect.stringMatching(
-          new RegExp(
-            `${customPrompt}.*AI assistant tasked with responding to the users question`,
-            "s"
-          )
+          new RegExp(`${assignmentPrompt}.*Current phase: Socratic`, "s")
         ),
       }),
       ...state._messages,
@@ -94,12 +177,13 @@ describe("replyToGeneralInput", () => {
 
   it("should return the AI response in the correct format", async () => {
     const mockResponse = new AIMessage({
-      content: "Here's my response",
+      content: "Here's my coaching response",
       id: "ai-response-123",
     });
     mockModel.invoke.mockResolvedValue(mockResponse);
 
     const state = createMockState({
+      phase_state: "socratic",
       _messages: [new HumanMessage({ content: "Help me", id: "1" })],
     });
     const config = createMockConfig({ assistant_id: "test-123" });
@@ -114,6 +198,7 @@ describe("replyToGeneralInput", () => {
 
   it("should retrieve reflections from store", async () => {
     const state = createMockState({
+      phase_state: "socratic",
       _messages: [new HumanMessage({ content: "Help me", id: "1" })],
     });
     const config = createMockConfig({ assistant_id: "test-assistant-456" });
@@ -121,7 +206,7 @@ describe("replyToGeneralInput", () => {
     // Configure mock store to return reflections
     const mockReflections = {
       styleRules: ["Be concise", "Use active voice"],
-      content: ["User prefers examples", "Works on long-form writing"],
+      content: ["Student prefers examples", "Struggles with thesis statements"],
     };
     mockStore.get.mockResolvedValue({ value: mockReflections });
 
@@ -136,6 +221,7 @@ describe("replyToGeneralInput", () => {
 
   it("should handle missing assistant_id in config", async () => {
     const state = createMockState({
+      phase_state: "socratic",
       _messages: [new HumanMessage({ content: "Help me", id: "1" })],
     });
     const config = createMockConfig({ assistant_id: undefined });
@@ -147,6 +233,7 @@ describe("replyToGeneralInput", () => {
 
   it("should use user role for o1 mini model", async () => {
     const state = createMockState({
+      phase_state: "socratic",
       _messages: [new HumanMessage({ content: "Help me", id: "1" })],
     });
     const config = createMockConfig({ assistant_id: "test-123" });
@@ -160,9 +247,7 @@ describe("replyToGeneralInput", () => {
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
         role: "user", // Not "system"
-        content: expect.stringContaining(
-          "AI assistant tasked with responding to the users question"
-        ),
+        content: expect.stringContaining("Current phase: Socratic"),
       }),
       ...state._messages,
     ]);

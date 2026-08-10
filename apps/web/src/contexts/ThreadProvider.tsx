@@ -13,6 +13,14 @@ import { createContext, ReactNode, useContext, useMemo, useState } from "react";
 import { useUserContext } from "./UserContext";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryState } from "nuqs";
+import {
+  emptyKickoffsToAbandon,
+  isSubmittedThread,
+  selectActiveThread,
+  shouldRejectCachedThread,
+  type ThreadLike,
+} from "@/lib/teaching/select-active-thread";
+
 type ThreadContentType = {
   threadId: string | null;
   userThreads: Thread[];
@@ -180,7 +188,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
       // (or nothing) exists so students can start a fresh attempt.
       if (assignmentId) {
         const existing = await getActiveThread(assignmentId);
-        if (existing) {
+        if (existing && !isSubmittedThread(existing as ThreadLike)) {
           setThreadId(existing.thread_id);
           try {
             const cache = JSON.parse(
@@ -195,8 +203,6 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
       const thread = await client.threads.create({
         metadata: {
-          user_id: currentUser.id,
-          // Kept for agents/config that still read this key from thread metadata.
           supabase_user_id: currentUser.id,
           ...(assignmentId ? { assignment_id: assignmentId } : {}),
           customModelName: modelName,
@@ -247,7 +253,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
       const client = createClient();
       const results = await client.threads.search({
         metadata: {
-          user_id: currentUser.id,
+          supabase_user_id: currentUser.id,
           assignment_id: assignmentId,
         },
         limit: 100,
@@ -300,6 +306,27 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     } catch (_) {}
   };
 
+  const abandonEmptyKickoffs = async (
+    client: ReturnType<typeof createClient>,
+    threads: Thread[],
+    selected: Thread
+  ) => {
+    const toAbandon = emptyKickoffsToAbandon(
+      threads as ThreadLike[],
+      selected as ThreadLike
+    );
+    for (const t of toAbandon) {
+      try {
+        const meta = (t.metadata || {}) as Record<string, unknown>;
+        await client.threads.update(t.thread_id, {
+          metadata: { ...meta, abandoned: true },
+        });
+      } catch (e) {
+        console.error("Failed to abandon empty kickoff thread", t.thread_id, e);
+      }
+    }
+  };
+
   const getActiveThread = async (
     assignmentId: string
   ): Promise<Thread | undefined> => {
@@ -327,7 +354,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     try {
       const results = await client.threads.search({
         metadata: {
-          user_id: currentUser.id,
+          supabase_user_id: currentUser.id,
           assignment_id: assignmentId,
         },
         limit: 100,
@@ -338,19 +365,37 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
         enriched.push(await enrichThreadValues(client, t));
       }
 
-      if (cachedThread) {
+      if (
+        cachedThread &&
+        !shouldRejectCachedThread(
+          cachedThread as ThreadLike,
+          enriched as ThreadLike[]
+        )
+      ) {
         writeThreadCache(currentUser.id, assignmentId, cachedThread.thread_id);
         return cachedThread;
       }
 
-      const active = enriched[0];
+      if (cachedThread) {
+        clearThreadCacheEntry(currentUser.id, assignmentId);
+      }
+
+      const active = selectActiveThread(enriched as ThreadLike[]) as
+        | Thread
+        | undefined;
       if (!active) return undefined;
 
       writeThreadCache(currentUser.id, assignmentId, active.thread_id);
+      void abandonEmptyKickoffs(client, enriched, active);
       return active;
     } catch (e) {
       console.error("Failed to get active thread", e);
-      if (cachedThread) {
+      if (
+        cachedThread &&
+        !shouldRejectCachedThread(cachedThread as ThreadLike, [
+          cachedThread as ThreadLike,
+        ])
+      ) {
         return cachedThread;
       }
       return undefined;
@@ -393,7 +438,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
       const userThreads = await client.threads.search({
         metadata: {
-          user_id: currentUser.id,
+          supabase_user_id: currentUser.id,
         },
         limit: 100,
       });

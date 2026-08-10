@@ -9,6 +9,7 @@ import { useUserContext } from "@/contexts/UserContext";
 import { Suspense } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { TeachingAssignmentProvider } from "@/contexts/TeachingAssignmentContext";
 
 // /canvas is an authenticated route. The client-side gate is a
 // belt-and-suspenders guard: any signed-in user may use the Canvas workspace.
@@ -34,11 +35,13 @@ export default function CanvasPage() {
       <UserProvider>
         <ThreadProvider>
           <AssistantProvider>
-            <GraphProvider>
-              <AuthGate>
-                <Canvas />
-              </AuthGate>
-            </GraphProvider>
+            <TeachingAssignmentProvider>
+              <GraphProvider>
+                <AuthGate>
+                  <Canvas />
+                </AuthGate>
+              </GraphProvider>
+            </TeachingAssignmentProvider>
           </AssistantProvider>
         </ThreadProvider>
       </UserProvider>

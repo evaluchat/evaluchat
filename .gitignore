@@ -62,6 +62,9 @@ codedb.snapshot
 .cursorrules
 kilo.jsonc
 data/
+!apps/web/data/
+apps/web/data/*
+!apps/web/data/apparatuses.generated.json
 test-results/
 playwright-report/
 .env.drill

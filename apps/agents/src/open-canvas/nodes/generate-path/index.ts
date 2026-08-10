@@ -6,6 +6,7 @@ import {
 } from "../../state.js";
 import { BaseMessage, HumanMessage } from "@langchain/core/messages";
 import { dynamicDeterminePath } from "./dynamic-determine-path.js";
+import { determineTeachingIntent } from "./determine-teaching-intent.js";
 import {
   convertContextDocumentToHumanMessage,
   fixMisFormattedContextDocMessage,
@@ -63,6 +64,11 @@ export async function generatePath(
   config: LangGraphRunnableConfig
 ): Promise<OpenCanvasGraphReturnType> {
   const { _messages } = state;
+  // No-AI profiles still expose assignment context, local authoring, and
+  // submission, but must never reach an LLM-backed node.
+  if (state.apparatusConfiguration?.ai_assistance === false) {
+    return { next: "noAiAssignment" };
+  }
   if (state.next) {
     return { next: state.next };
   }
@@ -92,6 +98,9 @@ export async function generatePath(
   }
 
   if (state.highlightedCode) {
+    if (state.apparatusConfiguration?.ai_canvas_actions === false) {
+      return { next: "noAiAssignment" };
+    }
     return {
       next: "updateArtifact",
       ...(newMessages.length
@@ -100,6 +109,9 @@ export async function generatePath(
     };
   }
   if (state.highlightedText) {
+    if (state.apparatusConfiguration?.ai_canvas_actions === false) {
+      return { next: "noAiAssignment" };
+    }
     const lastMsg = _messages[_messages.length - 1];
     const lastMsgContent = getStringFromContent(lastMsg?.content);
     const replaceIntent = parseReplaceIntent(lastMsgContent);
@@ -144,6 +156,9 @@ export async function generatePath(
     state.regenerateWithEmojis ||
     state.readingLevel
   ) {
+    if (state.apparatusConfiguration?.ai_canvas_actions === false) {
+      return { next: "noAiAssignment" };
+    }
     return {
       next: "rewriteArtifactTheme",
       ...(newMessages.length
@@ -158,6 +173,9 @@ export async function generatePath(
     state.portLanguage ||
     state.fixBugs
   ) {
+    if (state.apparatusConfiguration?.ai_canvas_actions === false) {
+      return { next: "noAiAssignment" };
+    }
     return {
       next: "rewriteCodeArtifactTheme",
       ...(newMessages.length
@@ -167,6 +185,9 @@ export async function generatePath(
   }
 
   if (state.customQuickActionId) {
+    if (state.apparatusConfiguration?.ai_canvas_actions === false) {
+      return { next: "noAiAssignment" };
+    }
     return {
       next: "customAction",
       ...(newMessages.length
@@ -222,7 +243,26 @@ export async function generatePath(
     };
   }
 
-  // LLM router for ambiguous cases.
+  // Teaching mode: LLM intent classification with full conversation context.
+  // Defaults to coaching chat; canvas edits only when the model judges clear intent.
+  const phase = state.phase_state || "socratic";
+  if (phase === "socratic" || phase === "drafting" || phase === "submitted") {
+    const intent = await determineTeachingIntent({
+      state: {
+        ...state,
+        _messages: newInternalMessageList,
+      },
+      newMessages,
+      config,
+    });
+
+    return {
+      next: intent.route,
+      ...buildMessagesReturn(newMessages, newInternalMessageList),
+    };
+  }
+
+  // Non-teaching fallback: LLM router for ambiguous cases on blank canvas.
   const routingResult = await dynamicDeterminePath({
     state: {
       ...state,

@@ -117,12 +117,12 @@ export function Login() {
           )}
           <UserAuthForm onLoginWithOauth={onLoginWithOauth} />
           <Link
-            href="/invite/accept"
+            href="/auth/signup"
             className={cn(buttonVariants({ variant: "outline" }), "w-full")}
           >
             Don&apos;t have an account? Sign up
           </Link>
-          {/* Mobile: brand panel is hidden — surface pricing + docs/legal here */}
+          {/* Mobile: brand panel is hidden — surface beta scope + docs/legal here */}
           <div className="lg:hidden pt-2 text-center space-y-3 border-t">
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm font-medium pt-1">
               <DocsLink

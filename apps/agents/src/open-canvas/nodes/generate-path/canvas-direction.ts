@@ -13,7 +13,7 @@ const SELECTION_EDIT_VERB_PATTERN =
  * True when the student wants the highlighted selection edited on canvas.
  * Questions and commentary about the selection → false (route to chat).
  *
- * Canvas-vs-chat routing for unhighlighted messages uses an LLM intent check.
+ * Canvas-vs-chat routing for unhighlighted messages uses determineTeachingIntent (LLM).
  */
 export function isSelectionEditRequest(message: string): boolean {
   const trimmed = message.trim();

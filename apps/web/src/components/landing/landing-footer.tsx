@@ -45,7 +45,7 @@ export function LandingFooter() {
           <div className="foot-col">
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
-            <a href="https://status.evaluchat.com">Status</a>
+            <a href="https://status.evaluchat.org">Status</a>
           </div>
         </div>
         <div className="foot-bottom">
