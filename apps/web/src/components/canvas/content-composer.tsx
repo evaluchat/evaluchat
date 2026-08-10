@@ -12,27 +12,32 @@ import {
 import {
   AppendMessage,
   AssistantRuntimeProvider,
+  CompositeAttachmentAdapter,
+  SimpleTextAttachmentAdapter,
   useExternalMessageConverter,
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { BaseMessage, HumanMessage } from "@langchain/core/messages";
 import { Thread as ThreadType } from "@langchain/langgraph-sdk";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { Toaster } from "../ui/toaster";
 import { Thread } from "@/components/chat-interface";
 import { useGraphContext } from "@/contexts/GraphContext";
-import {
-  CompositeAttachmentAdapter,
-  SimpleTextAttachmentAdapter,
-} from "@assistant-ui/react";
 import { AudioAttachmentAdapter } from "../ui/assistant-ui/attachment-adapters/audio";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { arrayToFileList, convertDocuments } from "@/lib/attachments";
 import { VideoAttachmentAdapter } from "../ui/assistant-ui/attachment-adapters/video";
 import { useUserContext } from "@/contexts/UserContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
 import { PDFAttachmentAdapter } from "../ui/assistant-ui/attachment-adapters/pdf";
+import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
+
+function isHiddenFromUi(message: BaseMessage): boolean {
+  const kwargs = message.additional_kwargs as
+    | Record<string, unknown>
+    | undefined;
+  return Boolean(kwargs?.[OC_HIDE_FROM_UI_KEY]);
+}
 
 export interface ContentComposerChatInterfaceProps {
   switchSelectedThreadCallback: (thread: ThreadType) => void;
@@ -44,6 +49,8 @@ export interface ContentComposerChatInterfaceProps {
   ) => void;
   chatCollapsed: boolean;
   setChatCollapsed: (c: boolean) => void;
+  hideQuickStartButtons?: boolean;
+  quickStartPrompts?: string[];
 }
 
 export function ContentComposerChatInterfaceComponent(
@@ -58,11 +65,19 @@ export function ContentComposerChatInterfaceComponent(
     streamMessage,
     setIsStreaming,
     searchEnabled,
+    isStreaming,
   } = graphData;
   const { getUserThreads } = useThreadContext();
-  const [isRunning, setIsRunning] = useState(false);
+  const [composerRunning, setComposerRunning] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
-  const ffmpegRef = useRef(new FFmpeg());
+  const ffmpegRef = useRef({ loaded: false });
+  // Kickoff streams set graph isStreaming without going through onNew.
+  const isRunning = composerRunning || isStreaming;
+
+  const visibleMessages = useMemo(
+    () => messages.filter((m) => !isHiddenFromUi(m)),
+    [messages]
+  );
 
   async function onNew(message: AppendMessage): Promise<void> {
     // Explicitly check for false and not ! since this does not provide a default value
@@ -86,7 +101,7 @@ export function ContentComposerChatInterfaceComponent(
       return;
     }
     props.setChatStarted(true);
-    setIsRunning(true);
+    setComposerRunning(true);
     setIsStreaming(true);
 
     const contentDocuments: ContextDocument[] = [];
@@ -122,7 +137,8 @@ export function ContentComposerChatInterfaceComponent(
         messages: [convertToOpenAIFormat(humanMessage)],
       });
     } finally {
-      setIsRunning(false);
+      setComposerRunning(false);
+      setIsStreaming(false);
       // Re-fetch threads so that the current thread's title is updated.
       await getUserThreads();
     }
@@ -130,7 +146,7 @@ export function ContentComposerChatInterfaceComponent(
 
   const threadMessages = useExternalMessageConverter<BaseMessage>({
     callback: convertLangchainMessages,
-    messages,
+    messages: visibleMessages,
     isRunning,
     joinStrategy: "none",
   });
@@ -160,6 +176,8 @@ export function ContentComposerChatInterfaceComponent(
           switchSelectedThreadCallback={props.switchSelectedThreadCallback}
           searchEnabled={searchEnabled}
           setChatCollapsed={props.setChatCollapsed}
+          hideQuickStartButtons={props.hideQuickStartButtons}
+          quickStartPrompts={props.quickStartPrompts}
         />
       </AssistantRuntimeProvider>
       <Toaster />

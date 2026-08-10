@@ -76,7 +76,7 @@ async function includeURLContentsFunc(
         },
       ],
       {
-        tool_choice: "determine_include_url_contents",
+        tool_choice: "auto",
       }
     );
 

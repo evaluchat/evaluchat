@@ -1,4 +1,5 @@
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
+import { AIMessage } from "@langchain/core/messages";
 import { getModelFromConfig } from "../../utils.js";
 import {
   getArtifactContent,
@@ -19,6 +20,41 @@ export const generateFollowup = async (
   state: typeof OpenCanvasGraphAnnotation.State,
   config: LangGraphRunnableConfig
 ): Promise<OpenCanvasGraphReturnType> => {
+  if (state.textEditSummary?.op === "replace_all") {
+    const { find, replace, matchCount } = state.textEditSummary;
+    const content =
+      matchCount === 0
+        ? `I couldn't find "${find}" in the document.`
+        : `Replaced ${matchCount} occurrence(s) of "${find}" with "${replace}".`;
+    const message = new AIMessage(content);
+    return {
+      messages: [message],
+      _messages: [message],
+    };
+  }
+
+  if (
+    state.textEditSummary?.op === "replace_in_selection" &&
+    "error" in state.textEditSummary
+  ) {
+    const message = new AIMessage(state.textEditSummary.error);
+    return {
+      messages: [message],
+      _messages: [message],
+    };
+  }
+
+  if (state.textEditSummary?.op === "replace_in_selection") {
+    const { find, replace, matchCount } = state.textEditSummary;
+    const message = new AIMessage(
+      `Replaced ${matchCount} occurrence(s) of "${find}" with "${replace}" in the selection.`
+    );
+    return {
+      messages: [message],
+      _messages: [message],
+    };
+  }
+
   const smallModel = await getModelFromConfig(config, {
     maxTokens: 250,
     // We say tool calling is true here because that'll cause it to use a small model

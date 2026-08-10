@@ -48,32 +48,8 @@ export function ArtifactTitle(props: ArtifactTitleProps) {
       : "Saving";
 
   return (
-    <div className="pl-[6px] pt-3 flex flex-col items-start justify-start ml-[6px] gap-1 max-w-1/2">
-      {isEditing ? (
-        <input
-          ref={inputRef}
-          className="text-xl font-medium text-gray-600 bg-transparent border-b border-gray-300 outline-none w-full max-w-md"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleSubmit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSubmit();
-            if (e.key === "Escape") {
-              setEditValue(props.title);
-              setIsEditing(false);
-            }
-          }}
-        />
-      ) : (
-        <h1
-          className="text-xl font-medium text-gray-600 line-clamp-1 cursor-text hover:text-gray-800"
-          onClick={() => setIsEditing(true)}
-          title="Click to edit title"
-        >
-          {props.title}
-        </h1>
-      )}
-      <span className="mt-auto">
+    <div className="flex flex-row items-center gap-2 min-w-0">
+      <span className="flex items-center">
         <TooltipProvider>
           <Tooltip delayDuration={400}>
             <TooltipTrigger asChild>
@@ -97,6 +73,31 @@ export function ArtifactTitle(props: ArtifactTitleProps) {
           </Tooltip>
         </TooltipProvider>
       </span>
+
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          className="text-base font-medium text-gray-700 bg-transparent border-b border-gray-300 outline-none w-full max-w-md"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSubmit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSubmit();
+            if (e.key === "Escape") {
+              setEditValue(props.title);
+              setIsEditing(false);
+            }
+          }}
+        />
+      ) : (
+        <h1
+          className="text-base font-medium text-gray-700 line-clamp-1 cursor-text hover:text-gray-900"
+          onClick={() => setIsEditing(true)}
+          title="Click to edit title"
+        >
+          {props.title}
+        </h1>
+      )}
     </div>
   );
 }

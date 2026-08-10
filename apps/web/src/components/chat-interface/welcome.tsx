@@ -1,11 +1,12 @@
 import { ProgrammingLanguageOptions } from "@opencanvas/shared/types";
 import { ThreadPrimitive, useThreadRuntime } from "@assistant-ui/react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import NextImage from "next/image";
 import { FC, useMemo } from "react";
 import { TighterText } from "../ui/header";
 import { NotebookPen } from "lucide-react";
 import { ProgrammingLanguagesDropdown } from "../ui/programming-lang-dropdown";
 import { Button } from "../ui/button";
+import NoSSRWrapper from "../NoSSRWrapper";
 
 const QUICK_START_PROMPTS_SEARCH = [
   "Write a market analysis of AI chip manufacturers in 2025",
@@ -37,6 +38,19 @@ const QUICK_START_PROMPTS = [
   "Write a web scraping program in Python",
 ];
 
+export const TEACHER_ASSIGNMENT_PROMPTS = [
+  "Draft a persuasive essay prompt about renewable energy",
+  "Create a rubric for evaluating research papers",
+  "Write a creative writing assignment about time travel",
+  "Design a critical thinking exercise for history class",
+  "Draft a group project brief for a marketing course",
+  "Create an essay prompt analyzing a Shakespeare sonnet",
+  "Design a lab report assignment for biology students",
+  "Write a reflection prompt for a field trip experience",
+  "Draft a debate topic about artificial intelligence ethics",
+  "Create a peer review rubric for student presentations",
+];
+
 function getRandomPrompts(prompts: string[], count: number = 4): string[] {
   return [...prompts].sort(() => Math.random() - 0.5).slice(0, count);
 }
@@ -48,13 +62,19 @@ interface QuickStartButtonsProps {
   ) => void;
   composer: React.ReactNode;
   searchEnabled: boolean;
+  hideQuickStartButtons?: boolean;
+  quickStartPrompts?: string[];
 }
 
 interface QuickStartPromptsProps {
   searchEnabled: boolean;
+  quickStartPrompts?: string[];
 }
 
-const QuickStartPrompts = ({ searchEnabled }: QuickStartPromptsProps) => {
+const QuickStartPrompts = ({
+  searchEnabled,
+  quickStartPrompts,
+}: QuickStartPromptsProps) => {
   const threadRuntime = useThreadRuntime();
 
   const handleClick = (text: string) => {
@@ -66,10 +86,11 @@ const QuickStartPrompts = ({ searchEnabled }: QuickStartPromptsProps) => {
 
   const selectedPrompts = useMemo(
     () =>
+      quickStartPrompts ||
       getRandomPrompts(
         searchEnabled ? QUICK_START_PROMPTS_SEARCH : QUICK_START_PROMPTS
       ),
-    [searchEnabled]
+    [searchEnabled, quickStartPrompts]
   );
 
   return (
@@ -93,30 +114,39 @@ const QuickStartPrompts = ({ searchEnabled }: QuickStartPromptsProps) => {
 };
 
 const QuickStartButtons = (props: QuickStartButtonsProps) => {
+  const hideBlankCanvas = props.hideQuickStartButtons;
+
   const handleLanguageSubmit = (language: ProgrammingLanguageOptions) => {
     props.handleQuickStart("code", language);
   };
 
   return (
     <div className="flex flex-col gap-8 items-center justify-center w-full">
-      <div className="flex flex-col gap-6">
-        <p className="text-gray-600 text-sm">Start with a blank canvas</p>
-        <div className="flex flex-row gap-1 items-center justify-center w-full">
-          <Button
-            variant="outline"
-            className="text-gray-500 hover:text-gray-700 transition-colors ease-in rounded-2xl flex items-center justify-center gap-2 w-[250px] h-[64px]"
-            onClick={() => props.handleQuickStart("text")}
-          >
-            New Markdown
-            <NotebookPen />
-          </Button>
-          <ProgrammingLanguagesDropdown handleSubmit={handleLanguageSubmit} />
+      {!hideBlankCanvas && (
+        <div className="flex flex-col gap-6">
+          <p className="text-gray-600 text-sm">Start with a blank canvas</p>
+          <div className="flex flex-row gap-1 items-center justify-center w-full">
+            <Button
+              variant="outline"
+              className="text-gray-500 hover:text-gray-700 transition-colors ease-in rounded-2xl flex items-center justify-center gap-2 w-[250px] h-[64px]"
+              onClick={() => props.handleQuickStart("text")}
+            >
+              New Markdown
+              <NotebookPen />
+            </Button>
+            <ProgrammingLanguagesDropdown handleSubmit={handleLanguageSubmit} />
+          </div>
         </div>
-      </div>
+      )}
       <div className="flex flex-col gap-6 mt-2 w-full">
         <p className="text-gray-600 text-sm">or with a message</p>
         {props.composer}
-        <QuickStartPrompts searchEnabled={props.searchEnabled} />
+        <NoSSRWrapper>
+          <QuickStartPrompts
+            searchEnabled={props.searchEnabled}
+            quickStartPrompts={props.quickStartPrompts}
+          />
+        </NoSSRWrapper>
       </div>
     </div>
   );
@@ -129,6 +159,8 @@ interface ThreadWelcomeProps {
   ) => void;
   composer: React.ReactNode;
   searchEnabled: boolean;
+  hideQuickStartButtons?: boolean;
+  quickStartPrompts?: string[];
 }
 
 export const ThreadWelcome: FC<ThreadWelcomeProps> = (
@@ -138,10 +170,13 @@ export const ThreadWelcome: FC<ThreadWelcomeProps> = (
     <ThreadPrimitive.Empty>
       <div className="flex items-center justify-center mt-16 w-full">
         <div className="text-center max-w-3xl w-full">
-          <Avatar className="mx-auto">
-            <AvatarImage src="/lc_logo.jpg" alt="LangChain Logo" />
-            <AvatarFallback>LC</AvatarFallback>
-          </Avatar>
+          <NextImage
+            src="/evaluchat.png"
+            alt="Evaluchat Logo"
+            width={96}
+            height={96}
+            className="mx-auto"
+          />
           <TighterText className="mt-4 text-lg font-medium">
             What would you like to write today?
           </TighterText>
@@ -150,6 +185,8 @@ export const ThreadWelcome: FC<ThreadWelcomeProps> = (
               composer={props.composer}
               handleQuickStart={props.handleQuickStart}
               searchEnabled={props.searchEnabled}
+              hideQuickStartButtons={props.hideQuickStartButtons}
+              quickStartPrompts={props.quickStartPrompts}
             />
           </div>
         </div>

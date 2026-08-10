@@ -12,6 +12,8 @@ import { replyToGeneralInput } from "./nodes/replyToGeneralInput.js";
 import { rewriteCodeArtifactTheme } from "./nodes/rewriteCodeArtifactTheme.js";
 import { generateTitleNode } from "./nodes/generateTitle.js";
 import { updateHighlightedText } from "./nodes/updateHighlightedText.js";
+import { applyTextEdits } from "./nodes/applyTextEdits.js";
+import { integrateCanvasDirection } from "./nodes/integrate-canvas-direction/index.js";
 import { OpenCanvasGraphAnnotation } from "./state.js";
 import { summarizer } from "./nodes/summarizer.js";
 import { graph as webSearchGraph } from "../web-search/index.js";
@@ -116,6 +118,8 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
   .addNode("rewriteCodeArtifactTheme", rewriteCodeArtifactTheme)
   .addNode("updateArtifact", updateArtifact)
   .addNode("updateHighlightedText", updateHighlightedText)
+  .addNode("applyTextEdits", applyTextEdits)
+  .addNode("integrateCanvasDirection", integrateCanvasDirection)
   .addNode("generateArtifact", generateArtifact)
   .addNode("customAction", customAction)
   .addNode("generateFollowup", generateFollowup)
@@ -135,12 +139,16 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
     "rewriteArtifact",
     "customAction",
     "updateHighlightedText",
+    "applyTextEdits",
+    "integrateCanvasDirection",
     "webSearch",
   ])
   // Edges
   .addEdge("generateArtifact", "generateFollowup")
   .addEdge("updateArtifact", "generateFollowup")
   .addEdge("updateHighlightedText", "generateFollowup")
+  .addEdge("applyTextEdits", "generateFollowup")
+  .addEdge("integrateCanvasDirection", "generateFollowup")
   .addEdge("rewriteArtifact", "generateFollowup")
   .addEdge("rewriteArtifactTheme", "generateFollowup")
   .addEdge("rewriteCodeArtifactTheme", "generateFollowup")

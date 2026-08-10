@@ -8,6 +8,9 @@ import {
   ArtifactV3,
   TextHighlight,
   SearchResult,
+  EditorCursorPosition,
+  TextEditIntent,
+  TextEditSummary,
 } from "@opencanvas/shared/types";
 import {
   Annotation,
@@ -133,6 +136,14 @@ export const OpenCanvasGraphAnnotation = Annotation.Root({
    * The search results to include in context.
    */
   webSearchResults: Annotation<SearchResult[] | undefined>,
+  /** The cursor position in the editor when the user sent their message. */
+  cursorPosition: Annotation<EditorCursorPosition | undefined>,
+  /** The text the user has selected in the editor (plain text, not markdown blocks). */
+  editorSelectedText: Annotation<string | undefined>,
+  /** Parsed mechanical text-edit intent from generatePath. */
+  textEditIntent: Annotation<TextEditIntent | undefined>,
+  /** Summary of a completed mechanical text edit for followup messaging. */
+  textEditSummary: Annotation<TextEditSummary | undefined>,
 });
 
 export type OpenCanvasGraphReturnType = Partial<

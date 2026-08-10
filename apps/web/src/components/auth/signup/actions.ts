@@ -8,15 +8,23 @@ import { SignupWithEmailInput } from "./Signup";
 export async function signup(input: SignupWithEmailInput, baseUrl: string) {
   const supabase = await createClient();
 
+  const role = input.role || "student";
+  const metadata: Record<string, string> = {
+    role,
+  };
+
+  if (input.name) {
+    metadata.name = input.name;
+    metadata.full_name = input.name;
+    metadata.registrationComplete = "true";
+  }
+
   const data = {
     email: input.email,
     password: input.password,
-    // Not possible to set this when signing up with OAuth, so for now we'll omit.
-    // data: {
-    //   is_open_canvas: true,
-    // },
     options: {
       emailRedirectTo: `${baseUrl}/auth/confirm`,
+      data: metadata,
     },
   };
 
@@ -27,7 +35,5 @@ export async function signup(input: SignupWithEmailInput, baseUrl: string) {
     redirect("/auth/signup?error=true");
   }
 
-  // Users still need to confirm their email address.
-  // This page will show a message to check their email.
   redirect("/auth/signup/success");
 }

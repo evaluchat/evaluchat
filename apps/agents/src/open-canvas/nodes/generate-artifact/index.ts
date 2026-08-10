@@ -6,6 +6,7 @@ import {
   isUsingO1MiniModel,
   optionallyGetSystemPromptFromConfig,
 } from "../../../utils.js";
+import { AIMessage } from "@langchain/core/messages";
 import { ArtifactV3 } from "@opencanvas/shared/types";
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import {
@@ -50,10 +51,19 @@ export const generateArtifact = async (
     modelName
   );
 
+  // Add cursor context if available
+  let cursorContext = "";
+  if (state.cursorPosition) {
+    cursorContext = `\n\nThe user's cursor is at line ${state.cursorPosition.line}, column ${state.cursorPosition.column}. The document has ${state.cursorPosition.totalLines} lines total.`;
+    if (state.cursorPosition.selectedText) {
+      cursorContext += `\nThe user has selected the following text:\n<selected-text>\n${state.cursorPosition.selectedText}\n</selected-text>`;
+    }
+  }
+
   const userSystemPrompt = optionallyGetSystemPromptFromConfig(config);
   const fullSystemPrompt = userSystemPrompt
-    ? `${userSystemPrompt}\n${formattedNewArtifactPrompt}`
-    : formattedNewArtifactPrompt;
+    ? `${userSystemPrompt}\n${formattedNewArtifactPrompt}${cursorContext}`
+    : `${formattedNewArtifactPrompt}${cursorContext}`;
 
   const contextDocumentMessages = await createContextDocumentMessages(config);
   const isO1MiniModel = isUsingO1MiniModel(config);
@@ -65,7 +75,8 @@ export const generateArtifact = async (
     ],
     { runName: "generate_artifact" }
   );
-  const args = response.tool_calls?.[0].args as
+
+  const args = response.tool_calls?.[0]?.args as
     | z.infer<typeof ARTIFACT_TOOL_SCHEMA>
     | undefined;
   if (!args) {
@@ -78,7 +89,22 @@ export const generateArtifact = async (
     contents: [newArtifactContent],
   };
 
+  // Strip tool_calls from the history message to prevent malformed
+  // message sequences on subsequent API calls. The OpenAI API requires
+  // a ToolMessage immediately after an AIMessage with tool_calls, but
+  // our graph adds generateFollowup (another assistant message) after
+  // generateArtifact, breaking that contract.
+  const cleanHistoryMessage = new AIMessage({
+    content:
+      typeof response.content === "string" && response.content.trim()
+        ? response.content
+        : `Generated ${args.type === "code" ? "code" : "artifact"}: "${args.title}".`,
+    // Intentionally omit tool_calls
+  });
+
   return {
     artifact: newArtifact,
+    messages: [response], // Original with tool_calls → UI
+    _messages: [cleanHistoryMessage], // Clean → future model calls
   };
 };

@@ -10,6 +10,7 @@ import {
 } from "@opencanvas/shared/types";
 import { BaseStore, LangGraphRunnableConfig } from "@langchain/langgraph";
 import { initChatModel } from "langchain/chat_models/universal";
+import { ChatOpenAI } from "@langchain/openai";
 import pdfParse from "pdf-parse";
 import {
   AIMessage,
@@ -27,6 +28,24 @@ import {
   LANGCHAIN_USER_ONLY_MODELS,
 } from "@opencanvas/shared/models";
 import { createClient, Session, User } from "@supabase/supabase-js";
+import {
+  getOpenRouterDefaultHeaders,
+  getOpenRouterBaseUrl,
+  isOpenRouterEnabled,
+  resolvePremiumOpenRouterApiKey,
+  resolveOpenRouterModelName,
+} from "./openrouter.js";
+import {
+  getPrimaryProviderName,
+  getProviderConfig,
+  getProviderChain,
+  wrapModelWithFallback,
+} from "./provider-registry.js";
+
+const FREE_ASSIGNMENT_MODEL = "mimo-v2.5-free";
+/** Legacy free id — still route via Zen rail if an old client sends it. */
+const LEGACY_FREE_ASSIGNMENT_MODELS = ["deepseek-v4-flash-free"] as const;
+const PREMIUM_ASSIGNMENT_MODEL = "openai/gpt-5.6-luna";
 
 export const formatReflections = (
   reflections: Reflections,
@@ -168,6 +187,7 @@ export const getModelConfig = (
   modelName: string;
   modelProvider: string;
   modelConfig?: CustomModelConfig;
+  shouldUseFallback: boolean;
   azureConfig?: {
     azureOpenAIApiKey: string;
     azureOpenAIApiInstanceName: string;
@@ -177,6 +197,7 @@ export const getModelConfig = (
   };
   apiKey?: string;
   baseUrl?: string;
+  defaultHeaders?: Record<string, string>;
 } => {
   const customModelName = config.configurable?.customModelName as string;
   if (!customModelName) throw new Error("Model name is missing in config.");
@@ -192,6 +213,7 @@ export const getModelConfig = (
     return {
       modelName: actualModelName,
       modelProvider: "azure_openai",
+      shouldUseFallback: true,
       azureConfig: {
         azureOpenAIApiKey: process.env._AZURE_OPENAI_API_KEY || "",
         azureOpenAIApiInstanceName:
@@ -211,6 +233,51 @@ export const getModelConfig = (
   };
 
   if (
+    customModelName === FREE_ASSIGNMENT_MODEL ||
+    (LEGACY_FREE_ASSIGNMENT_MODELS as readonly string[]).includes(
+      customModelName
+    )
+  ) {
+    const primaryProvider = getProviderConfig(getPrimaryProviderName());
+    // Prefer the Zen registry model (OPENCODE_ZEN_MODEL) so free traffic follows
+    // the configured budget SKU — not a stale client id if DeepSeek free is down.
+    return {
+      ...providerConfig,
+      modelName: primaryProvider.model,
+      modelProvider: primaryProvider.modelProvider,
+      shouldUseFallback: true,
+      apiKey: primaryProvider.apiKey,
+      baseUrl: primaryProvider.baseURL,
+    };
+  }
+
+  if (customModelName === PREMIUM_ASSIGNMENT_MODEL) {
+    const actualModelName = resolveOpenRouterModelName(customModelName);
+    return {
+      ...providerConfig,
+      modelName: actualModelName,
+      modelProvider: "openai",
+      shouldUseFallback: false,
+      apiKey: resolvePremiumOpenRouterApiKey(),
+      baseUrl: getOpenRouterBaseUrl(),
+      defaultHeaders: getOpenRouterDefaultHeaders(),
+    };
+  }
+
+  if (isOpenRouterEnabled() || customModelName.includes("/")) {
+    const actualModelName = resolveOpenRouterModelName(customModelName);
+    return {
+      ...providerConfig,
+      modelName: actualModelName,
+      modelProvider: "openai",
+      shouldUseFallback: true,
+      apiKey: resolvePremiumOpenRouterApiKey(),
+      baseUrl: getOpenRouterBaseUrl(),
+      defaultHeaders: getOpenRouterDefaultHeaders(),
+    };
+  }
+
+  if (
     customModelName.includes("gpt-") ||
     customModelName.includes("o1") ||
     customModelName.includes("o3")
@@ -224,7 +291,11 @@ export const getModelConfig = (
       ...providerConfig,
       modelName: actualModelName,
       modelProvider: "openai",
+      shouldUseFallback: true,
       apiKey: process.env.OPENAI_API_KEY,
+      ...(process.env.OPENAI_API_BASE_URL
+        ? { baseUrl: process.env.OPENAI_API_BASE_URL }
+        : {}),
     };
   }
 
@@ -232,6 +303,7 @@ export const getModelConfig = (
     return {
       ...providerConfig,
       modelProvider: "anthropic",
+      shouldUseFallback: true,
       apiKey: process.env.ANTHROPIC_API_KEY,
     };
   }
@@ -248,6 +320,7 @@ export const getModelConfig = (
       ...providerConfig,
       modelName: actualModelName,
       modelProvider: "fireworks",
+      shouldUseFallback: true,
       apiKey: process.env.FIREWORKS_API_KEY,
     };
   }
@@ -257,6 +330,7 @@ export const getModelConfig = (
     return {
       modelName: actualModelName,
       modelProvider: "groq",
+      shouldUseFallback: true,
       apiKey: process.env.GROQ_API_KEY,
     };
   }
@@ -271,6 +345,7 @@ export const getModelConfig = (
       ...providerConfig,
       modelName: actualModelName,
       modelProvider: "google-genai",
+      shouldUseFallback: true,
       apiKey: process.env.GOOGLE_API_KEY,
     };
   }
@@ -285,6 +360,7 @@ export const getModelConfig = (
       ...providerConfig,
       modelName: actualModelName,
       modelProvider: "google-genai",
+      shouldUseFallback: true,
       apiKey: process.env.GOOGLE_API_KEY,
     };
   }
@@ -293,6 +369,7 @@ export const getModelConfig = (
     return {
       modelName: customModelName.replace("ollama-", ""),
       modelProvider: "ollama",
+      shouldUseFallback: true,
       baseUrl:
         process.env.OLLAMA_API_URL || "http://host.docker.internal:11434",
     };
@@ -307,12 +384,19 @@ export function optionallyGetSystemPromptFromConfig(
   return config.configurable?.systemPrompt as string | undefined;
 }
 
+function isSupabaseServiceRoleConfigured(): boolean {
+  const key = process.env.SUPABASE_SERVICE_ROLE?.trim();
+  return Boolean(
+    key && key !== "your-service-role-key" && !key.startsWith("your-")
+  );
+}
+
 async function getUserFromConfig(
   config: LangGraphRunnableConfig
 ): Promise<User | undefined> {
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    !process.env.SUPABASE_SERVICE_ROLE
+    !isSupabaseServiceRoleConfigured()
   ) {
     return undefined;
   }
@@ -325,8 +409,8 @@ async function getUserFromConfig(
   }
 
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE!
   );
 
   const authRes = await supabase.auth.getUser(accessToken);
@@ -352,7 +436,9 @@ export async function getModelFromConfig(
     azureConfig,
     apiKey,
     baseUrl,
+    defaultHeaders,
     modelConfig,
+    shouldUseFallback,
   } = getModelConfig(config, {
     isToolCalling: extra?.isToolCalling,
   });
@@ -383,16 +469,40 @@ export async function getModelFromConfig(
     (m) => m === modelName
   );
 
-  return await initChatModel(modelName, {
+  const generationConfig = includeStandardParams
+    ? { maxTokens, temperature }
+    : {
+        max_completion_tokens: maxTokens,
+        // streaming: false,
+        // disableStreaming: true,
+      };
+
+  if (modelProvider === "openai" && baseUrl) {
+    const primaryModel = new ChatOpenAI({
+      model: modelName,
+      ...generationConfig,
+      ...(apiKey ? { apiKey } : {}),
+      maxRetries: 0,
+      configuration: {
+        baseURL: baseUrl,
+        ...(defaultHeaders ? { defaultHeaders } : {}),
+      },
+    }) as any;
+    if (!shouldUseFallback) {
+      return primaryModel;
+    }
+    const providerChain = getProviderChain();
+    return wrapModelWithFallback(
+      primaryModel,
+      providerChain,
+      generationConfig
+    ) as any;
+  }
+
+  const primaryModel = await initChatModel(modelName, {
     modelProvider,
     // Certain models (e.g., OpenAI o1) do not support passing the temperature param.
-    ...(includeStandardParams
-      ? { maxTokens, temperature }
-      : {
-          max_completion_tokens: maxTokens,
-          // streaming: false,
-          // disableStreaming: true,
-        }),
+    ...generationConfig,
     ...(baseUrl ? { baseUrl } : {}),
     ...(apiKey ? { apiKey } : {}),
     ...(azureConfig != null
@@ -406,6 +516,15 @@ export async function getModelFromConfig(
         }
       : {}),
   });
+  if (!shouldUseFallback) {
+    return primaryModel;
+  }
+  const providerChain = getProviderChain();
+  return wrapModelWithFallback(
+    primaryModel,
+    providerChain,
+    generationConfig
+  ) as any;
 }
 
 const cleanBase64 = (base64String: string): string => {

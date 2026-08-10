@@ -103,6 +103,17 @@ export interface CodeHighlight {
   endCharIndex: number;
 }
 
+export interface EditorCursorPosition {
+  /** 1-based line number where the cursor is */
+  line: number;
+  /** 1-based column number */
+  column: number;
+  /** If the user has text selected, the plain-text content of the selection */
+  selectedText?: string;
+  /** Total number of lines in the document */
+  totalLines: number;
+}
+
 export interface ArtifactMarkdownV3 {
   index: number;
   type: "text";
@@ -208,6 +219,7 @@ export interface GraphInput {
 
   highlightedCode?: CodeHighlight;
   highlightedText?: TextHighlight;
+  cursorPosition?: EditorCursorPosition;
 
   artifact?: ArtifactV3;
 
@@ -227,3 +239,37 @@ export interface GraphInput {
   webSearchEnabled?: boolean;
   webSearchResults?: SearchResult[];
 }
+
+// --- Text edit types (deterministic canvas edits) ---
+
+export type TextEditIntent =
+  | {
+      kind: "replace_all";
+      find: string;
+      replace: string;
+      matchCase?: boolean;
+    }
+  | {
+      kind: "replace_in_selection";
+      find: string;
+      replace: string;
+      replaceAllInBlock?: boolean;
+    };
+
+export type TextEditSummary =
+  | {
+      op: "replace_all";
+      find: string;
+      replace: string;
+      matchCount: number;
+    }
+  | {
+      op: "replace_in_selection";
+      find: string;
+      replace: string;
+      matchCount: number;
+    }
+  | {
+      op: "replace_in_selection";
+      error: string;
+    };

@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import * as Icons from "lucide-react";
+import { LoaderCircle, CirclePlus } from "lucide-react";
 import React from "react";
 import { TighterText } from "../ui/header";
 import { TooltipIconButton } from "../ui/assistant-ui/tooltip-icon-button";
@@ -104,7 +104,7 @@ function AssistantSelectComponent(props: AssistantSelectProps) {
           {isLoadingAllAssistants && !assistants?.length ? (
             <span className="text-sm text-gray-600 flex items-center justify-start gap-1 p-2">
               Loading
-              <Icons.LoaderCircle className="w-4 h-4 animate-spin" />
+              <LoaderCircle className="w-4 h-4 animate-spin" />
             </span>
           ) : (
             <>
@@ -115,7 +115,7 @@ function AssistantSelectComponent(props: AssistantSelectProps) {
                 className="flex items-center justify-start gap-2"
                 disabled={allDisabled}
               >
-                <Icons.CirclePlus className="w-4 h-4" />
+                <CirclePlus className="w-4 h-4" />
                 <TighterText className="font-medium">New</TighterText>
               </DropdownMenuItem>
               {assistants.map((assistant) => (

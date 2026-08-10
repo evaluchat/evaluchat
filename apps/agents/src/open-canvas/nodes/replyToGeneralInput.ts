@@ -8,6 +8,7 @@ import {
   formatReflections,
   getModelFromConfig,
   isUsingO1MiniModel,
+  optionallyGetSystemPromptFromConfig,
 } from "../../utils.js";
 import { CURRENT_ARTIFACT_PROMPT, NO_ARTIFACT_PROMPT } from "../prompts.js";
 import {
@@ -24,8 +25,18 @@ export const replyToGeneralInput = async (
 ): Promise<OpenCanvasGraphReturnType> => {
   const smallModel = await getModelFromConfig(config);
 
+  // Add cursor context if available
+  let cursorContext = "";
+  if (state.cursorPosition) {
+    cursorContext = `\n\nThe user's cursor is at line ${state.cursorPosition.line}, column ${state.cursorPosition.column}. The document has ${state.cursorPosition.totalLines} lines total.`;
+    if (state.cursorPosition.selectedText) {
+      cursorContext += `\nThe user has selected the following text:\n<selected-text>\n${state.cursorPosition.selectedText}\n</selected-text>`;
+    }
+  }
+
   const prompt = `You are an AI assistant tasked with responding to the users question.
-  
+${cursorContext}
+
 The user has generated artifacts in the past. Use the following artifacts as context when responding to the users question.
 
 You also have the following reflections on style guidelines and general memories/facts about the user to use when generating your response.
@@ -63,10 +74,15 @@ You also have the following reflections on style guidelines and general memories
         : NO_ARTIFACT_PROMPT
     );
 
+  const userSystemPrompt = optionallyGetSystemPromptFromConfig(config);
+  const fullSystemPrompt = userSystemPrompt
+    ? `${userSystemPrompt}\n\n---\n\n${formattedPrompt}`
+    : formattedPrompt;
+
   const contextDocumentMessages = await createContextDocumentMessages(config);
   const isO1MiniModel = isUsingO1MiniModel(config);
   const response = await smallModel.invoke([
-    { role: isO1MiniModel ? "user" : "system", content: formattedPrompt },
+    { role: isO1MiniModel ? "user" : "system", content: fullSystemPrompt },
     ...contextDocumentMessages,
     ...state._messages,
   ]);

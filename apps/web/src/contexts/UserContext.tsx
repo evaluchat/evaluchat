@@ -8,6 +8,24 @@ import {
   useState,
 } from "react";
 
+/** Matches the mock user returned by verify_user_server.ts in E2E test mode. */
+function e2eMockUser(): User {
+  return {
+    id: "e2e-test-user-id",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "e2e-test@example.com",
+    app_metadata: {},
+    user_metadata: {},
+    created_at: new Date().toISOString(),
+  } as User;
+}
+
+function isE2ETestMode(): boolean {
+  if (typeof window === "undefined") return false;
+  return document.cookie.includes("__e2e_test__=true");
+}
+
 type UserContentType = {
   getUser: () => Promise<User | undefined>;
   user: User | undefined;
@@ -23,6 +41,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user || typeof window === "undefined") return;
 
+    // E2E test mode: return mock user without hitting Supabase
+    if (isE2ETestMode()) {
+      setUser(e2eMockUser());
+      setLoading(false);
+      return;
+    }
+
     getUser();
   }, []);
 
@@ -34,12 +59,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const supabase = createSupabaseClient();
 
-    const {
-      data: { user: supabaseUser },
-    } = await supabase.auth.getUser();
-    setUser(supabaseUser || undefined);
-    setLoading(false);
-    return supabaseUser || undefined;
+    try {
+      const result = await supabase.auth.getUser();
+      const supabaseUser = result.data?.user;
+      setUser(supabaseUser || undefined);
+      setLoading(false);
+      return supabaseUser || undefined;
+    } catch (e) {
+      console.error("[UserContext] getUser failed:", e);
+      setLoading(false);
+      return undefined;
+    }
   }
 
   const contextValue: UserContentType = {

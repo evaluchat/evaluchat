@@ -6,6 +6,7 @@ import {
   ArtifactCodeV3,
   ArtifactMarkdownV3,
   ProgrammingLanguageOptions,
+  EditorCursorPosition,
 } from "@opencanvas/shared/types";
 import {
   OPTIONALLY_UPDATE_META_PROMPT,
@@ -35,6 +36,18 @@ export const validateState = (
   return { currentArtifactContent, recentHumanMessage };
 };
 
+/**
+ * Add line numbers to artifact content so the AI can reference specific lines.
+ * Format: "N\t<line content>" where N is the 1-based line number.
+ * Line numbers are separated from content by a tab character.
+ */
+export const addLineNumbers = (content: string): string => {
+  return content
+    .split("\n")
+    .map((line, idx) => `${idx + 1}\t${line}`)
+    .join("\n");
+};
+
 const buildMetaPrompt = (
   artifactMetaToolCall: z.infer<typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA>
 ) => {
@@ -54,6 +67,7 @@ interface BuildPromptArgs {
   memoriesAsString: string;
   isNewType: boolean;
   artifactMetaToolCall: z.infer<typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA>;
+  cursorPosition?: EditorCursorPosition;
 }
 
 export const buildPrompt = ({
@@ -61,15 +75,30 @@ export const buildPrompt = ({
   memoriesAsString,
   isNewType,
   artifactMetaToolCall,
+  cursorPosition,
 }: BuildPromptArgs) => {
   const metaPrompt = isNewType ? buildMetaPrompt(artifactMetaToolCall) : "";
 
+  // Add line numbers to artifact content
+  const numberedContent = addLineNumbers(artifactContent);
+
+  // Build cursor context string
+  let cursorContext = "";
+  if (cursorPosition) {
+    cursorContext = `\nThe user's cursor is at line ${cursorPosition.line}, column ${cursorPosition.column}.\n`;
+    cursorContext += `The document has ${cursorPosition.totalLines} lines total.\n`;
+    if (cursorPosition.selectedText) {
+      cursorContext += `The user has selected the following text:\n<selected-text>\n${cursorPosition.selectedText}\n</selected-text>\n`;
+    }
+  }
+
   return UPDATE_ENTIRE_ARTIFACT_PROMPT.replace(
     "{artifactContent}",
-    artifactContent
+    numberedContent
   )
     .replace("{reflections}", memoriesAsString)
-    .replace("{updateMetaPrompt}", metaPrompt);
+    .replace("{updateMetaPrompt}", metaPrompt)
+    .replace("{cursorContext}", cursorContext);
 };
 
 interface CreateNewArtifactContentArgs {

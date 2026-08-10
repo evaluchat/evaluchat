@@ -1,18 +1,6 @@
 import { ArtifactCodeV3 } from "@opencanvas/shared/types";
-import React, { MutableRefObject, useEffect } from "react";
+import React, { MutableRefObject, useEffect, useState } from "react";
 import CodeMirror, { EditorView } from "@uiw/react-codemirror";
-import { javascript } from "@codemirror/lang-javascript";
-import { cpp } from "@codemirror/lang-cpp";
-import { java } from "@codemirror/lang-java";
-import { php } from "@codemirror/lang-php";
-import { python } from "@codemirror/lang-python";
-import { html } from "@codemirror/lang-html";
-import { sql } from "@codemirror/lang-sql";
-import { json } from "@codemirror/lang-json";
-import { rust } from "@codemirror/lang-rust";
-import { xml } from "@codemirror/lang-xml";
-import { clojure } from "@nextjournal/lang-clojure";
-import { csharp } from "@replit/codemirror-lang-csharp";
 import styles from "./CodeRenderer.module.css";
 import { cleanContent } from "@/lib/normalize_string";
 import { cn } from "@/lib/utils";
@@ -25,34 +13,40 @@ export interface CodeRendererProps {
   isHovering: boolean;
 }
 
-const getLanguageExtension = (language: string) => {
+const getLanguageExtension = async (language: string) => {
   switch (language) {
     case "javascript":
-      return javascript({ jsx: true, typescript: false });
+      return (await import("@codemirror/lang-javascript")).javascript({
+        jsx: true,
+        typescript: false,
+      });
     case "typescript":
-      return javascript({ jsx: true, typescript: true });
+      return (await import("@codemirror/lang-javascript")).javascript({
+        jsx: true,
+        typescript: true,
+      });
     case "cpp":
-      return cpp();
+      return (await import("@codemirror/lang-cpp")).cpp();
     case "java":
-      return java();
+      return (await import("@codemirror/lang-java")).java();
     case "php":
-      return php();
+      return (await import("@codemirror/lang-php")).php();
     case "python":
-      return python();
+      return (await import("@codemirror/lang-python")).python();
     case "html":
-      return html();
+      return (await import("@codemirror/lang-html")).html();
     case "sql":
-      return sql();
+      return (await import("@codemirror/lang-sql")).sql();
     case "json":
-      return json();
+      return (await import("@codemirror/lang-json")).json();
     case "rust":
-      return rust();
+      return (await import("@codemirror/lang-rust")).rust();
     case "xml":
-      return xml();
+      return (await import("@codemirror/lang-xml")).xml();
     case "clojure":
-      return clojure();
+      return (await import("@nextjournal/lang-clojure")).clojure();
     case "csharp":
-      return csharp();
+      return (await import("@replit/codemirror-lang-csharp")).csharp();
     default:
       return [];
   }
@@ -64,10 +58,11 @@ export function CodeRendererComponent(props: Readonly<CodeRendererProps>) {
     artifact,
     isStreaming,
     updateRenderedArtifactRequired,
-    firstTokenReceived,
     setArtifactContent,
     setUpdateRenderedArtifactRequired,
   } = graphData;
+
+  const [languageExtension, setLanguageExtension] = useState<any>([]);
 
   useEffect(() => {
     if (updateRenderedArtifactRequired) {
@@ -75,12 +70,21 @@ export function CodeRendererComponent(props: Readonly<CodeRendererProps>) {
     }
   }, [updateRenderedArtifactRequired]);
 
+  useEffect(() => {
+    if (!artifact) {
+      return;
+    }
+    const artifactContent = getArtifactContent(artifact) as ArtifactCodeV3;
+
+    getLanguageExtension(artifactContent.language).then(setLanguageExtension);
+  }, [artifact]);
+
   if (!artifact) {
     return null;
   }
 
   const artifactContent = getArtifactContent(artifact) as ArtifactCodeV3;
-  const extensions = [getLanguageExtension(artifactContent.language)];
+  const extensions = [languageExtension];
 
   if (!artifactContent.code) {
     return null;
@@ -90,21 +94,6 @@ export function CodeRendererComponent(props: Readonly<CodeRendererProps>) {
 
   return (
     <div className="relative">
-      <style jsx global>{`
-        .pulse-code .cm-content {
-          animation: codePulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        @keyframes codePulse {
-          0%,
-          100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.3;
-          }
-        }
-      `}</style>
       {props.isHovering && (
         <div className="absolute top-0 right-4 z-10">
           <CopyText currentArtifactContent={artifactContent} />
@@ -112,11 +101,7 @@ export function CodeRendererComponent(props: Readonly<CodeRendererProps>) {
       )}
       <CodeMirror
         editable={isEditable}
-        className={cn(
-          "w-full min-h-full",
-          styles.codeMirrorCustom,
-          isStreaming && !firstTokenReceived ? "pulse-code" : ""
-        )}
+        className={cn("w-full min-h-full", styles.codeMirrorCustom)}
         value={cleanContent(artifactContent.code)}
         height="800px"
         extensions={extensions}
@@ -124,6 +109,7 @@ export function CodeRendererComponent(props: Readonly<CodeRendererProps>) {
         onCreateEditor={(view) => {
           props.editorRef.current = view;
         }}
+        data-tracking-id="canvas-editor"
       />
     </div>
   );

@@ -12,12 +12,47 @@ import {
 } from "./documents.js";
 import { getStringFromContent } from ".././../../utils.js";
 import { includeURLContents } from "./include-url-contents.js";
+import {
+  isLiteralReplace,
+  parseReplaceAllIntent,
+  parseReplaceIntent,
+} from "@opencanvas/shared/utils/text-edits";
+import { isSelectionEditRequest } from "./canvas-direction.js";
+
+function artifactHasMarkdownContent(
+  state: typeof OpenCanvasGraphAnnotation.State
+): boolean {
+  return !(
+    !state.artifact?.contents?.length ||
+    state.artifact.contents.every((c) => {
+      if (c.type === "text") return !c.fullMarkdown?.trim();
+      if (c.type === "code") return !c.code?.trim();
+      return true;
+    })
+  );
+}
 
 function extractURLsFromLastMessage(messages: BaseMessage[]): string[] {
+  if (!messages.length) return [];
   const recentMessage = messages[messages.length - 1];
+  if (!recentMessage?.content) return [];
   const recentMessageContent = getStringFromContent(recentMessage.content);
   const messageUrls = extractUrls(recentMessageContent);
   return messageUrls;
+}
+
+function buildMessagesReturn(
+  newMessages: BaseMessage[],
+  newInternalMessageList: BaseMessage[]
+) {
+  return newMessages.length
+    ? {
+        messages: newMessages,
+        _messages: [...newInternalMessageList, ...newMessages],
+      }
+    : {
+        _messages: newInternalMessageList,
+      };
 }
 
 /**
@@ -28,6 +63,9 @@ export async function generatePath(
   config: LangGraphRunnableConfig
 ): Promise<OpenCanvasGraphReturnType> {
   const { _messages } = state;
+  if (state.next) {
+    return { next: state.next };
+  }
   const newMessages: BaseMessage[] = [];
   const docMessage = await convertContextDocumentToHumanMessage(
     _messages,
@@ -62,8 +100,38 @@ export async function generatePath(
     };
   }
   if (state.highlightedText) {
+    const lastMsg = _messages[_messages.length - 1];
+    const lastMsgContent = getStringFromContent(lastMsg?.content);
+    const replaceIntent = parseReplaceIntent(lastMsgContent);
+    if (
+      replaceIntent &&
+      isLiteralReplace(replaceIntent, state.highlightedText)
+    ) {
+      return {
+        next: "applyTextEdits",
+        textEditIntent: {
+          kind: "replace_in_selection",
+          find: replaceIntent.find,
+          replace: replaceIntent.replace,
+          replaceAllInBlock: replaceIntent.replaceAllInBlock,
+        },
+        ...(newMessages.length
+          ? { messages: newMessages, _messages: newMessages }
+          : {}),
+      };
+    }
+
+    if (isSelectionEditRequest(lastMsgContent)) {
+      return {
+        next: "updateHighlightedText",
+        ...(newMessages.length
+          ? { messages: newMessages, _messages: newMessages }
+          : {}),
+      };
+    }
+
     return {
-      next: "updateHighlightedText",
+      next: "replyToGeneralInput",
       ...(newMessages.length
         ? { messages: newMessages, _messages: newMessages }
         : {}),
@@ -116,8 +184,6 @@ export async function generatePath(
     };
   }
 
-  // Check if any URLs are in the latest message. If true, determine if the contents should be included
-  // inline in the prompt, and if so, scrape the contents and update the prompt.
   const messageUrls = extractURLsFromLastMessage(state._messages);
   let updatedMessageWithContents: HumanMessage | undefined = undefined;
   if (messageUrls.length) {
@@ -127,7 +193,6 @@ export async function generatePath(
     );
   }
 
-  // Update the internal message list with the new message, if one was generated
   const newInternalMessageList = updatedMessageWithContents
     ? state._messages.map((m) => {
         if (m.id === updatedMessageWithContents.id) {
@@ -138,6 +203,26 @@ export async function generatePath(
       })
     : state._messages;
 
+  const lastMsg = newInternalMessageList[newInternalMessageList.length - 1];
+  const lastMsgContentRaw = getStringFromContent(lastMsg?.content);
+
+  // Mechanical replace_all — deterministic, no LLM.
+  const replaceAllIntent = parseReplaceAllIntent(lastMsgContentRaw);
+  if (
+    replaceAllIntent &&
+    artifactHasMarkdownContent(state) &&
+    !state.highlightedText
+  ) {
+    return {
+      next: "applyTextEdits",
+      textEditIntent: replaceAllIntent,
+      ...(newMessages.length
+        ? { messages: newMessages, _messages: newMessages }
+        : {}),
+    };
+  }
+
+  // LLM router for ambiguous cases.
   const routingResult = await dynamicDeterminePath({
     state: {
       ...state,
@@ -151,18 +236,8 @@ export async function generatePath(
     throw new Error("Route not found");
   }
 
-  // Create the messages object including the new messages if any
-  const messages = newMessages.length
-    ? {
-        messages: newMessages,
-        _messages: [...newInternalMessageList, ...newMessages],
-      }
-    : {
-        _messages: newInternalMessageList,
-      };
-
   return {
     next: route,
-    ...messages,
+    ...buildMessagesReturn(newMessages, newInternalMessageList),
   };
 }

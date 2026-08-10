@@ -3,6 +3,8 @@ import {
   ALL_MODELS,
   DEFAULT_MODEL_CONFIG,
   DEFAULT_MODEL_NAME,
+  OPENROUTER_DEFAULT_MODEL_NAME,
+  OPENROUTER_MODELS,
 } from "@opencanvas/shared/models";
 import { CustomModelConfig } from "@opencanvas/shared/types";
 import { Thread } from "@langchain/langgraph-sdk";
@@ -11,7 +13,6 @@ import { createContext, ReactNode, useContext, useMemo, useState } from "react";
 import { useUserContext } from "./UserContext";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryState } from "nuqs";
-
 type ThreadContentType = {
   threadId: string | null;
   userThreads: Thread[];
@@ -21,7 +22,10 @@ type ThreadContentType = {
   modelConfigs: Record<ALL_MODEL_NAMES, CustomModelConfig>;
   createThreadLoading: boolean;
   getThread: (id: string) => Promise<Thread | undefined>;
-  createThread: () => Promise<Thread | undefined>;
+  createThread: (assignmentId?: string) => Promise<Thread | undefined>;
+  findThreadByAssignment: (assignmentId: string) => Promise<Thread | undefined>;
+  getActiveThread: (assignmentId: string) => Promise<Thread | undefined>;
+  getAllThreadsForAssignment: (assignmentId: string) => Promise<Thread[]>;
   getUserThreads: () => Promise<void>;
   deleteThread: (id: string, clearMessages: () => void) => Promise<void>;
   setThreadId: (id: string | null) => void;
@@ -35,13 +39,16 @@ type ThreadContentType = {
 const ThreadContext = createContext<ThreadContentType | undefined>(undefined);
 
 export function ThreadProvider({ children }: { children: ReactNode }) {
-  const { user } = useUserContext();
+  const { user, getUser, loading: userLoading } = useUserContext();
   const { toast } = useToast();
   const [threadId, setThreadId] = useQueryState("threadId");
   const [userThreads, setUserThreads] = useState<Thread[]>([]);
   const [isUserThreadsLoading, setIsUserThreadsLoading] = useState(false);
-  const [modelName, setModelName] =
-    useState<ALL_MODEL_NAMES>(DEFAULT_MODEL_NAME);
+  const defaultModelName =
+    process.env.NEXT_PUBLIC_OPENROUTER_ENABLED === "true"
+      ? OPENROUTER_DEFAULT_MODEL_NAME
+      : DEFAULT_MODEL_NAME;
+  const [modelName, setModelName] = useState<ALL_MODEL_NAMES>(defaultModelName);
   const [createThreadLoading, setCreateThreadLoading] = useState(false);
 
   const [modelConfigs, setModelConfigs] = useState<
@@ -51,7 +58,11 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     const initialConfigs: Record<ALL_MODEL_NAMES, CustomModelConfig> =
       {} as Record<ALL_MODEL_NAMES, CustomModelConfig>;
 
-    ALL_MODELS.forEach((model) => {
+    const modelsForConfig =
+      process.env.NEXT_PUBLIC_OPENROUTER_ENABLED === "true"
+        ? OPENROUTER_MODELS
+        : ALL_MODELS;
+    modelsForConfig.forEach((model) => {
       const modelKey = model.modelName || model.name;
 
       initialConfigs[modelKey] = {
@@ -136,8 +147,23 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const createThread = async (): Promise<Thread | undefined> => {
-    if (!user) {
+  const createThread = async (
+    assignmentId?: string
+  ): Promise<Thread | undefined> => {
+    // Wait for auth to resolve instead of relying on stale closure
+    let currentUser = user;
+    if (!currentUser && userLoading) {
+      // Auth still loading — wait up to 3s for it
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 300));
+        currentUser = await getUser();
+        if (currentUser) break;
+      }
+    }
+    if (!currentUser) {
+      currentUser = await getUser();
+    }
+    if (!currentUser) {
       toast({
         title: "Failed to create thread",
         description: "User not found",
@@ -150,9 +176,27 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     setCreateThreadLoading(true);
 
     try {
+      // Reuse an incomplete active thread; allow minting when only submitted
+      // (or nothing) exists so students can start a fresh attempt.
+      if (assignmentId) {
+        const existing = await getActiveThread(assignmentId);
+        if (existing) {
+          setThreadId(existing.thread_id);
+          try {
+            const cache = JSON.parse(
+              localStorage.getItem("oc_thread_cache") || "{}"
+            );
+            cache[`${currentUser.id}:${assignmentId}`] = existing.thread_id;
+            localStorage.setItem("oc_thread_cache", JSON.stringify(cache));
+          } catch (_) {}
+          return existing;
+        }
+      }
+
       const thread = await client.threads.create({
         metadata: {
-          supabase_user_id: user.id,
+          supabase_user_id: currentUser.id,
+          ...(assignmentId ? { assignment_id: assignmentId } : {}),
           customModelName: modelName,
           modelConfig: {
             ...modelConfig,
@@ -165,6 +209,15 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
       });
 
       setThreadId(thread.thread_id);
+      if (assignmentId) {
+        try {
+          const cache = JSON.parse(
+            localStorage.getItem("oc_thread_cache") || "{}"
+          );
+          cache[`${currentUser.id}:${assignmentId}`] = thread.thread_id;
+          localStorage.setItem("oc_thread_cache", JSON.stringify(cache));
+        } catch (_) {}
+      }
       // Fetch updated threads so the new thread is included.
       // Do not await since we do not want to block the UI.
       getUserThreads().catch(console.error);
@@ -183,8 +236,146 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const findThreadByAssignment = async (
+    assignmentId: string
+  ): Promise<Thread | undefined> => {
+    const currentUser = await getUser();
+    if (!currentUser) return undefined;
+    try {
+      const client = createClient();
+      const results = await client.threads.search({
+        metadata: {
+          supabase_user_id: currentUser.id,
+          assignment_id: assignmentId,
+        },
+        limit: 100,
+      });
+      return results[0] || undefined;
+    } catch (e) {
+      console.error("Failed to find thread by assignment", e);
+      return undefined;
+    }
+  };
+
+  const enrichThreadValues = async (
+    client: ReturnType<typeof createClient>,
+    thread: Thread
+  ): Promise<Thread> => {
+    const values = thread.values as Record<string, unknown> | undefined;
+    const hasValues =
+      values &&
+      ((Array.isArray(values.messages) && values.messages.length > 0) ||
+        values.artifact);
+    if (hasValues) return thread;
+    try {
+      const state = await client.threads.getState(thread.thread_id);
+      if (state?.values) {
+        return { ...thread, values: state.values };
+      }
+    } catch (_) {
+      // Keep registry-only thread; scorer treats missing values as empty.
+    }
+    return thread;
+  };
+
+  const writeThreadCache = (
+    userId: string,
+    assignmentId: string,
+    threadIdValue: string
+  ) => {
+    try {
+      const cache = JSON.parse(localStorage.getItem("oc_thread_cache") || "{}");
+      cache[`${userId}:${assignmentId}`] = threadIdValue;
+      localStorage.setItem("oc_thread_cache", JSON.stringify(cache));
+    } catch (_) {}
+  };
+
+  const clearThreadCacheEntry = (userId: string, assignmentId: string) => {
+    try {
+      const cache = JSON.parse(localStorage.getItem("oc_thread_cache") || "{}");
+      delete cache[`${userId}:${assignmentId}`];
+      localStorage.setItem("oc_thread_cache", JSON.stringify(cache));
+    } catch (_) {}
+  };
+
+  const getActiveThread = async (
+    assignmentId: string
+  ): Promise<Thread | undefined> => {
+    const currentUser = await getUser();
+    if (!currentUser) return undefined;
+
+    const client = createClient();
+    let cachedThread: Thread | undefined;
+
+    try {
+      const cache = JSON.parse(localStorage.getItem("oc_thread_cache") || "{}");
+      const cachedThreadId = cache[`${currentUser.id}:${assignmentId}`];
+      if (cachedThreadId) {
+        try {
+          const thread = await client.threads.get(cachedThreadId);
+          if (thread) {
+            cachedThread = await enrichThreadValues(client, thread);
+          }
+        } catch (_) {
+          clearThreadCacheEntry(currentUser.id, assignmentId);
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const results = await client.threads.search({
+        metadata: {
+          supabase_user_id: currentUser.id,
+          assignment_id: assignmentId,
+        },
+        limit: 100,
+      });
+
+      const enriched: Thread[] = [];
+      for (const t of results) {
+        enriched.push(await enrichThreadValues(client, t));
+      }
+
+      if (cachedThread) {
+        writeThreadCache(currentUser.id, assignmentId, cachedThread.thread_id);
+        return cachedThread;
+      }
+
+      const active = enriched[0];
+      if (!active) return undefined;
+
+      writeThreadCache(currentUser.id, assignmentId, active.thread_id);
+      return active;
+    } catch (e) {
+      console.error("Failed to get active thread", e);
+      if (cachedThread) {
+        return cachedThread;
+      }
+      return undefined;
+    }
+  };
+
+  const getAllThreadsForAssignment = async (
+    assignmentId: string
+  ): Promise<Thread[]> => {
+    try {
+      const client = createClient();
+      const results = await client.threads.search({
+        metadata: {
+          assignment_id: assignmentId,
+        },
+        limit: 100,
+      });
+      return results;
+    } catch (e) {
+      console.error("Failed to get all threads for assignment", e);
+      return [];
+    }
+  };
+
   const getUserThreads = async () => {
-    if (!user) {
+    const currentUser = await getUser();
+    if (!currentUser) {
       toast({
         title: "Failed to create thread",
         description: "User not found",
@@ -200,7 +391,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
       const userThreads = await client.threads.search({
         metadata: {
-          supabase_user_id: user.id,
+          supabase_user_id: currentUser.id,
         },
         limit: 100,
       });
@@ -238,6 +429,15 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error(`Failed to delete thread with ID ${id}`, e);
     }
+    try {
+      const cache = JSON.parse(localStorage.getItem("oc_thread_cache") || "{}");
+      for (const key of Object.keys(cache)) {
+        if (cache[key] === id) {
+          delete cache[key];
+        }
+      }
+      localStorage.setItem("oc_thread_cache", JSON.stringify(cache));
+    } catch (_) {}
   };
 
   const getThread = async (id: string): Promise<Thread | undefined> => {
@@ -267,6 +467,9 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     createThreadLoading,
     getThread,
     createThread,
+    findThreadByAssignment,
+    getActiveThread,
+    getAllThreadsForAssignment,
     getUserThreads,
     deleteThread,
     setThreadId,

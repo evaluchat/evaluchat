@@ -599,11 +599,180 @@ export const NON_STREAMING_TEXT_MODELS = [
   "gemini-2.0-flash-thinking-exp-01-21",
 ];
 
-// Models which preform CoT before generating a final response.
+// Models which perform CoT before generating a final response.
 export const THINKING_MODELS = [
   "accounts/fireworks/models/deepseek-r1",
   "groq/deepseek-r1-distill-llama-70b",
 ];
+
+/** Curated models for OpenRouter (OpenAI-compatible API). */
+export const OPENROUTER_MODELS: ModelConfigurationParams[] = [
+  {
+    // OpenCode Zen free budget SKU (no slash → Zen rail). DeepSeek free is
+    // often capacity-starved; mimo is the current default.
+    name: "mimo-v2.5-free",
+    label: "MiMo V2.5 (Free / OpenCode Zen)",
+    isNew: true,
+    config: {
+      provider: "openai",
+      temperatureRange: {
+        min: 0,
+        max: 1,
+        default: 0.5,
+        current: 0.5,
+      },
+      maxTokens: {
+        min: 1,
+        max: 16_384,
+        default: 4_096,
+        current: 4_096,
+      },
+    },
+  },
+  {
+    name: "deepseek-v4-flash-free",
+    label: "DeepSeek V4 Flash (Free / OpenCode Zen)",
+    isNew: false,
+    config: {
+      provider: "openai",
+      temperatureRange: {
+        min: 0,
+        max: 1,
+        default: 0.5,
+        current: 0.5,
+      },
+      maxTokens: {
+        min: 1,
+        max: 16_384,
+        default: 4_096,
+        current: 4_096,
+      },
+    },
+  },
+  {
+    name: "openai/gpt-5.6-luna",
+    label: "GPT-5.6 Luna (Premium)",
+    isNew: true,
+    config: {
+      provider: "openai",
+      temperatureRange: {
+        min: 0,
+        max: 1,
+        default: 0.5,
+        current: 0.5,
+      },
+      maxTokens: {
+        min: 1,
+        max: 16_384,
+        default: 4_096,
+        current: 4_096,
+      },
+    },
+  },
+  {
+    name: "openai/gpt-4o-mini",
+    label: "GPT-4o mini (OpenRouter)",
+    isNew: false,
+    config: {
+      provider: "openai",
+      temperatureRange: {
+        min: 0,
+        max: 1,
+        default: 0.5,
+        current: 0.5,
+      },
+      maxTokens: {
+        min: 1,
+        max: 16_384,
+        default: 4_096,
+        current: 4_096,
+      },
+    },
+  },
+  {
+    name: "anthropic/claude-3.5-sonnet",
+    label: "Claude 3.5 Sonnet (OpenRouter)",
+    isNew: false,
+    config: {
+      provider: "openai",
+      temperatureRange: {
+        min: 0,
+        max: 1,
+        default: 0.5,
+        current: 0.5,
+      },
+      maxTokens: {
+        min: 1,
+        max: 8_192,
+        default: 4_096,
+        current: 4_096,
+      },
+    },
+  },
+  {
+    name: "google/gemini-2.0-flash-001",
+    label: "Gemini 2.0 Flash (OpenRouter)",
+    isNew: false,
+    config: {
+      provider: "openai",
+      temperatureRange: {
+        min: 0,
+        max: 1,
+        default: 0.5,
+        current: 0.5,
+      },
+      maxTokens: {
+        min: 1,
+        max: 8_192,
+        default: 4_096,
+        current: 4_096,
+      },
+    },
+  },
+  {
+    name: "meta-llama/llama-3.3-70b-instruct",
+    label: "Llama 3.3 70B (OpenRouter)",
+    isNew: false,
+    config: {
+      provider: "openai",
+      temperatureRange: {
+        min: 0,
+        max: 1,
+        default: 0.5,
+        current: 0.5,
+      },
+      maxTokens: {
+        min: 1,
+        max: 8_192,
+        default: 4_096,
+        current: 4_096,
+      },
+    },
+  },
+  {
+    name: "xiaomi/mimo-v2.5-pro",
+    label: "MiMo-V2.5-Pro (OpenRouter)",
+    isNew: false,
+    config: {
+      provider: "openai",
+      temperatureRange: {
+        min: 0,
+        max: 1,
+        default: 0.5,
+        current: 0.5,
+      },
+      maxTokens: {
+        min: 1,
+        max: 32_768,
+        default: 16_384,
+        current: 16_384,
+      },
+    },
+  },
+];
+
+export const OPENROUTER_DEFAULT_MODEL_NAME = OPENROUTER_MODELS[0]
+  .name as (typeof OPENROUTER_MODELS)[number]["name"];
 
 export const ALL_MODELS: ModelConfigurationParams[] = [
   ...OPENAI_MODELS,
@@ -613,6 +782,7 @@ export const ALL_MODELS: ModelConfigurationParams[] = [
   ...AZURE_MODELS,
   ...OLLAMA_MODELS,
   ...GROQ_MODELS,
+  ...OPENROUTER_MODELS,
 ];
 
 type OPENAI_MODEL_NAMES = (typeof OPENAI_MODELS)[number]["name"];
@@ -622,6 +792,7 @@ type GEMINI_MODEL_NAMES = (typeof GEMINI_MODELS)[number]["name"];
 type AZURE_MODEL_NAMES = (typeof AZURE_MODELS)[number]["name"];
 type OLLAMA_MODEL_NAMES = (typeof OLLAMA_MODELS)[number]["name"];
 type GROQ_MODEL_NAMES = (typeof GROQ_MODELS)[number]["name"];
+type OPENROUTER_MODEL_NAMES = (typeof OPENROUTER_MODELS)[number]["name"];
 export type ALL_MODEL_NAMES =
   | OPENAI_MODEL_NAMES
   | ANTHROPIC_MODEL_NAMES
@@ -629,7 +800,8 @@ export type ALL_MODEL_NAMES =
   | GEMINI_MODEL_NAMES
   | AZURE_MODEL_NAMES
   | OLLAMA_MODEL_NAMES
-  | GROQ_MODEL_NAMES;
+  | GROQ_MODEL_NAMES
+  | OPENROUTER_MODEL_NAMES;
 
 export const DEFAULT_MODEL_NAME: ALL_MODEL_NAMES = OPENAI_MODELS[1].name;
 export const DEFAULT_MODEL_CONFIG: CustomModelConfig = {

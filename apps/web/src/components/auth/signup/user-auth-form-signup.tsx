@@ -14,29 +14,48 @@ import { PasswordInput } from "../../ui/password-input";
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLDivElement> {
   onSignupWithEmail: (input: SignupWithEmailInput) => Promise<void>;
   onSignupWithOauth: (provider: "google" | "github") => Promise<void>;
+  defaultEmail?: string;
+  emailReadOnly?: boolean;
+  showNameField?: boolean;
+  showRoleToggle?: boolean;
 }
 
 export function UserAuthForm({
   className,
   onSignupWithEmail,
   onSignupWithOauth,
+  defaultEmail = "",
+  emailReadOnly = false,
+  showNameField = false,
+  showRoleToggle = true,
   ...props
 }: UserAuthFormProps) {
   const [isEmailPasswordLoading, setEmailPasswordIsLoading] = useState(false);
   const [isGoogleLoading, setGoogleIsLoading] = useState(false);
   const [isGithubLoading, setGithubIsLoading] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPasswordField, setShowPasswordField] = useState(false);
+  const [showPasswordField, setShowPasswordField] = useState(showNameField);
+  const [isTeacher, setIsTeacher] = useState(false);
 
   const isLoading =
     isEmailPasswordLoading || isGoogleLoading || isGithubLoading;
 
-  async function onSubmit(event: React.SyntheticEvent) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setEmailPasswordIsLoading(true);
 
-    await onSignupWithEmail({ email, password });
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? defaultEmail).trim();
+    const password = String(formData.get("password") ?? "");
+    const name = showNameField
+      ? String(formData.get("name") ?? "").trim()
+      : undefined;
+
+    await onSignupWithEmail({
+      email,
+      password,
+      name,
+      role: isTeacher ? "teacher" : undefined,
+    });
     setEmailPasswordIsLoading(false);
   }
 
@@ -51,21 +70,36 @@ export function UserAuthForm({
               </Label>
               <Input
                 id="email"
+                name="email"
                 placeholder="name@example.com"
                 type="email"
                 autoCapitalize="none"
                 autoComplete="email"
                 autoCorrect="off"
-                disabled={isLoading}
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
+                defaultValue={defaultEmail}
+                readOnly={emailReadOnly}
+                disabled={isLoading || emailReadOnly}
+                onChange={() => {
                   if (!showPasswordField) {
                     setShowPasswordField(true);
                   }
                 }}
               />
             </div>
+
+            {showNameField && (
+              <div className="pt-[2px] pb-1 px-1">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  placeholder="Jane Doe"
+                  autoComplete="name"
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+            )}
 
             <div
               className={cn(
@@ -78,14 +112,35 @@ export function UserAuthForm({
               </Label>
               <PasswordInput
                 id="password"
+                name="password"
                 autoComplete="new-password"
                 autoCorrect="off"
                 disabled={isLoading}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                minLength={6}
+                required
               />
             </div>
           </div>
+          {showRoleToggle && (
+            <div className="px-1 pb-2">
+              <Label
+                className="flex items-center gap-2 cursor-pointer"
+                htmlFor="role-toggle"
+              >
+                <input
+                  id="role-toggle"
+                  type="checkbox"
+                  checked={isTeacher}
+                  onChange={(e) => setIsTeacher(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                  disabled={isLoading}
+                />
+                <span className="text-sm text-muted-foreground">
+                  I am a teacher
+                </span>
+              </Label>
+            </div>
+          )}
           <Button disabled={isLoading}>
             {isLoading && (
               <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />

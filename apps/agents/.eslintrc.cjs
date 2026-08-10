@@ -21,6 +21,7 @@ module.exports = {
     "*.js",
     "*.cjs",
     "*.d.ts",
+    "vitest.config.ts",
   ],
   rules: {
     "@typescript-eslint/explicit-module-boundary-types": 0,
@@ -37,7 +38,7 @@ module.exports = {
     "import/extensions": [2, "ignorePackages"],
     "import/no-extraneous-dependencies": [
       "error",
-      { devDependencies: ["**/*.test.ts"] },
+      { devDependencies: ["**/*.test.ts", "**/__test-helpers__/**", "**/vitest.config.*"] },
     ],
     "import/no-unresolved": 0,
     "import/prefer-default-export": 0,
@@ -58,4 +59,12 @@ module.exports = {
     "no-else-return": 0,
     "new-cap": ["error", { properties: false, capIsNew: false }],
   },
+  overrides: [
+    {
+      files: ["**/*.test.ts", "**/__test-helpers__/**"],
+      rules: {
+        "@typescript-eslint/no-require-imports": "off",
+      },
+    },
+  ],
 };

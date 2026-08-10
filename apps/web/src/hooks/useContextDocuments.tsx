@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { arrayToFileList, convertDocuments, load } from "@/lib/attachments";
 import { useToast } from "./use-toast";
 import { ContextDocument } from "@opencanvas/shared/types";
@@ -13,7 +12,7 @@ export function useContextDocuments(userId: string) {
   const [urls, setUrls] = useState<string[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
-  const ffmpegRef = useRef(new FFmpeg());
+  const ffmpegRef = useRef({ loaded: false });
 
   useEffect(() => {
     if (!documents?.length) return;

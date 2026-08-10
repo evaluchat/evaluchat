@@ -17,9 +17,13 @@ import React, {
 import { createPortal } from "react-dom";
 import { v4 as uuidv4 } from "uuid";
 import { ActionsToolbar, CodeToolBar } from "./actions_toolbar";
-import { CodeRenderer } from "./CodeRenderer";
-import { TextRenderer } from "./TextRenderer";
 
+const CodeRenderer = React.lazy(() =>
+  import("./CodeRenderer").then((m) => ({ default: m.CodeRenderer }))
+);
+const TextRenderer = React.lazy(() =>
+  import("./TextRenderer").then((m) => ({ default: m.TextRenderer }))
+);
 const PrintView = React.lazy(() =>
   import("./PrintView").then((m) => ({ default: m.PrintView }))
 );
@@ -55,22 +59,23 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     isStreaming,
     isArtifactSaved,
     artifactUpdateFailed,
-    setSelectedArtifact,
     setMessages,
     streamMessage,
-    setSelectedBlocks,
+    setSelectedBlocks: _unused_setSelectedBlocks,
     setArtifact,
   } = graphData;
+
   const editorRef = useRef<EditorView | null>(null);
+  const blockNoteEditorRef = useRef<any | null>(null);
   const artifactContentRef = useRef<HTMLDivElement>(null);
   const highlightLayerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const selectionBoxRef = useRef<HTMLDivElement>(null);
   // Cached clone of the most recent in-canvas selection range. The highlight overlay
   // renders from this (DOM-anchored) range so it survives the browser selection moving
-  // to the chat input when the user types/scrolls there. Without it, every
-  // rerender re-read window.getSelection(), which had left the canvas, so the green
-  // highlight was wiped on chat interaction.
+  // to the chat input when the student types/scrolls there. Without it, every
+  // scrollTick re-render re-read window.getSelection(), which had left the canvas, so
+  // the green overlay was wiped on chat interaction.
   const selectionRangeRef = useRef<Range | null>(null);
   const [selectionBox, setSelectionBox] = useState<SelectionBox>();
   const [selectionIndexes, setSelectionIndexes] = useState<{
@@ -84,7 +89,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const [isValidSelectionOrigin, setIsValidSelectionOrigin] = useState(false);
   // Incremented on scroll to force highlight re-render so highlights scroll with text
   const [scrollTick, setScrollTick] = useState(0);
-
   // Print functionality
   const [showPrintView, setShowPrintView] = useState(false);
 
@@ -152,11 +156,16 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
 
   const handleDocumentMouseDown = useCallback(
     (event: MouseEvent) => {
-      if (
-        isSelectionActive &&
-        selectionBoxRef.current &&
-        !selectionBoxRef.current.contains(event.target as Node)
-      ) {
+      if (!isSelectionActive) return;
+
+      // Don't clean up if clicking inside the AskOpenCanvas popup
+      if (selectionBoxRef.current?.contains(event.target as Node)) return;
+
+      // Only clean up if clicking inside the canvas content area
+      // (user making new selection or moving cursor in canvas).
+      // Clicks outside the canvas (chat input, toolbar, sidebar, etc.)
+      // should NOT clear the selection highlight.
+      if (artifactContentRef.current?.contains(event.target as Node)) {
         handleCleanupState();
       }
     },
@@ -166,6 +175,25 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const handleSelectionBoxMouseDown = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
   }, []);
+
+  const handleSubmit = async (content: string) => {
+    const humanMessage = new HumanMessage({
+      content,
+      id: uuidv4(),
+    });
+
+    setMessages((prevMessages) => [...prevMessages, humanMessage]);
+    handleCleanupState();
+    await streamMessage({
+      messages: [convertToOpenAIFormat(humanMessage)],
+      ...(selectionIndexes && {
+        highlightedCode: {
+          startCharIndex: selectionIndexes.start,
+          endCharIndex: selectionIndexes.end,
+        },
+      }),
+    });
+  };
 
   const handlePrint = useCallback(() => {
     if (!artifact) return;
@@ -193,25 +221,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     },
     [handlePrint]
   );
-
-  const handleSubmit = async (content: string) => {
-    const humanMessage = new HumanMessage({
-      content,
-      id: uuidv4(),
-    });
-
-    setMessages((prevMessages) => [...prevMessages, humanMessage]);
-    handleCleanupState();
-    await streamMessage({
-      messages: [convertToOpenAIFormat(humanMessage)],
-      ...(selectionIndexes && {
-        highlightedCode: {
-          startCharIndex: selectionIndexes.start,
-          endCharIndex: selectionIndexes.end,
-        },
-      }),
-    });
-  };
 
   useEffect(() => {
     document.addEventListener("mouseup", handleMouseUp);
@@ -329,13 +338,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   }, [isSelectionActive, selectionBox, scrollTick]);
 
   useEffect(() => {
-    if (!!selectedBlocks && !isSelectionActive) {
-      // Selection is not active but selected blocks are present. Clear them.
-      setSelectedBlocks(undefined);
-    }
-  }, [selectedBlocks, isSelectionActive]);
-
-  useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // Check if we're in an input/textarea element
       const activeElement = document.activeElement;
@@ -376,28 +378,19 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     return <div className="w-full h-full"></div>;
   }
 
-  const isBackwardsDisabled =
-    artifact.contents.length === 1 ||
-    currentArtifactContent.index === 1 ||
-    isStreaming;
-  const isForwardDisabled =
-    artifact.contents.length === 1 ||
-    currentArtifactContent.index === artifact.contents.length ||
-    isStreaming;
-
   return (
     <div className="relative w-full h-full max-h-screen overflow-auto">
       <ArtifactHeader
         isArtifactSaved={isArtifactSaved}
-        isBackwardsDisabled={isBackwardsDisabled}
-        isForwardDisabled={isForwardDisabled}
-        setSelectedArtifact={setSelectedArtifact}
         currentArtifactContent={currentArtifactContent}
-        totalArtifactVersions={artifact.contents.length}
         selectedAssistant={selectedAssistant}
         artifactUpdateFailed={artifactUpdateFailed}
         chatCollapsed={props.chatCollapsed}
         setChatCollapsed={props.setChatCollapsed}
+        blockNoteEditorRef={blockNoteEditorRef}
+        onPrint={
+          currentArtifactContent.type === "text" ? handlePrint : undefined
+        }
         onTitleChange={(newTitle: string) => {
           if (!artifact) return;
           const updatedContents = artifact.contents.map((c) =>
@@ -407,9 +400,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           );
           setArtifact({ ...artifact, contents: updatedContents });
         }}
-        onPrint={
-          currentArtifactContent.type === "text" ? handlePrint : undefined
-        }
       />
       <div
         ref={contentRef}
@@ -427,21 +417,27 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           <div
             className="h-full"
             ref={artifactContentRef}
+            data-testid="artifact-content-wrapper"
             onMouseEnter={() => setIsHoveringOverArtifact(true)}
             onMouseLeave={() => setIsHoveringOverArtifact(false)}
           >
             {currentArtifactContent.type === "text" ? (
-              <TextRenderer
-                isInputVisible={isInputVisible}
-                isEditing={props.isEditing}
-                isHovering={isHoveringOverArtifact}
-              />
+              <Suspense fallback={<div>Loading...</div>}>
+                <TextRenderer
+                  isInputVisible={isInputVisible}
+                  isEditing={props.isEditing}
+                  isHovering={isHoveringOverArtifact}
+                  editorRef={blockNoteEditorRef}
+                />
+              </Suspense>
             ) : null}
             {currentArtifactContent.type === "code" ? (
-              <CodeRenderer
-                editorRef={editorRef}
-                isHovering={isHoveringOverArtifact}
-              />
+              <Suspense fallback={<div>Loading...</div>}>
+                <CodeRenderer
+                  editorRef={editorRef}
+                  isHovering={isHoveringOverArtifact}
+                />
+              </Suspense>
             ) : null}
           </div>
           <div
@@ -486,7 +482,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           }
         />
       ) : null}
-
       {/* Print view portal */}
       {showPrintView &&
         currentArtifactContent.type === "text" &&

@@ -11,6 +11,7 @@ import {
   ALL_MODEL_NAMES,
   ALL_MODELS,
   LANGCHAIN_USER_ONLY_MODELS,
+  OPENROUTER_MODELS,
 } from "@opencanvas/shared/models";
 import {
   Dispatch,
@@ -136,12 +137,21 @@ export default function ModelSelector({
     [setModelName]
   );
 
-  const allAllowedModels = ALL_MODELS.filter((model) => {
+  const modelCatalog =
+    process.env.NEXT_PUBLIC_OPENROUTER_ENABLED === "true"
+      ? OPENROUTER_MODELS
+      : ALL_MODELS;
+
+  const allAllowedModels = modelCatalog.filter((model) => {
     if (
       !isLangChainUser &&
       LANGCHAIN_USER_ONLY_MODELS.some((m) => m === model.name)
     ) {
       return false;
+    }
+
+    if (process.env.NEXT_PUBLIC_OPENROUTER_ENABLED === "true") {
+      return true;
     }
 
     if (
@@ -158,6 +168,7 @@ export default function ModelSelector({
     }
     if (
       model.name.includes("gpt-") &&
+      !model.name.includes("/") &&
       process.env.NEXT_PUBLIC_OPENAI_ENABLED === "false"
     ) {
       return false;

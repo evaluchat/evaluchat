@@ -63,6 +63,7 @@ interface ComposerProps {
   chatStarted: boolean;
   userId: string | undefined;
   searchEnabled: boolean;
+  disabled?: boolean;
 }
 
 export const Composer: FC<ComposerProps> = (props: ComposerProps) => {
@@ -71,6 +72,18 @@ export const Composer: FC<ComposerProps> = (props: ComposerProps) => {
   useEffect(() => {
     setPlaceholder(getRandomPlaceholder(props.searchEnabled));
   }, [props.searchEnabled]);
+
+  if (props.disabled) {
+    return (
+      <div className="flex flex-col w-full min-h-[64px] items-center justify-center border px-2.5 shadow-sm bg-muted/50 rounded-2xl">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <span className="text-sm">
+            Assignment submitted — chat is read-only
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <DragAndDropWrapper>
@@ -89,18 +102,23 @@ export const Composer: FC<ComposerProps> = (props: ComposerProps) => {
             placeholder={placeholder}
             rows={1}
             className="placeholder:text-muted-foreground max-h-40 flex-grow resize-none border-none bg-transparent px-2 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+            data-tracking-id="chat-input"
+            data-testid="chat-input"
+            disabled={props.disabled}
           />
-          <ThreadPrimitive.If running={false}>
-            <ComposerPrimitive.Send asChild>
-              <TooltipIconButton
-                tooltip="Send"
-                variant="default"
-                className="my-2.5 size-8 p-2 transition-opacity ease-in"
-              >
-                <SendHorizontalIcon />
-              </TooltipIconButton>
-            </ComposerPrimitive.Send>
-          </ThreadPrimitive.If>
+          {!props.disabled && (
+            <ThreadPrimitive.If running={false}>
+              <ComposerPrimitive.Send asChild>
+                <TooltipIconButton
+                  tooltip="Send"
+                  variant="default"
+                  className="my-2.5 size-8 p-2 transition-opacity ease-in"
+                >
+                  <SendHorizontalIcon />
+                </TooltipIconButton>
+              </ComposerPrimitive.Send>
+            </ThreadPrimitive.If>
+          )}
           <ThreadPrimitive.If running>
             <ComposerPrimitive.Cancel asChild>
               <TooltipIconButton

@@ -1,10 +1,12 @@
-import * as Icons from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { ALLOWED_VIDEO_TYPES, ALLOWED_AUDIO_TYPES } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { ContextDocument } from "@opencanvas/shared/types";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { toBlobURL } from "@ffmpeg/util";
 import { createClient } from "@supabase/supabase-js";
+
+// FFmpeg removed — not needed for text-only teaching prototype.
+// Stub types so the rest of the code compiles.
+type FFmpeg = { loaded: boolean };
 
 export function arrayToFileList(files: File[] | undefined) {
   if (!files || !files.length) return undefined;
@@ -115,69 +117,20 @@ export function fileToBase64(file: File): Promise<string> {
 const MAX_AUDIO_SIZE = 26214400;
 
 export async function load(
-  ffmpeg: FFmpeg,
-  messageRef: React.RefObject<HTMLDivElement>
+  _ffmpeg: FFmpeg,
+  _messageRef: React.RefObject<HTMLDivElement>
 ) {
-  // Check if FFmpeg is already loaded
-  if (ffmpeg.loaded) {
-    return;
-  }
-
-  const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
-  ffmpeg.on("log", ({ message }) => {
-    if (messageRef.current) messageRef.current.innerHTML = message;
-  });
-  // toBlobURL is used to bypass CORS issue, urls with the same
-  // domain can be used directly.
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-  });
+  // FFmpeg removed — video/audio upload not supported in teaching prototype
+  console.warn("FFmpeg is not available — video/audio upload disabled");
 }
 
 export async function convertToAudio(
-  videoFile: File,
-  ffmpeg: FFmpeg
+  _videoFile: File,
+  _ffmpeg: FFmpeg
 ): Promise<File> {
-  try {
-    // Create a buffer from the video file
-    const videoData = await videoFile.arrayBuffer();
-
-    // Write the video buffer to FFmpeg's virtual filesystem
-    await ffmpeg.writeFile("input.mp4", new Uint8Array(videoData));
-
-    // Run FFmpeg command to convert video to audio
-    await ffmpeg.exec([
-      "-i",
-      "input.mp4",
-      "-vn",
-      "-acodec",
-      "libmp3lame",
-      "-q:a",
-      "2",
-      "output.mp3",
-    ]);
-
-    // Read the output file from FFmpeg's virtual filesystem
-    const audioData = await ffmpeg.readFile("output.mp3");
-
-    // Create a Blob from the audio data
-    const audioBlob = new Blob([audioData], { type: "audio/mp3" });
-
-    // Generate a filename for the new audio file
-    // You can customize this naming convention
-    const originalName = videoFile.name;
-    const audioFileName = originalName.replace(/\.[^/.]+$/, "") + ".mp3";
-
-    // Create and return a new File object
-    return new File([audioBlob], audioFileName, {
-      type: "audio/mp3",
-      lastModified: new Date().getTime(),
-    });
-  } catch (error) {
-    console.error("Error converting video to audio:", error);
-    throw error;
-  }
+  throw new Error(
+    "Video-to-audio conversion is not available — FFmpeg was removed"
+  );
 }
 
 export interface ConvertDocumentsProps {
@@ -224,7 +177,7 @@ export async function convertDocuments({
         description: (
           <span className="flex items-center gap-2">
             Transcribing audio {doc.name}. This may take a while. Please wait{" "}
-            <Icons.LoaderCircle className="animate-spin w-4 h-4" />
+            <LoaderCircle className="animate-spin w-4 h-4" />
           </span>
         ),
         duration: 15000,
@@ -250,7 +203,7 @@ export async function convertDocuments({
         description: (
           <span className="flex items-center gap-2">
             Converting video {doc.name} to audio. This may take a while. Please
-            wait <Icons.LoaderCircle className="animate-spin w-4 h-4" />
+            wait <LoaderCircle className="animate-spin w-4 h-4" />
           </span>
         ),
         duration: 15000,
@@ -275,7 +228,7 @@ export async function convertDocuments({
           <span className="flex items-center gap-2">
             Video to audio conversion completed for {doc.name}. Transcribing
             audio now. This may take a while. Please wait{" "}
-            <Icons.LoaderCircle className="animate-spin w-4 h-4" />
+            <LoaderCircle className="animate-spin w-4 h-4" />
           </span>
         ),
         duration: 60000,

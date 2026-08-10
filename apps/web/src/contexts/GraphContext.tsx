@@ -7,18 +7,19 @@ import {
 } from "@opencanvas/shared/utils/artifacts";
 import { reverseCleanContent } from "@/lib/normalize_string";
 import {
-  ArtifactMarkdownV3,
   ArtifactType,
   ArtifactV3,
+  ArtifactMarkdownV3,
   CustomModelConfig,
+  EditorCursorPosition,
   GraphInput,
   ProgrammingLanguageOptions,
   RewriteArtifactMetaToolResponse,
   SearchResult,
   TextHighlight,
 } from "@opencanvas/shared/types";
+import { type DiffRange } from "@/lib/diffing";
 import { AIMessage, BaseMessage } from "@langchain/core/messages";
-import { useRuns } from "@/hooks/useRuns";
 import { createClient } from "@/hooks/utils";
 import { WEB_SEARCH_RESULTS_QUERY_PARAM } from "@/constants";
 import {
@@ -29,9 +30,11 @@ import {
   ALL_MODEL_NAMES,
   NON_STREAMING_TEXT_MODELS,
   NON_STREAMING_TOOL_CALLING_MODELS,
-  DEFAULT_MODEL_CONFIG,
-  DEFAULT_MODEL_NAME,
 } from "@opencanvas/shared/models";
+import {
+  getActiveDefaultModelConfig,
+  getActiveDefaultModelName,
+} from "@/lib/active-model";
 import { Thread } from "@langchain/langgraph-sdk";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -39,6 +42,7 @@ import {
   Dispatch,
   ReactNode,
   SetStateAction,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -61,9 +65,29 @@ import {
 import { debounce } from "lodash";
 import { useThreadContext } from "./ThreadProvider";
 import { useAssistantContext } from "./AssistantContext";
-import { StreamWorkerService } from "@/workers/graph-stream/streamWorker";
 import { useQueryState } from "nuqs";
-import type { DiffRange } from "@/lib/diffing";
+import {
+  findBlockInMarkdown,
+  reconcileTextHighlight,
+} from "@opencanvas/shared/utils/markdown-canvas";
+
+function resolveHighlightBlockBounds(highlight: TextHighlight): {
+  start: number;
+  end: number;
+} | null {
+  const block = findBlockInMarkdown(
+    highlight.fullMarkdown,
+    highlight.markdownBlock
+  );
+  if (!block) {
+    return null;
+  }
+  const start = highlight.fullMarkdown.indexOf(block);
+  if (start === -1) {
+    return null;
+  }
+  return { start, end: start + block.length };
+}
 
 export interface PendingEditState {
   isActive: boolean;
@@ -80,6 +104,7 @@ interface GraphData {
   messages: BaseMessage[];
   artifact: ArtifactV3 | undefined;
   updateRenderedArtifactRequired: boolean;
+  artifactSyncGeneration: number;
   isArtifactSaved: boolean;
   firstTokenReceived: boolean;
   feedbackSubmitted: boolean;
@@ -99,6 +124,8 @@ interface GraphData {
   clearState: () => void;
   switchSelectedThread: (thread: Thread) => void;
   setUpdateRenderedArtifactRequired: Dispatch<SetStateAction<boolean>>;
+  setCursorPosition: (pos: EditorCursorPosition | undefined) => void;
+  setEditorHasFocus: (focused: boolean) => void;
   pendingEdit: PendingEditState | null;
   setPendingEdit: Dispatch<SetStateAction<PendingEditState | null>>;
   setEditorTextContent: (text: string) => void;
@@ -130,23 +157,21 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const assistantsData = useAssistantContext();
   const threadData = useThreadContext();
   const { toast } = useToast();
-  const { shareRun } = useRuns();
   const [chatStarted, setChatStarted] = useState(false);
   const [messages, setMessages] = useState<BaseMessage[]>([]);
   const [artifact, setArtifact] = useState<ArtifactV3>();
+  const artifactRef = useRef<ArtifactV3 | undefined>(undefined);
   const [selectedBlocks, setSelectedBlocks] = useState<TextHighlight>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [updateRenderedArtifactRequired, setUpdateRenderedArtifactRequired] =
     useState(false);
+  const [artifactSyncGeneration, setArtifactSyncGeneration] = useState(0);
   const lastSavedArtifact = useRef<ArtifactV3 | undefined>(undefined);
-  const artifactRef = useRef<ArtifactV3 | undefined>(undefined);
-  const editorTextContentRef = useRef<string>("");
-  const [pendingEdit, setPendingEdit] = useState<PendingEditState | null>(null);
   const debouncedAPIUpdate = useRef(
     debounce(
       (artifact: ArtifactV3, threadId: string) =>
         updateArtifact(artifact, threadId),
-      5000
+      1000
     )
   ).current;
   const [isArtifactSaved, setIsArtifactSaved] = useState(true);
@@ -157,6 +182,47 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState(false);
   const [artifactUpdateFailed, setArtifactUpdateFailed] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
+  const editorTextContentRef = useRef<string>("");
+  const [pendingEdit, setPendingEdit] = useState<PendingEditState | null>(null);
+
+  // Expose setPendingEdit for E2E testing
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).__setPendingEdit = setPendingEdit;
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        delete (window as any).__setPendingEdit;
+      }
+    };
+  }, [setPendingEdit]);
+
+  // Keep artifactRef in sync so async closures (streamMessageV2) can
+  // read the latest artifact value instead of the stale render snapshot.
+  useEffect(() => {
+    artifactRef.current = artifact;
+  }, [artifact]);
+
+  // Cursor position — updated by TextRenderer, read by streamMessageV2.
+  // Only updates when the canvas editor has focus, so the position persists
+  // when the user clicks into the chat input to type.
+  const cursorPositionRef = useRef<EditorCursorPosition | undefined>(undefined);
+  const editorHasFocusRef = useRef(false);
+  const setCursorPosition = useCallback(
+    (pos: EditorCursorPosition | undefined) => {
+      if (editorHasFocusRef.current) {
+        cursorPositionRef.current = pos;
+      }
+    },
+    []
+  );
+  const setEditorHasFocus = useCallback((focused: boolean) => {
+    editorHasFocusRef.current = focused;
+  }, []);
+
+  const setEditorTextContent = useCallback((text: string) => {
+    editorTextContentRef.current = text;
+  }, []);
 
   const [_, setWebSearchResultsId] = useQueryState(
     WEB_SEARCH_RESULTS_QUERY_PARAM
@@ -175,12 +241,6 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     }
   }, [userData.user]);
 
-  // Keep artifactRef in sync so async closures (streamMessageV2) can
-  // read the latest artifact after a stream finishes.
-  useEffect(() => {
-    artifactRef.current = artifact;
-  }, [artifact]);
-
   // Very hacky way of ensuring updateState is not called when a thread is switched
   useEffect(() => {
     if (threadSwitched) {
@@ -194,7 +254,18 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
-      debouncedAPIUpdate.cancel();
+      debouncedAPIUpdate.flush();
+    };
+  }, [debouncedAPIUpdate]);
+
+  // Flush artifact save when the page is closed/navigated away
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      debouncedAPIUpdate.flush();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [debouncedAPIUpdate]);
 
@@ -228,35 +299,116 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     }
   }, [artifact, threadData.threadId]);
 
-  const searchOrCreateEffectRan = useRef(false);
+  const lastLoadedThreadIdFromQuery = useRef<string | null>(null);
+  const threadLoadRetries = useRef<number>(0);
+  const MAX_THREAD_RETRIES = 3;
 
   // Attempt to load the thread if an ID is present in query params.
   useEffect(() => {
     if (
       typeof window === "undefined" ||
-      !userData.user ||
       threadData.createThreadLoading ||
       !threadData.threadId
     ) {
       return;
     }
 
-    // Only run effect once in development
-    if (searchOrCreateEffectRan.current) {
+    // Active streams own the thread (assignment kickoff / chat). Loading or
+    // resetting here clears React messages while assistant-ui still holds
+    // message indices → "Entry not available in the store".
+    if (isStreaming) {
       return;
     }
-    searchOrCreateEffectRan.current = true;
 
-    threadData.getThread(threadData.threadId).then((thread) => {
-      if (thread) {
-        switchSelectedThread(thread);
-        return;
+    if (lastLoadedThreadIdFromQuery.current === threadData.threadId) {
+      return;
+    }
+
+    // Reset retry counter when threadId changes
+    if (
+      threadLoadRetries.current > 0 &&
+      lastLoadedThreadIdFromQuery.current !== threadData.threadId
+    ) {
+      threadLoadRetries.current = 0;
+    }
+
+    // Don't set the ref yet — set it inside .then() after confirming content.
+    // This allows the effect to retry if the thread loads with empty values
+    // (e.g., cold LangGraph server on first request after rebuild).
+
+    const currentThreadId = threadData.threadId as string;
+    const tryLoadThread = async () => {
+      for (let attempt = 0; attempt <= MAX_THREAD_RETRIES; attempt++) {
+        const thread = await threadData.getThread(currentThreadId);
+        if (thread) {
+          // Thread found — process it
+          let threadValues = thread.values as
+            | Record<string, unknown>
+            | undefined;
+          // Registry rehydrate can leave values null while checkpointer has state.
+          if (
+            !threadValues ||
+            (!(threadValues.messages as unknown[] | undefined)?.length &&
+              !threadValues.artifact)
+          ) {
+            try {
+              const client = createClient();
+              const state = await client.threads.getState(currentThreadId);
+              if (state?.values) {
+                threadValues = state.values as Record<string, unknown>;
+                (thread as Thread).values = state.values;
+              }
+            } catch (_) {
+              /* keep empty values */
+            }
+          }
+
+          const hasContent =
+            threadValues &&
+            ((threadValues.messages &&
+              (threadValues.messages as unknown[]).length > 0) ||
+              threadValues.artifact);
+
+          if (hasContent) {
+            lastLoadedThreadIdFromQuery.current = threadData.threadId;
+            threadLoadRetries.current = 0;
+          } else if (attempt < MAX_THREAD_RETRIES) {
+            // Thread exists but empty — allow retry on next attempt
+            lastLoadedThreadIdFromQuery.current = null;
+            threadLoadRetries.current = attempt + 1;
+            await new Promise((r) => setTimeout(r, 3000));
+            continue;
+          } else {
+            lastLoadedThreadIdFromQuery.current = threadData.threadId;
+            threadLoadRetries.current = 0;
+            if (!isStreaming) {
+              threadData.setThreadId(null);
+            }
+            return;
+          }
+
+          if (!isStreaming) {
+            switchSelectedThread(thread);
+          }
+          return;
+        }
+
+        // Thread not found. This can happen if the proxy auth check hasn't
+        // settled yet. Wait and retry.
+        threadLoadRetries.current = attempt + 1;
+        if (attempt < MAX_THREAD_RETRIES) {
+          lastLoadedThreadIdFromQuery.current = null;
+          await new Promise((r) => setTimeout(r, 3000));
+        }
       }
 
-      // Failed to fetch thread. Remove from query params
+      // All retries exhausted — thread not found
+      lastLoadedThreadIdFromQuery.current = null;
       threadData.setThreadId(null);
-    });
-  }, [threadData.threadId, userData.user]);
+    };
+
+    tryLoadThread();
+  }, [threadData.threadId, userData.user, isStreaming]);
 
   const updateArtifact = async (
     artifactToUpdate: ArtifactV3,
@@ -267,13 +419,19 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
     try {
       const client = createClient();
-      await client.threads.updateState(threadId, {
-        values: {
-          artifact: artifactToUpdate,
-        },
-      });
+      const values: Record<string, unknown> = {
+        artifact: artifactToUpdate,
+      };
+      await client.threads.updateState(threadId, { values });
       setIsArtifactSaved(true);
       lastSavedArtifact.current = artifactToUpdate;
+      // Backup to localStorage as safety net against container restarts
+      try {
+        localStorage.setItem(
+          `canvas_backup_${threadId}`,
+          JSON.stringify({ artifact: artifactToUpdate, timestamp: Date.now() })
+        );
+      } catch (_) {}
     } catch (_) {
       setArtifactUpdateFailed(true);
     }
@@ -283,10 +441,6 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     setMessages([]);
     setArtifact(undefined);
     setFirstTokenReceived(true);
-  };
-
-  const setEditorTextContent = (text: string) => {
-    editorTextContentRef.current = text;
   };
 
   const streamMessageV2 = async (params: GraphInput) => {
@@ -302,10 +456,19 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Mark streaming BEFORE createThread. createThread writes threadId into the
+    // URL, which triggers the resume/load effect — that effect must see
+    // isStreaming so it does not clear messages mid-kickoff (assistant-ui
+    // "Entry not available in the store").
+    setIsStreaming(true);
+    setRunId(undefined);
+    setFeedbackSubmitted(false);
+
     let currentThreadId = threadData.threadId;
     if (!currentThreadId) {
       const newThread = await threadData.createThread();
       if (!newThread) {
+        setIsStreaming(false);
         toast({
           title: "Error",
           description: "Failed to create thread",
@@ -327,13 +490,42 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
     // TODO: update to properly pass the highlight data back
     // one field for highlighted text, and one for code
+    let highlightedTextForInput = selectedBlocks;
+    const latestArtifact = artifactRef.current ?? artifact;
+    if (highlightedTextForInput && latestArtifact) {
+      const currentContent = latestArtifact.contents.find(
+        (c) => c.index === latestArtifact.currentIndex && c.type === "text"
+      );
+      if (currentContent?.type === "text" && currentContent.fullMarkdown) {
+        const reconciled = reconcileTextHighlight(
+          highlightedTextForInput,
+          currentContent.fullMarkdown
+        );
+        if (reconciled.ok) {
+          highlightedTextForInput = reconciled.highlight;
+        } else {
+          toast({
+            title: "Selection out of sync",
+            description:
+              "Could not match your selection to the current document. Try selecting again.",
+            variant: "destructive",
+            duration: 5000,
+          });
+          highlightedTextForInput = undefined;
+        }
+      }
+    }
+
     const input = {
       ...DEFAULT_INPUTS,
       artifact,
+      ...(cursorPositionRef.current && {
+        cursorPosition: cursorPositionRef.current,
+      }),
       ...params,
       ...messagesInput,
-      ...(selectedBlocks && {
-        highlightedText: selectedBlocks,
+      ...(highlightedTextForInput && {
+        highlightedText: highlightedTextForInput,
       }),
       webSearchEnabled: searchEnabled,
     };
@@ -353,6 +545,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     ];
 
     if (fieldsToCheck.filter((field) => field !== undefined).length >= 2) {
+      setIsStreaming(false);
       toast({
         title: "Error",
         description:
@@ -375,24 +568,42 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         : "";
     const preEditText = editorTextContentRef.current;
 
-    setIsStreaming(true);
-    setRunId(undefined);
-    setFeedbackSubmitted(false);
+    // isStreaming already set before createThread above
     // The root level run ID of this stream
     let runId = "";
     let followupMessageId = "";
     // The ID of the message containing the thinking content.
     let thinkingMessageId = "";
+    // When streaming handlers apply an artifact version, skip duplicate on_chain_end.
+    let artifactAppliedFromStreamIndex: number | undefined;
+
+    const applyAgentArtifactUpdate = (nextArtifact: ArtifactV3) => {
+      setFirstTokenReceived(true);
+      setArtifact(nextArtifact);
+      setUpdateRenderedArtifactRequired(true);
+      setArtifactSyncGeneration((g) => g + 1);
+      artifactAppliedFromStreamIndex = nextArtifact.currentIndex;
+    };
 
     try {
-      const workerService = new StreamWorkerService();
-      const stream = workerService.streamData({
-        threadId: currentThreadId,
-        assistantId: assistantsData.selectedAssistant.assistant_id,
-        input,
-        modelName: threadData.modelName,
-        modelConfigs: threadData.modelConfigs,
-      });
+      const client = createClient();
+      const stream = client.runs.stream(
+        currentThreadId,
+        assistantsData.selectedAssistant.assistant_id,
+        {
+          input: input as Record<string, unknown>,
+          streamMode: "events",
+          config: {
+            configurable: {
+              customModelName: threadData.modelName,
+              modelConfig:
+                threadData.modelConfigs[
+                  threadData.modelName as keyof typeof threadData.modelConfigs
+                ],
+            },
+          },
+        }
+      );
 
       // Variables to keep track of content specific to this stream
       const prevCurrentContent = artifact
@@ -524,7 +735,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
               // Process accumulated content with rate limiting
               const result = handleGenerateArtifactToolCallChunk(
-                generateArtifactToolCallStr
+                generateArtifactToolCallStr,
+                artifact
               );
 
               if (result) {
@@ -580,10 +792,13 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               }
 
               const partialUpdatedContent = message.content || "";
-              const startIndexOfHighlightedText =
-                highlightedText.fullMarkdown.indexOf(
-                  highlightedText.markdownBlock
+              const blockBounds = resolveHighlightBlockBounds(highlightedText);
+              if (!blockBounds) {
+                console.error(
+                  "[updateHighlightedText] markdown block not found in fullMarkdown"
                 );
+                continue;
+              }
 
               if (
                 updatedArtifactStartContent === undefined &&
@@ -591,13 +806,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               ) {
                 // Initialize the start and rest content on first chunk
                 updatedArtifactStartContent =
-                  highlightedText.fullMarkdown.slice(
-                    0,
-                    startIndexOfHighlightedText
-                  );
+                  highlightedText.fullMarkdown.slice(0, blockBounds.start);
                 updatedArtifactRestContent = highlightedText.fullMarkdown.slice(
-                  startIndexOfHighlightedText +
-                    highlightedText.markdownBlock.length
+                  blockBounds.end
                 );
               }
 
@@ -622,6 +833,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                   firstUpdateCopy
                 );
               });
+              artifactAppliedFromStreamIndex = newArtifactIndex;
 
               if (isFirstUpdate) {
                 isFirstUpdate = false;
@@ -996,10 +1208,13 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               }
 
               const partialUpdatedContent = message.content || "";
-              const startIndexOfHighlightedText =
-                highlightedText.fullMarkdown.indexOf(
-                  highlightedText.markdownBlock
+              const blockBounds = resolveHighlightBlockBounds(highlightedText);
+              if (!blockBounds) {
+                console.error(
+                  "[updateHighlightedText] markdown block not found in fullMarkdown"
                 );
+                continue;
+              }
 
               if (
                 updatedArtifactStartContent === undefined &&
@@ -1007,13 +1222,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               ) {
                 // Initialize the start and rest content on first chunk
                 updatedArtifactStartContent =
-                  highlightedText.fullMarkdown.slice(
-                    0,
-                    startIndexOfHighlightedText
-                  );
+                  highlightedText.fullMarkdown.slice(0, blockBounds.start);
                 updatedArtifactRestContent = highlightedText.fullMarkdown.slice(
-                  startIndexOfHighlightedText +
-                    highlightedText.markdownBlock.length
+                  blockBounds.end
                 );
               }
 
@@ -1038,6 +1249,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                   firstUpdateCopy
                 );
               });
+              artifactAppliedFromStreamIndex = newArtifactIndex;
 
               if (isFirstUpdate) {
                 isFirstUpdate = false;
@@ -1207,6 +1419,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               NON_STREAMING_TEXT_MODELS.some((m) => m === threadData.modelName)
             ) {
               const message = extractStreamDataOutput(nodeOutput);
+              if (typeof message?.content !== "string") {
+                continue;
+              }
               followupMessageId = message.id;
               setMessages((prevMessages) =>
                 replaceOrInsertMessageChunk(prevMessages, message)
@@ -1254,13 +1469,70 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               generateArtifactToolCallStr +=
                 message?.tool_call_chunks?.[0]?.args || message?.content || "";
               const result = handleGenerateArtifactToolCallChunk(
-                generateArtifactToolCallStr
+                generateArtifactToolCallStr,
+                artifact
               );
               if (result && result === "continue") {
                 continue;
               } else if (result && typeof result === "object") {
                 setFirstTokenReceived(true);
                 setArtifact(result);
+              }
+            }
+
+            if (langgraphNode === "applyTextEdits" && nodeOutput) {
+              const output = extractStreamDataOutput(nodeOutput) as {
+                artifact?: ArtifactV3;
+              };
+              if (output?.artifact) {
+                applyAgentArtifactUpdate(output.artifact);
+              }
+            }
+
+            if (
+              (langgraphNode === "updateHighlightedText" ||
+                langgraphNode === "updateArtifact" ||
+                langgraphNode === "rewriteArtifact" ||
+                langgraphNode === "integrateCanvasDirection") &&
+              nodeOutput
+            ) {
+              const output = extractStreamDataOutput(nodeOutput) as {
+                artifact?: ArtifactV3;
+              };
+              if (output?.artifact) {
+                const shouldApply =
+                  langgraphNode === "updateHighlightedText" ||
+                  output.artifact.currentIndex !==
+                    artifactAppliedFromStreamIndex;
+                if (shouldApply) {
+                  applyAgentArtifactUpdate(output.artifact);
+                }
+              }
+            }
+
+            if (langgraphNode === "generateFollowup" && nodeOutput) {
+              const output = extractStreamDataOutput(nodeOutput) as {
+                messages?: Array<Record<string, unknown>>;
+              };
+              const raw = output?.messages?.[0];
+              if (raw && !followupMessageId) {
+                const content =
+                  typeof raw.content === "string"
+                    ? raw.content
+                    : typeof (raw as { kwargs?: { content?: string } }).kwargs
+                          ?.content === "string"
+                      ? (raw as { kwargs: { content: string } }).kwargs.content
+                      : null;
+
+                if (content) {
+                  const aiMsg = new AIMessage({
+                    id: (raw.id as string) || uuidv4(),
+                    content,
+                  });
+                  followupMessageId = aiMsg.id!;
+                  setFirstTokenReceived(true);
+                  setMessages((prev) => [...prev, aiMsg]);
+                }
               }
             }
           }
@@ -1291,6 +1563,19 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       lastSavedArtifact.current = artifact;
     } catch (e) {
       console.error("Failed to stream message", e);
+      let errorMessage = "Unknown error. Please try again.";
+      if (e instanceof Error) {
+        errorMessage = e.message;
+      } else if (typeof e === "object" && e && "message" in e) {
+        errorMessage = String((e as { message: unknown }).message);
+      }
+      toast({
+        title: "Error generating content",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 5000,
+      });
+      setError(true);
     } finally {
       setSelectedBlocks(undefined);
       setIsStreaming(false);
@@ -1315,6 +1600,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
           preEditMarkdown !== postEditMarkdown
         ) {
           setUpdateRenderedArtifactRequired(true);
+          setArtifactSyncGeneration((g) => g + 1);
 
           if (preEditText) {
             setPendingEdit({
@@ -1328,43 +1614,6 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         console.warn("[track-changes] Failed to compute diff:", e);
       }
-    }
-
-    if (runId) {
-      // Chain `.then` to not block the stream
-      shareRun(runId).then(async (sharedRunURL) => {
-        setMessages((prevMessages) => {
-          const newMsgs = prevMessages.map((msg) => {
-            if (
-              msg.id === followupMessageId &&
-              !(msg as AIMessage).tool_calls?.find(
-                (tc) => tc.name === "langsmith_tool_ui"
-              )
-            ) {
-              const toolCall = {
-                name: "langsmith_tool_ui",
-                args: { sharedRunURL },
-                id: sharedRunURL
-                  ?.split("https://smith.langchain.com/public/")[1]
-                  .split("/")[0],
-              };
-              const castMsg = msg as AIMessage;
-              const newMessageWithToolCall = new AIMessage({
-                ...castMsg,
-                content: castMsg.content,
-                id: castMsg.id,
-                tool_calls: castMsg.tool_calls
-                  ? [...castMsg.tool_calls, toolCall]
-                  : [toolCall],
-              });
-              return newMessageWithToolCall;
-            }
-
-            return msg;
-          });
-          return newMsgs;
-        });
-      });
     }
   };
 
@@ -1428,7 +1677,6 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     // isn't created on page load if one already exists.
     threadData.setThreadId(thread.thread_id);
 
-    // Set the model name and config
     if (thread.metadata?.customModelName) {
       threadData.setModelName(
         thread.metadata.customModelName as ALL_MODEL_NAMES
@@ -1438,8 +1686,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         thread.metadata.modelConfig as CustomModelConfig
       );
     } else {
-      threadData.setModelName(DEFAULT_MODEL_NAME);
-      threadData.setModelConfig(DEFAULT_MODEL_NAME, DEFAULT_MODEL_CONFIG);
+      const defaultName = getActiveDefaultModelName();
+      threadData.setModelName(defaultName);
+      threadData.setModelConfig(defaultName, getActiveDefaultModelConfig());
     }
 
     const castValues: {
@@ -1458,6 +1707,31 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       }
     } else {
       castValues.artifact = undefined;
+    }
+    // If artifact is empty/missing, check localStorage backup
+    if (!castValues.artifact && threadData.threadId) {
+      try {
+        const backupRaw = localStorage.getItem(
+          `canvas_backup_${threadData.threadId}`
+        );
+        if (backupRaw) {
+          const { artifact: backupArtifact, timestamp } = JSON.parse(backupRaw);
+          if (
+            backupArtifact &&
+            Date.now() - timestamp < 7 * 24 * 60 * 60 * 1000
+          ) {
+            // Backup is less than 7 days old — use it
+            castValues.artifact = backupArtifact;
+            // Restore to server in the background
+            const client = createClient();
+            void client.threads
+              .updateState(threadData.threadId, {
+                values: { artifact: backupArtifact },
+              })
+              .catch(console.warn);
+          }
+        }
+      } catch (_) {}
     }
     lastSavedArtifact.current = castValues?.artifact;
 
@@ -1493,6 +1767,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       messages,
       artifact,
       updateRenderedArtifactRequired,
+      artifactSyncGeneration,
       isArtifactSaved,
       firstTokenReceived,
       feedbackSubmitted,
@@ -1512,6 +1787,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       clearState,
       switchSelectedThread,
       setUpdateRenderedArtifactRequired,
+      setCursorPosition,
+      setEditorHasFocus,
       pendingEdit,
       setPendingEdit,
       setEditorTextContent,

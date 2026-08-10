@@ -1,5 +1,6 @@
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArtifactMarkdownV3 } from "@opencanvas/shared/types";
+import { calculateCursorPosition } from "@opencanvas/shared";
 import "@blocknote/core/fonts/inter.css";
 import {
   FormattingToolbarController,
@@ -7,11 +8,14 @@ import {
   SuggestionMenuController,
   useCreateBlockNote,
 } from "@blocknote/react";
+import { CustomFormattingToolbar } from "./CustomFormattingToolbar";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
-import { CustomFormattingToolbar } from "./CustomFormattingToolbar";
-import MathInlineExtension from "./MathInlineExtension";
 import { isArtifactMarkdownContent } from "@opencanvas/shared/utils/artifacts";
+import {
+  buildTextHighlight,
+  normalizeCanvasMarkdown,
+} from "@opencanvas/shared/utils/markdown-canvas";
 import { CopyText } from "./components/CopyText";
 import { getArtifactContent } from "@opencanvas/shared/utils/artifacts";
 import { useGraphContext, PendingEditState } from "@/contexts/GraphContext";
@@ -20,27 +24,20 @@ import { TooltipIconButton } from "../ui/assistant-ui/tooltip-icon-button";
 import { Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { Textarea } from "../ui/textarea";
-import { cn } from "@/lib/utils";
-import { canvasSchema } from "./canvas-schema";
 import TrackChangesExtension, {
   setTrackChangesRanges,
   clearTrackChangesRanges,
 } from "./TrackChangesExtension";
+import MathInlineExtension from "./MathInlineExtension";
+import { computeDiffRanges, type DiffRange } from "@/lib/diffing";
 import { EditActionBar } from "./EditActionBar";
-import { computeDiffRanges } from "@/lib/diffing";
+import { canvasSchema } from "./canvas-schema";
 
 import "katex/dist/katex.min.css";
 import {
   exportCanvasBlocksToMarkdown,
   parseMarkdownToCanvasBlocks,
 } from "./mermaid-markdown";
-
-const cleanText = (text: string) => {
-  return text.replaceAll("\\\n", "\n");
-};
-
-// Suppresses onChange while an undo restores the pre-edit document.
-let bnSuppressOnChange = false;
 
 /**
  * Checks whether a single cell in a table row is "empty" — i.e. contains no
@@ -59,7 +56,7 @@ function isCellEmpty(cell: unknown[]): boolean {
 }
 
 /**
- * Removes phantom empty rows that BlockNote's tryParseMarkdownToBlocks()
+ * Removes phantom empty rows that BlockNote 0.17.1's tryParseMarkdownToBlocks()
  * injects into tables during markdown → block conversion.
  *
  * A row is considered phantom when *every* cell in it is empty.
@@ -95,10 +92,10 @@ function filterEmptyTableRows(blocks: any[]): any[] {
 
 function ViewRawText({
   isRawView,
-  setIsRawView,
+  onToggle,
 }: {
   isRawView: boolean;
-  setIsRawView: Dispatch<SetStateAction<boolean>>;
+  onToggle: () => void;
 }) {
   return (
     <motion.div
@@ -111,7 +108,8 @@ function ViewRawText({
         tooltip={`View ${isRawView ? "rendered" : "raw"} markdown`}
         variant="outline"
         delayDuration={400}
-        onClick={() => setIsRawView((p) => !p)}
+        onClick={onToggle}
+        data-testid="toggle-raw-view"
       >
         {isRawView ? (
           <EyeOff className="w-5 h-5 text-gray-600" />
@@ -127,6 +125,7 @@ export interface TextRendererProps {
   isEditing: boolean;
   isHovering: boolean;
   isInputVisible: boolean;
+  editorRef?: React.MutableRefObject<any | null>;
 }
 
 export function TextRendererComponent(props: TextRendererProps) {
@@ -138,22 +137,106 @@ export function TextRendererComponent(props: TextRendererProps) {
   });
   const { graphData } = useGraphContext();
   const {
+    setCursorPosition,
+    setEditorHasFocus,
     artifact,
     isStreaming,
     updateRenderedArtifactRequired,
-    firstTokenReceived,
     setArtifact,
     setSelectedBlocks,
     setUpdateRenderedArtifactRequired,
+    artifactSyncGeneration,
     pendingEdit,
     setPendingEdit,
     setEditorTextContent,
   } = graphData;
 
+  // Track cursor position changes — push to GraphContext so all message paths get it
+  useEffect(() => {
+    if (!editor) return;
+
+    const updateCursorPosition = () => {
+      const selection = editor._tiptapEditor.state.selection;
+      const doc = editor._tiptapEditor.state.doc;
+      const pos = selection.$head.pos;
+      const { from, to } = selection;
+
+      const position = calculateCursorPosition(doc, pos, from, to);
+      setCursorPosition(position);
+    };
+
+    // Track editor focus — only update cursor position when canvas has focus
+    const onFocus = () => setEditorHasFocus(true);
+    const onBlur = () => setEditorHasFocus(false);
+    editor._tiptapEditor.on("focus", onFocus);
+    editor._tiptapEditor.on("blur", onBlur);
+
+    // Listen to selection updates (fires on cursor move, click, type)
+    editor._tiptapEditor.on("selectionUpdate", updateCursorPosition);
+    // Also fire on content changes (cursor might shift)
+    editor._tiptapEditor.on("update", updateCursorPosition);
+
+    return () => {
+      editor._tiptapEditor.off("focus", onFocus);
+      editor._tiptapEditor.off("blur", onBlur);
+      editor._tiptapEditor.off("selectionUpdate", updateCursorPosition);
+      editor._tiptapEditor.off("update", updateCursorPosition);
+    };
+  }, [editor, setCursorPosition, setEditorHasFocus]);
+
+  // Expose editor to parent for undo/redo buttons
+  useEffect(() => {
+    if (props.editorRef) {
+      props.editorRef.current = {
+        editor,
+      };
+    }
+    return () => {
+      if (props.editorRef) {
+        props.editorRef.current = null;
+      }
+    };
+  }, [editor, props.editorRef]);
+
   const [rawMarkdown, setRawMarkdown] = useState("");
   const [isRawView, setIsRawView] = useState(false);
   const [manuallyUpdatingArtifact, setManuallyUpdatingArtifact] =
     useState(false);
+  const contentLoadedRef = useRef(false);
+  const lastSyncedGenerationRef = useRef(0);
+
+  const toggleRawView = async () => {
+    if (isRawView) {
+      // Don't try to update the BlockNote editor directly — BlockNoteView
+      // is conditionally unmounted when isRawView=true, which destroys the
+      // Tiptap view. editor.replaceBlocks() silently fails on a detached
+      // view. Instead, force the sync effect (useEffect at line 285) to
+      // reload the artifact content. It correctly handles view lifecycle:
+      // it sets manuallyUpdatingArtifact(true) synchronously, then the
+      // async parse yields and React mounts BlockNoteView before
+      // replaceBlocks runs.
+      contentLoadedRef.current = false;
+      setUpdateRenderedArtifactRequired(true);
+      setIsRawView(false);
+      return;
+    }
+    const md = await exportCanvasBlocksToMarkdown(editor, editor.document);
+    setRawMarkdown(normalizeCanvasMarkdown(md));
+    setIsRawView(true);
+  };
+
+  // New artifact version (e.g. applyTextEdits) → formatted canvas only
+  useEffect(() => {
+    setIsRawView(false);
+    setRawMarkdown("");
+  }, [artifact?.currentIndex]);
+
+  // When a new artifact version arrives (thread switch, streaming update,
+  // or bootstrap), mark content as not-yet-loaded so the guard in the
+  // content-loading effect doesn't block the initial parse.
+  useEffect(() => {
+    contentLoadedRef.current = false;
+  }, [artifact?.currentIndex]);
 
   useEffect(() => {
     const selectedText = editor.getSelectedText();
@@ -179,15 +262,25 @@ export function TextRendererComponent(props: TextRendererProps) {
       }
 
       (async () => {
-        const [markdownBlock, fullMarkdown] = await Promise.all([
-          editor.blocksToMarkdownLossy(selection.blocks),
-          editor.blocksToMarkdownLossy(editor.document),
-        ]);
-        setSelectedBlocks({
-          fullMarkdown: cleanText(fullMarkdown),
-          markdownBlock: cleanText(markdownBlock),
-          selectedText: cleanText(selectedText),
-        });
+        const markdownBlock = await editor.blocksToMarkdownLossy(
+          selection.blocks
+        );
+        const built = buildTextHighlight(
+          currentContent.fullMarkdown,
+          markdownBlock,
+          selectedText
+        );
+        if (!built.ok) {
+          console.warn(
+            "[TextRenderer] selection block not found in artifact markdown",
+            {
+              markdownBlock,
+              fullMarkdown: currentContent.fullMarkdown.slice(0, 200),
+            }
+          );
+          return;
+        }
+        setSelectedBlocks(built.highlight);
       })();
     }
   }, [editor.getSelectedText()]);
@@ -202,34 +295,49 @@ export function TextRendererComponent(props: TextRendererProps) {
     if (!artifact) {
       return;
     }
+    if (isStreaming || manuallyUpdatingArtifact) {
+      return;
+    }
+
+    const forceSync = artifactSyncGeneration > lastSyncedGenerationRef.current;
     if (
-      !isStreaming &&
-      !manuallyUpdatingArtifact &&
-      !updateRenderedArtifactRequired
+      !updateRenderedArtifactRequired &&
+      contentLoadedRef.current &&
+      !forceSync
     ) {
       return;
     }
 
-    let cancelled = false;
-    try {
-      const currentIndex = artifact.currentIndex;
-      const currentContent = artifact.contents.find(
-        (c) => c.index === currentIndex && c.type === "text"
-      ) as ArtifactMarkdownV3 | undefined;
-      if (!currentContent) return;
+    const currentIndex = artifact.currentIndex;
+    const currentContent = artifact.contents.find(
+      (c) => c.index === currentIndex && c.type === "text"
+    ) as ArtifactMarkdownV3 | undefined;
+    if (!currentContent) return;
 
-      // Blocks are not found in the artifact, so once streaming is done we should update the artifact state with the blocks
-      (async () => {
+    let cancelled = false;
+    setManuallyUpdatingArtifact(true);
+
+    (async () => {
+      try {
         const markdownAsBlocks = await parseMarkdownToCanvasBlocks(
           editor,
           currentContent.fullMarkdown
         );
         if (cancelled) return;
-        editor.replaceBlocks(
-          editor.document,
-          filterEmptyTableRows(markdownAsBlocks)
-        );
-        setEditorTextContent(editor._tiptapEditor.state.doc.textContent);
+
+        const cleanedBlocks = filterEmptyTableRows(markdownAsBlocks);
+        editor.replaceBlocks(editor.document, cleanedBlocks);
+        contentLoadedRef.current = true;
+        if (forceSync) {
+          lastSyncedGenerationRef.current = artifactSyncGeneration;
+        }
+        try {
+          const clearTr = editor._tiptapEditor.state.tr;
+          clearTr.setMeta("historyFilter", () => true);
+          editor._tiptapEditor.dispatch(clearTr);
+        } catch {
+          // If clearing history fails, that's OK
+        }
 
         if (pendingEdit?.isActive && pendingEdit.preEditText) {
           const postEditText = editor._tiptapEditor.state.doc.textContent;
@@ -243,13 +351,20 @@ export function TextRendererComponent(props: TextRendererProps) {
             );
           }
         }
-        setUpdateRenderedArtifactRequired(false);
-        setManuallyUpdatingArtifact(false);
-      })();
-    } finally {
-      setManuallyUpdatingArtifact(false);
-      setUpdateRenderedArtifactRequired(false);
-    }
+
+        setEditorTextContent(editor._tiptapEditor.state.doc.textContent);
+
+        if (updateRenderedArtifactRequired || forceSync) {
+          setRawMarkdown("");
+          setIsRawView(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setManuallyUpdatingArtifact(false);
+          setUpdateRenderedArtifactRequired(false);
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -260,7 +375,16 @@ export function TextRendererComponent(props: TextRendererProps) {
       // the canvas empty when toggling back to formatted view.
       setManuallyUpdatingArtifact(false);
     };
-  }, [artifact, updateRenderedArtifactRequired]);
+  }, [
+    artifact,
+    artifact?.currentIndex,
+    artifactSyncGeneration,
+    updateRenderedArtifactRequired,
+    isStreaming,
+    editor,
+  ]);
+
+  const isComposition = useRef(false);
 
   const refreshTrackChangeDecorations = () => {
     const view = editor._tiptapEditor?.view;
@@ -278,6 +402,15 @@ export function TextRendererComponent(props: TextRendererProps) {
   }, [pendingEdit, editor]);
 
   const handleKeep = () => {
+    // Track the keep action
+    const aggregator = (window as any).__trackingAggregator;
+    if (aggregator && pendingEdit) {
+      const totalChanged = pendingEdit.diffRanges.reduce(
+        (sum: number, r: DiffRange) => sum + (r.end - r.start),
+        0
+      );
+      aggregator.trackEditAction("keep", totalChanged);
+    }
     clearTrackChangesRanges();
     refreshTrackChangeDecorations();
     setPendingEdit(null);
@@ -285,11 +418,20 @@ export function TextRendererComponent(props: TextRendererProps) {
 
   const handleUndo = async () => {
     if (!editor || !pendingEdit) return;
+    // Track the undo action
+    const aggregator = (window as any).__trackingAggregator;
+    if (aggregator) {
+      const totalChanged = pendingEdit.diffRanges.reduce(
+        (sum: number, r: DiffRange) => sum + (r.end - r.start),
+        0
+      );
+      aggregator.trackEditAction("undo", totalChanged);
+    }
     clearTrackChangesRanges();
     refreshTrackChangeDecorations();
 
     // Restore pre-edit markdown
-    bnSuppressOnChange = true;
+    (window as any).__bn_suppressOnChange = true;
     try {
       const blocks = await parseMarkdownToCanvasBlocks(
         editor,
@@ -298,37 +440,10 @@ export function TextRendererComponent(props: TextRendererProps) {
       const cleanedBlocks = filterEmptyTableRows(blocks);
       editor.replaceBlocks(editor.document, cleanedBlocks);
     } finally {
-      bnSuppressOnChange = false;
+      (window as any).__bn_suppressOnChange = false;
       setPendingEdit(null);
     }
   };
-
-  useEffect(() => {
-    if (isRawView) {
-      exportCanvasBlocksToMarkdown(editor, editor.document).then(
-        setRawMarkdown
-      );
-    } else if (!isRawView && rawMarkdown) {
-      try {
-        (async () => {
-          setManuallyUpdatingArtifact(true);
-          const markdownAsBlocks = await parseMarkdownToCanvasBlocks(
-            editor,
-            rawMarkdown
-          );
-          editor.replaceBlocks(
-            editor.document,
-            filterEmptyTableRows(markdownAsBlocks)
-          );
-          setManuallyUpdatingArtifact(false);
-        })();
-      } catch (_) {
-        setManuallyUpdatingArtifact(false);
-      }
-    }
-  }, [isRawView, editor]);
-
-  const isComposition = useRef(false);
 
   const onChange = async () => {
     // Always keep the editor text ref current regardless of streaming/update state
@@ -338,7 +453,7 @@ export function TextRendererComponent(props: TextRendererProps) {
       isStreaming ||
       manuallyUpdatingArtifact ||
       updateRenderedArtifactRequired ||
-      bnSuppressOnChange
+      (window as any).__bn_suppressOnChange
     )
       return;
 
@@ -416,10 +531,10 @@ export function TextRendererComponent(props: TextRendererProps) {
         onKeep={handleKeep}
         onUndo={handleUndo}
       />
-      {props.isHovering && artifact && (
+      {(props.isHovering || isRawView) && artifact && (
         <div className="absolute flex gap-2 top-2 right-4 z-10">
           <CopyText currentArtifactContent={getArtifactContent(artifact)} />
-          <ViewRawText isRawView={isRawView} setIsRawView={setIsRawView} />
+          <ViewRawText isRawView={isRawView} onToggle={toggleRawView} />
         </div>
       )}
       {isRawView ? (
@@ -427,24 +542,11 @@ export function TextRendererComponent(props: TextRendererProps) {
           className="whitespace-pre-wrap font-mono text-sm px-[54px] border-0 shadow-none h-full outline-none ring-0 rounded-none  focus-visible:ring-0 focus-visible:ring-offset-0"
           value={rawMarkdown}
           onChange={onChangeRawMarkdown}
+          data-tracking-id="canvas-editor"
+          data-testid="canvas-editor-raw"
         />
       ) : (
         <>
-          <style jsx global>{`
-            .pulse-text .bn-block-group {
-              animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-            }
-
-            @keyframes pulse {
-              0%,
-              100% {
-                opacity: 1;
-              }
-              50% {
-                opacity: 0.3;
-              }
-            }
-          `}</style>
           <BlockNoteView
             theme="light"
             formattingToolbar={false}
@@ -457,10 +559,9 @@ export function TextRendererComponent(props: TextRendererProps) {
               !pendingEdit?.isActive
             }
             editor={editor}
-            className={cn(
-              isStreaming && !firstTokenReceived ? "pulse-text" : "",
-              "custom-blocknote-theme"
-            )}
+            className="custom-blocknote-theme"
+            data-tracking-id="canvas-editor"
+            data-testid="canvas-editor"
           >
             <FormattingToolbarController
               formattingToolbar={CustomFormattingToolbar as any}

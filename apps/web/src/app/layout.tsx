@@ -10,8 +10,17 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Open Canvas",
-  description: "Open Canvas Chat UX by LangChain",
+  title: "Evaluchat — What should we be measuring when AI is available?",
+  description:
+    "AI isn't going away. Evaluchat builds tools and experiments around a simple question: what should people know, decide, explain and demonstrate when AI is available?",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export default function RootLayout({
