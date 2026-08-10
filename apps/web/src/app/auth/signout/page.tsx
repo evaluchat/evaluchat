@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 export default function Page() {
-  const router = useRouter();
   const [errorOccurred, setErrorOccurred] = useState(false);
 
   useEffect(() => {
@@ -14,9 +12,11 @@ export default function Page() {
       const { error } = await client.auth.signOut();
       if (error) {
         setErrorOccurred(true);
-      } else {
-        router.push("/auth/login");
+        return;
       }
+      // Hard navigation so middleware sees cleared cookies and does not leave
+      // the previous role shell mounted.
+      window.location.assign("/auth/login");
     }
     signOut();
   }, []);

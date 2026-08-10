@@ -105,11 +105,10 @@ export function StudentAssignmentsLanding() {
     }
   }, [user, router]);
 
-  if (user && !canAccessStudentDashboard(user)) return null;
-
   useEffect(() => {
     // Don't start loading until auth is resolved
     if (userLoading) return;
+    if (user && !canAccessStudentDashboard(user)) return;
     let cancelled = false;
 
     async function loadAssignments() {
@@ -233,6 +232,9 @@ export function StudentAssignmentsLanding() {
       ).length,
     [assignments]
   );
+
+  // After all hooks — early return must not precede useEffect/useMemo (Rules of Hooks).
+  if (user && !canAccessStudentDashboard(user)) return null;
 
   const headerActions = (
     <>

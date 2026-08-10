@@ -32,8 +32,6 @@ export function TeacherLandingPage() {
     }
   }, [user]);
 
-  if (user && !isTeacher(user)) return null;
-
   useEffect(() => {
     const requestedSection = searchParams.get(
       "section"
@@ -57,6 +55,9 @@ export function TeacherLandingPage() {
     }
   }, [section, showInviteTeachers]);
 
+  // After all hooks — early return must not precede useEffect (Rules of Hooks).
+  if (user && !isTeacher(user)) return null;
+
   return (
     <TeacherWorkspaceShell section={section} onSectionChange={setSection}>
       {section === "overview" && (
@@ -65,9 +66,12 @@ export function TeacherLandingPage() {
       {section === "apparatuses" && (
         <div className="mx-auto max-w-4xl space-y-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Research apparatuses</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Research apparatuses
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Inspect the public specifications and enable reviewed profiles for this organisation.
+              Inspect the public specifications and enable reviewed profiles for
+              this organisation.
             </p>
           </div>
           <ApparatusCatalogPanel />
