@@ -1,8 +1,8 @@
 {
   "name": "open_canvas",
-  "author": "Brace Sproul",
-  "homepage": "https://opencanvas.langchain.com",
-  "repository": "https://github.com/langchain-ai/open-canvas",
+  "author": "Evaluchat",
+  "homepage": "https://evaluchat.com",
+  "repository": "https://github.com/evaluchat/canvas",
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
