@@ -1,5 +1,12 @@
-import { CircleCheck, CircleX, LoaderCircle } from "lucide-react";
+import { Save } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface ArtifactTitleProps {
   title: string;
@@ -34,6 +41,12 @@ export function ArtifactTitle(props: ArtifactTitleProps) {
     }
   };
 
+  const saveTooltip = props.isArtifactSaved
+    ? "Saved"
+    : props.artifactUpdateFailed
+      ? "Failed to save"
+      : "Saving";
+
   return (
     <div className="pl-[6px] pt-3 flex flex-col items-start justify-start ml-[6px] gap-1 max-w-1/2">
       {isEditing ? (
@@ -61,22 +74,28 @@ export function ArtifactTitle(props: ArtifactTitleProps) {
         </h1>
       )}
       <span className="mt-auto">
-        {props.isArtifactSaved ? (
-          <span className="flex items-center justify-start gap-1 text-gray-400">
-            <p className="text-xs font-light">Saved</p>
-            <CircleCheck className="w-[10px] h-[10px]" />
-          </span>
-        ) : !props.artifactUpdateFailed ? (
-          <span className="flex items-center justify-start gap-1 text-gray-400">
-            <p className="text-xs font-light">Saving</p>
-            <LoaderCircle className="animate-spin w-[10px] h-[10px]" />
-          </span>
-        ) : props.artifactUpdateFailed ? (
-          <span className="flex items-center justify-start gap-1 text-red-300">
-            <p className="text-xs font-light">Failed to save</p>
-            <CircleX className="w-[10px] h-[10px]" />
-          </span>
-        ) : null}
+        <TooltipProvider>
+          <Tooltip delayDuration={400}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center justify-center"
+              >
+                <Save
+                  className={cn(
+                    "w-4 h-4",
+                    !props.isArtifactSaved &&
+                      !props.artifactUpdateFailed &&
+                      "text-amber-500 animate-spin",
+                    props.isArtifactSaved && "text-green-500",
+                    props.artifactUpdateFailed && "text-red-500"
+                  )}
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{saveTooltip}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </span>
     </div>
   );
