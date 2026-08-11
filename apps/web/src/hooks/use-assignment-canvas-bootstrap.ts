@@ -7,8 +7,9 @@ import { ArtifactV3 } from "@opencanvas/shared/types";
 import { useEffect, useRef } from "react";
 
 /**
- * When ?assignment= is set, open a fresh canvas workspace with a blank document
- * and assignment-scoped agent instructions (via GraphContext systemPrompt).
+ * When an assignment is active (route `/student/assignment/[id]` or legacy
+ * `?assignment=`), open a fresh canvas workspace with a blank document and
+ * assignment-scoped agent instructions (via GraphContext systemPrompt).
  *
  * On resume (?threadId= present), the canvas is restored from the existing
  * thread state via GraphContext's switchSelectedThread, so we skip

@@ -3,16 +3,15 @@
 import { Canvas } from "@/components/canvas";
 import { AssistantProvider } from "@/contexts/AssistantContext";
 import { GraphProvider } from "@/contexts/GraphContext";
+import { TeachingAssignmentProvider } from "@/contexts/TeachingAssignmentContext";
 import { ThreadProvider } from "@/contexts/ThreadProvider";
 import { UserProvider } from "@/contexts/UserContext";
 import { useUserContext } from "@/contexts/UserContext";
-import { Suspense } from "react";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { TeachingAssignmentProvider } from "@/contexts/TeachingAssignmentContext";
+import { Suspense, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 
-// /canvas is an authenticated route. The client-side gate is a
-// belt-and-suspenders guard: any signed-in user may use the canvas workspace.
+// /student paths are middleware-protected; this client gate matches the old
+// /canvas AuthGate as a belt-and-suspenders guard.
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUserContext();
   const router = useRouter();
@@ -29,13 +28,19 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export default function CanvasPage() {
+export default function StudentAssignmentWorkspacePage() {
+  const { id } = useParams<{ id: string }>();
+
   return (
-    <Suspense>
+    <Suspense
+      fallback={
+        <div className="p-8 text-sm text-muted-foreground">Loading…</div>
+      }
+    >
       <UserProvider>
         <ThreadProvider>
           <AssistantProvider>
-            <TeachingAssignmentProvider>
+            <TeachingAssignmentProvider assignmentId={id}>
               <GraphProvider>
                 <AuthGate>
                   <Canvas />

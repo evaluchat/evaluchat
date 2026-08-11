@@ -214,7 +214,7 @@ export function StudentAssignmentsLanding() {
       setSelfInitOpen(false);
       setSelfInitTitle("");
       setSelfInitPrompt("");
-      router.push(`/canvas?assignment=${created.id}`);
+      router.push(`/student/assignment/${created.id}`);
     } catch (e) {
       console.error("[SelfInitiate] failed:", e);
       setSelfInitError(
@@ -324,8 +324,8 @@ export function StudentAssignmentsLanding() {
             const meta = assignment.thread?.metadata as Record<string, unknown>;
             const isSubmitted = meta?.completionPercent === 100;
             const href = assignment.thread
-              ? `/canvas?assignment=${assignment.id}&threadId=${assignment.thread.thread_id}${isSubmitted ? "&readonly=1" : ""}`
-              : `/canvas?assignment=${assignment.id}`;
+              ? `/student/assignment/${assignment.id}?threadId=${assignment.thread.thread_id}${isSubmitted ? "&readonly=1" : ""}`
+              : `/student/assignment/${assignment.id}`;
 
             return (
               <li key={assignment.id} className="w-full max-w-2xl">

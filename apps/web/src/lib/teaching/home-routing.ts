@@ -1,10 +1,10 @@
 /**
  * Teaching role routing.
  *
- * `/` is the public marketing landing (for everyone). The canvas workspace
- * lives at `/canvas` and requires auth via middleware. Role dashboards
- * (`/teacher`, `/owner`) are server-gated here so a gate that
- * is only client-side cannot be bypassed.
+ * `/` is the public marketing landing (for everyone). The student assignment
+ * workspace lives at `/student/assignment/[id]` (threadId/readonly stay query
+ * params). Role dashboards (`/student`, `/teacher`, `/owner`) are
+ * server-gated here so a gate that is only client-side cannot be bypassed.
  */
 
 /** Whether `/` may render the legacy canvas workspace. */
@@ -46,7 +46,10 @@ export function deniedTeachingRoleRedirect(opts: {
     return opts.isTeacher ? "/teacher" : "/student";
   }
   // Research is a public external site; it has no in-app role gate.
-  if (opts.pathname === "/researcher" || opts.pathname.startsWith("/researcher/")) {
+  if (
+    opts.pathname === "/researcher" ||
+    opts.pathname.startsWith("/researcher/")
+  ) {
     return null;
   }
   return null;

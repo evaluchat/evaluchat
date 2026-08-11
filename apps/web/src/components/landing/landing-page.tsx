@@ -1,6 +1,7 @@
 "use client";
 
 import { useUserContext } from "@/contexts/UserContext";
+import { postLoginPath } from "@/lib/teaching/config";
 import { Menu, X, ArrowUpRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -18,7 +19,7 @@ import {
 import { LandingFooter } from "./landing-footer";
 
 const NAV_LINKS = [
-  { href: "#canvas", label: "Canvas editor" },
+  { href: "#canvas", label: "Workspace" },
   { href: "#research", label: "Research" },
   { href: "#open-source", label: "Open source" },
 ];
@@ -27,7 +28,7 @@ function LandingHeader() {
   const { user } = useUserContext();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const openCanvasHref = user ? "/canvas" : "/auth/login";
+  const openCanvasHref = user ? postLoginPath(user) : "/auth/login";
 
   return (
     <header className="site">
@@ -64,7 +65,7 @@ function LandingHeader() {
             </Link>
           )}
           <Link className="nav-cta" href={openCanvasHref}>
-            <span>Open editor</span>
+            <span>Open Workspace</span>
             <ArrowUpRight width={14} height={14} />
           </Link>
           <button
@@ -94,7 +95,7 @@ function LandingHeader() {
           <a href="/auth/login">Sign in</a>
         )}
         <a className="nav-cta mcta" href={openCanvasHref}>
-          <span>Open editor</span>
+          <span>Open Workspace</span>
           <ArrowUpRight width={14} height={14} />
         </a>
       </div>

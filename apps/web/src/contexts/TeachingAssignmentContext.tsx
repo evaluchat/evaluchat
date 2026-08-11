@@ -35,12 +35,16 @@ const TeachingAssignmentContext = createContext<
 
 export function TeachingAssignmentProvider({
   children,
+  /** Route-param assignment id (e.g. `/student/assignment/[id]`). Wins over `?assignment=`. */
+  assignmentId: assignmentIdProp,
 }: {
   children: ReactNode;
+  assignmentId?: string;
 }) {
   // == essays apparatus enabled (2A-3) — dev flow unchanged
   const teachingMode = isTeachingPrototype();
-  const [assignmentId, setAssignmentId] = useQueryState("assignment");
+  const [assignmentIdQuery, setAssignmentIdQuery] = useQueryState("assignment");
+  const assignmentId = assignmentIdProp ?? assignmentIdQuery;
   const [assignment, setAssignment] = useState<StudentAssignment | undefined>(
     undefined
   );
@@ -79,8 +83,9 @@ export function TeachingAssignmentProvider({
   const apparatusConfiguration = assignment?.apparatusConfiguration;
 
   const clearAssignment = useCallback(() => {
-    void setAssignmentId(null);
-  }, [setAssignmentId]);
+    if (assignmentIdProp) return;
+    void setAssignmentIdQuery(null);
+  }, [assignmentIdProp, setAssignmentIdQuery]);
 
   const value = useMemo(
     () => ({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useUserContext } from "@/contexts/UserContext";
+import { postLoginPath } from "@/lib/teaching/config";
 import { ArrowRight } from "lucide-react";
 
 function OpenCanvasButton({
@@ -11,7 +12,7 @@ function OpenCanvasButton({
   children: React.ReactNode;
 }) {
   const { user } = useUserContext();
-  const href = user ? "/canvas" : "/auth/login";
+  const href = user ? postLoginPath(user) : "/auth/login";
 
   return (
     <a className={className} href={href}>
@@ -39,7 +40,7 @@ export function HeroSection() {
           </p>
           <div className="hero-ctas">
             <OpenCanvasButton className="btn btn-primary">
-              Open editor
+              Open Workspace
               <ArrowRight className="arrow" width={15} height={15} />
             </OpenCanvasButton>
             <a className="btn btn-outline" href="#research">
@@ -47,7 +48,7 @@ export function HeroSection() {
             </a>
           </div>
           <div className="hero-trust" aria-label="Platform foundations">
-            <span>Canvas editor</span>
+            <span>Workspace</span>
             <span>OKF knowledge</span>
             <span>Git provenance</span>
           </div>
@@ -190,19 +191,19 @@ export function ProblemsSection() {
 
 const CANVAS_CAPABILITIES = [
   {
-    label: "Documents",
-    title: "Markdown-native workspace",
-    body: "Write in Markdown or rich text, move between raw and rendered views, and keep the document open instead of turning it into a proprietary blob.",
+    label: "Optional AI assistance",
+    title: "Help when you want it",
+    body: "Ask the assistant to suggest, revise or explain content when useful; the Workspace remains fully usable with AI turned off.",
   },
   {
-    label: "Thinking tools",
-    title: "Structure the method",
-    body: "Use AI-assisted editing alongside outlines, diagrams, Mermaid and LaTeX to design a method clearly enough for others to examine.",
+    label: "Mermaid + LaTeX",
+    title: "Render the work as you write",
+    body: "Render Mermaid diagrams and LaTeX directly in the Workspace alongside the document.",
   },
   {
-    label: "Portable output",
+    label: "Printing",
     title: "Take the work with you",
-    body: "Create clean, shareable documents and print/PDF output without losing the structure that makes a method understandable.",
+    body: "Print the document or create clean PDF output for sharing and review.",
   },
 ];
 
@@ -213,9 +214,9 @@ export function BuildingSection() {
         <span className="eyebrow">The common workspace</span>
         <h2>A practical place for methods to take shape.</h2>
         <p className="lede">
-          The editor is useful on its own—and gives
-          teachers and researchers an open surface for designing, running and
-          explaining new ways of working with AI.
+          The Workspace is useful on its own—and gives teachers and researchers
+          an open surface for designing, running and explaining new ways of
+          working with AI.
         </p>
         <div className="platform-map">
           {CANVAS_CAPABILITIES.map((layer, index) => (
@@ -236,7 +237,7 @@ export function BuildingSection() {
         </div>
         <div className="dark-ctas">
           <OpenCanvasButton className="btn btn-primary">
-            Open editor
+            Open Workspace
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
           <a
@@ -245,7 +246,7 @@ export function BuildingSection() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Read editor documentation
+            Read Workspace documentation
           </a>
         </div>
       </div>
@@ -278,7 +279,7 @@ export function ResearchSection() {
           <i>→</i>
           <span>Method</span>
           <i>→</i>
-          <span>Editor activity</span>
+          <span>Workspace activity</span>
           <i>→</i>
           <span>Public record</span>
           <i>→</i>
@@ -336,7 +337,7 @@ export function ResearchSection() {
 
 const OPEN_LAYERS = [
   {
-    label: "Canvas editor",
+    label: "Workspace",
     text: "An MIT-licensed Markdown workspace: useful on its own and open to inspection, extension and self-hosting.",
   },
   {
@@ -378,7 +379,7 @@ export function OssSection() {
             View on GitHub
           </a>
           <OpenCanvasButton className="btn btn-ghost">
-            Open editor
+            Open Workspace
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
         </div>
@@ -394,12 +395,12 @@ export function FinalCtaSection() {
         <span className="eyebrow">The invitation</span>
         <h2>Bring a question. Try a method. Show your work.</h2>
         <p>
-          The editor gives the experiment a place to happen. Open methods and
+          The Workspace gives the experiment a place to happen. Open methods and
           portable knowledge give the result a chance to matter.
         </p>
         <div className="final-ctas">
           <OpenCanvasButton className="btn btn-primary">
-            Open editor
+            Open Workspace
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
           <a

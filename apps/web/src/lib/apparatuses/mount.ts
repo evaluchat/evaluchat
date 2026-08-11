@@ -8,13 +8,16 @@ export interface SurfaceRef {
  * Declarative capability → existing surface map (2A-4).
  * Proves capabilities map to EXISTING surfaces; not wired as a runtime loader.
  */
-export const APPARATUS_SURFACES: Record<string, Record<string, SurfaceRef[]>> = {
+export const APPARATUS_SURFACES: Record<
+  string,
+  Record<string, SurfaceRef[]>
+> = {
   "ai-assisted-essay": {
     "student-workspace": [
       { kind: "route", ref: "/student" },
       {
         kind: "route",
-        ref: "/canvas?assignment=<id>",
+        ref: "/student/assignment/<id>",
         note: "assignment workspace (split-screen)",
       },
     ],
@@ -39,7 +42,7 @@ export const APPARATUS_SURFACES: Record<string, Record<string, SurfaceRef[]>> = 
       { kind: "api", ref: "/api/teaching/registry" },
       {
         kind: "route",
-        ref: "/canvas?assignment=<id>",
+        ref: "/student/assignment/<id>",
         note: "submit-assignment-dialog",
       },
     ],
@@ -48,9 +51,7 @@ export const APPARATUS_SURFACES: Record<string, Record<string, SurfaceRef[]>> = 
       { kind: "api", ref: "/api/tracking/metrics" },
       { kind: "api", ref: "/api/tracking/sessions" },
     ],
-    "closeout-survey": [
-      { kind: "api", ref: "/api/teaching/closeout-survey" },
-    ],
+    "closeout-survey": [{ kind: "api", ref: "/api/teaching/closeout-survey" }],
   },
 };
 
