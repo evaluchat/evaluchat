@@ -18,9 +18,9 @@
     "format:check": "prettier --config .prettierrc --check \"src\" \"*.ts\" \"*.yml\" \"scripts/**/*.mjs\""
   },
   "dependencies": {
-    "@blocknote/core": "^0.17.1",
-    "@blocknote/react": "^0.17.1",
-    "@blocknote/shadcn": "^0.17.1",
+    "@blocknote/core": "^0.18.0",
+    "@blocknote/react": "^0.18.0",
+    "@blocknote/shadcn": "^0.18.0",
     "beautiful-mermaid": "^1.1.3",
     "clsx": "^2.1.1",
     "katex": "^0.16.0",
