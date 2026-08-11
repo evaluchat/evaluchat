@@ -8,7 +8,7 @@ import {
 import { requireAuthenticatedTeacher } from "@/lib/teaching/invitation-helpers";
 import type { ClassStudent } from "@/lib/teaching/types";
 
-type RouteContext = { params: { classId: string } };
+type RouteContext = { params: Promise<{ classId: string }> };
 
 async function requireOwnedClass(classId: string, teacherId: string) {
   const studentClass = await getClassById(classId);
@@ -38,7 +38,7 @@ async function requireOwnedClass(classId: string, teacherId: string) {
  */
 export async function PATCH(req: Request, context: RouteContext) {
   try {
-    const { classId } = context.params;
+    const { classId } = await context.params;
     const supabase = await createClient();
     const auth = await requireAuthenticatedTeacher(supabase);
     if (auth.response) {
@@ -85,7 +85,7 @@ export async function PATCH(req: Request, context: RouteContext) {
  */
 export async function DELETE(_req: Request, context: RouteContext) {
   try {
-    const { classId } = context.params;
+    const { classId } = await context.params;
     const supabase = await createClient();
     const auth = await requireAuthenticatedTeacher(supabase);
     if (auth.response) {

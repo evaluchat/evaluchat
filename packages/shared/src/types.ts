@@ -1,4 +1,4 @@
-import { DocumentInterface } from "@langchain/core/documents";
+import type { DocumentInterface } from "@langchain/core/documents";
 
 export * from "./apparatus.js";
 

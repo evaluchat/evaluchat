@@ -16,7 +16,6 @@ import {
   AIMessage,
   BaseMessage,
   MessageContent,
-  MessageContentComplex,
   MessageFieldWithRole,
 } from "@langchain/core/messages";
 import {
@@ -685,7 +684,7 @@ export async function createContextDocumentMessages(
 
   let contextMessages: Array<{
     role: "user";
-    content: MessageContentComplex[];
+    content: any[];
   }> = [];
   if (contextDocumentMessages?.length) {
     contextMessages = [
@@ -702,7 +701,7 @@ export async function createContextDocumentMessages(
     ];
   }
 
-  return contextMessages;
+  return contextMessages as unknown as MessageFieldWithRole[];
 }
 
 export function formatMessages(messages: BaseMessage[]): string {

@@ -670,7 +670,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     ) {
       toast({
         title: "AI canvas actions are disabled",
-        description: "Edit the document directly or continue the assignment conversation.",
+        description:
+          "Edit the document directly or continue the assignment conversation.",
         variant: "destructive",
       });
       return;
@@ -746,9 +747,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       }),
       ...params,
       ...messagesInput,
-      ...(apparatusConfiguration
-        ? { apparatusConfiguration }
-        : {}),
+      ...(apparatusConfiguration ? { apparatusConfiguration } : {}),
       ...(highlightedTextForInput && {
         highlightedText: highlightedTextForInput,
       }),
@@ -828,9 +827,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               ...(assignmentSystemPrompt
                 ? { systemPrompt: assignmentSystemPrompt }
                 : {}),
-              ...(apparatusConfiguration
-                ? { apparatusConfiguration }
-                : {}),
+              ...(apparatusConfiguration ? { apparatusConfiguration } : {}),
             },
           },
         }
@@ -1173,11 +1170,14 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                 if (!thinkingMessageId) {
                   thinkingMessageId = `thinking-${uuidv4()}`;
                 }
-                newArtifactContent = handleRewriteArtifactThinkingModel({
-                  newArtifactContent: fullNewArtifactContent,
-                  setMessages,
-                  thinkingMessageId,
-                });
+                newArtifactContent =
+                  handleRewriteArtifactThinkingModel<BaseMessage>({
+                    newArtifactContent: fullNewArtifactContent,
+                    setMessages,
+                    thinkingMessageId,
+                    createMessage: (id, content) =>
+                      new AIMessage({ id, content }),
+                  });
               } else {
                 newArtifactContent = fullNewArtifactContent;
               }
@@ -1266,11 +1266,14 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                 if (!thinkingMessageId) {
                   thinkingMessageId = `thinking-${uuidv4()}`;
                 }
-                newArtifactContent = handleRewriteArtifactThinkingModel({
-                  newArtifactContent: fullNewArtifactContent,
-                  setMessages,
-                  thinkingMessageId,
-                });
+                newArtifactContent =
+                  handleRewriteArtifactThinkingModel<BaseMessage>({
+                    newArtifactContent: fullNewArtifactContent,
+                    setMessages,
+                    thinkingMessageId,
+                    createMessage: (id, content) =>
+                      new AIMessage({ id, content }),
+                  });
               } else {
                 newArtifactContent = fullNewArtifactContent;
               }

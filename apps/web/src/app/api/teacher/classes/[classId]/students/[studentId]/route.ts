@@ -6,7 +6,9 @@ import {
 } from "@/lib/teaching/class-store";
 import { requireAuthenticatedTeacher } from "@/lib/teaching/invitation-helpers";
 
-type RouteContext = { params: { classId: string; studentId: string } };
+type RouteContext = {
+  params: Promise<{ classId: string; studentId: string }>;
+};
 
 /**
  * DELETE /api/teacher/classes/[classId]/students/[studentId]
@@ -14,7 +16,7 @@ type RouteContext = { params: { classId: string; studentId: string } };
  */
 export async function DELETE(_req: Request, context: RouteContext) {
   try {
-    const { classId, studentId } = context.params;
+    const { classId, studentId } = await context.params;
     const supabase = await createClient();
     const auth = await requireAuthenticatedTeacher(supabase);
     if (auth.response) {

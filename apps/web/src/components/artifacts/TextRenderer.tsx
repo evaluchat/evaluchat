@@ -56,7 +56,7 @@ function isCellEmpty(cell: unknown[]): boolean {
 }
 
 /**
- * Removes phantom empty rows that BlockNote 0.17.1's tryParseMarkdownToBlocks()
+ * Removes phantom empty rows that BlockNote's tryParseMarkdownToBlocks()
  * injects into tables during markdown → block conversion.
  *
  * A row is considered phantom when *every* cell in it is empty.
