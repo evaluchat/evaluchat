@@ -5,7 +5,7 @@
 
 ## Goal
 
-Turn Evaluchat into a **usable desktop application** (Electron) for **Windows and Linux first** (macOS eventual — keep code cross-platform, compile-gated in CI). The AI assistant/editor must be **completely disableable** — with AI off, the app is a pure WYSIWYG Markdown editor with the main canvas features (BlockNote editing, Mermaid + LaTeX rendering, raw/preview toggle, print view). With AI on, the user supplies **their own API credentials** (BYOK).
+Turn Evaluchat into a **usable desktop application** (Electron) for **Windows and Linux first** (macOS eventual — keep code cross-platform, compile-gated in CI). The AI assistant and Workspace must be **completely separable** — with AI off, the app is a pure WYSIWYG Markdown Workspace with the main workspace features (BlockNote editing, Mermaid + LaTeX rendering, raw/preview toggle, print view). With AI on, the user supplies **their own API credentials** (BYOK).
 
 ## Strategic fit
 
@@ -13,7 +13,7 @@ Per the OSS strategy (`concepts/open-source-strategy.md` in the evaluchat knowle
 
 ## Hard constraints
 
-1. **AI OFF by default and fully removable at runtime.** When disabled: no chat pane, no AI toolbar items, no AI code paths executed, no network calls to any AI endpoint. Editor + Mermaid + LaTeX + preview + print all work.
+1. **AI OFF by default and fully removable at runtime.** When disabled: no chat pane, no AI toolbar items, no AI code paths executed, no network calls to any AI endpoint. Workspace + Mermaid + LaTeX + preview + print all work.
 2. **BYOK when AI is on:** settings UI for provider (OpenAI-compatible base URL), model, and API key. Key persisted via Electron `safeStorage` (OS keychain). No Evaluchat account, no Evaluchat backend.
 3. **No SaaS coupling in the desktop app:** no Supabase auth, no LangGraph server, no assignment routing. Local files only (open/save/recent/autosave).
 4. **Windows + Linux are the testable platforms** (WSL + Windows host available). macOS: no platform-specific APIs, `dmg` target configured, mac CI job compile-gated only.
@@ -57,10 +57,10 @@ Do **not** resume daily cron on T1.5 first — packaging/host-run is the bottlen
 - [x] T0.3 Markdown file plumbing: `dialog.showOpenDialog`/`showSaveDialog` + fs in main, IPC `file:open`/`file:save`/`file:read`, recent-files list in menu, unsaved-changes guard. — *done 2026-08-09 MVP W1 (53f4962)*
 - [x] T0.4 Autosave + first-run window: new-document template (front-matter-free), autosave timer, dirty indicator. — *done 2026-08-09 MVP W3 (54dee32)*
 
-### Phase 1 — Pure WYSIWYG Markdown editor (AI fully disabled)
+### Phase 1 — Pure WYSIWYG Markdown Workspace (AI fully disabled)
 
 - [x] T1.1 Port the BlockNote canvas: editor + formatting toolbar from `apps/web` into the renderer (strip Next-only imports: `next/image`, `next/navigation`, server actions; replace with Vite-safe equivalents). Local document state (no Supabase, no LangGraph). — *done 2026-08-09 MVP W2 (6167e9b)*
-- [x] T1.2 Mermaid rendering in the editor (port `beautiful-mermaid` integration from `apps/web`). — *done 2026-08-09 MVP W2 (6167e9b)*
+- [x] T1.2 Mermaid rendering in the Workspace (port `beautiful-mermaid` integration from `apps/web`). — *done 2026-08-09 MVP W2 (6167e9b)*
 - [x] T1.3 LaTeX rendering (port `rehype-katex`/math handling; `$...$` and `$$...$$` incl. LaTeX-delimiter behavior). — *done 2026-08-09 MVP W2 (6167e9b)*
 - [x] T1.4 Raw/preview toggle + printer-friendly print view (port from `apps/web` artifacts). — *done 2026-08-09 MVP W3 (54dee32)*
 - [ ] T1.5 AI-gating architecture: settings store (electron-store or main-process JSON), `ai.enabled` flag (default **false**), chat/AI components only imported via dynamic `import()` when enabled; E2E proves zero AI network calls when disabled (Playwright Electron). — *after T3.1a/b + T1.6*

@@ -4,7 +4,7 @@
 
 ![Screenshot of app](./public/screenshot.png)
 
-Evaluchat is an open-source web application for collaborating with agents to write and revise documents in a WYSIWYG Markdown editor.
+Evaluchat is an open-source web application for collaborating with agents to write and revise documents in the Workspace.
 
 1. **Open Source**: All the code, from the frontend, to the content generation agent, to the reflection agent is open source and MIT licensed.
 2. **Built in memory**: Evaluchat ships out of the box with a [reflection agent](https://langchain-ai.github.io/langgraphjs/tutorials/reflection/reflection/) which stores style rules and user insights in a [shared memory store](https://langchain-ai.github.io/langgraphjs/concepts/memory/). This allows Evaluchat to remember facts about you across sessions.
@@ -17,7 +17,10 @@ Evaluchat is an open-source web application for collaborating with agents to wri
 - **Pre-built quick actions**: There are also a series of pre-built quick actions for common writing and coding tasks that are always available.
 - **Artifact versioning**: All artifacts have a "version" tied to them, allowing you to travel back in time and see previous versions of your artifact.
 - **Code, Markdown, or both**: The artifact view allows for viewing and editing both code, and markdown. You can even have chats which generate code, and markdown artifacts, and switch between them.
-- **Live markdown rendering & editing**: Evaluchat's WYSIWYG Markdown editor allows you to view the rendered markdown while you're editing, without having to toggle back and fourth.
+- **Live Markdown rendering**: The Workspace shows the rendered document while you work, without having to toggle back and forth.
+- **Optional AI assistance**: Use AI when it helps, while keeping the Workspace useful with AI turned off.
+- **Mermaid and LaTeX rendering**: Render diagrams and equations directly in the document.
+- **Printing**: Create clean print and PDF output for sharing and review.
 
 ## Setup locally
 

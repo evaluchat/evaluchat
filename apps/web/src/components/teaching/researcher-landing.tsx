@@ -171,15 +171,12 @@ export function ResearcherLanding() {
           </p>
         </div>
 
-        <section
-          className="mb-8"
-          data-testid="apparatus-registry-section"
-        >
+        <section className="mb-8" data-testid="apparatus-registry-section">
           <h2 className="mb-1 text-lg font-semibold">
             Available research apparatuses
           </h2>
           <p className="mb-3 text-sm text-muted-foreground">
-            Research questions instrumented in the canvas editor as reproducible,
+            Research questions instrumented in the Workspace as reproducible,
             configurable apparatuses.
           </p>
 

@@ -491,7 +491,7 @@ function CanvasReplayViewToggle({
     <div
       className="inline-flex rounded-md border border-input p-0.5 text-sm"
       role="group"
-      aria-label="Canvas editor replay view"
+      aria-label="Workspace replay view"
     >
       <button
         type="button"
@@ -504,7 +504,7 @@ function CanvasReplayViewToggle({
         onClick={() => onModeChange("canvas")}
         aria-pressed={mode === "canvas"}
       >
-        Canvas editor
+        Workspace
       </button>
       <button
         type="button"

@@ -33,8 +33,8 @@ export function studentFirstNameFromUser(user: {
 
 export function buildAssignmentSystemPrompt(
   assignment: StudentAssignment,
-  configuration: ApparatusConfiguration =
-    assignment.apparatusConfiguration ?? CANONICAL_ESSAYS_CONFIGURATION
+  configuration: ApparatusConfiguration = assignment.apparatusConfiguration ??
+    CANONICAL_ESSAYS_CONFIGURATION
 ): string {
   const instructions =
     assignment.agentInstructions.trim() ||
@@ -54,7 +54,7 @@ ${assignment.wordTarget ? `- **Target length:** about ${assignment.wordTarget} w
 ${instructions}
 
 ## Runtime treatment
-- AI assistance: ${configuration.ai_assistance ? "enabled" : "disabled"}
+- Optional AI assistance: ${configuration.ai_assistance ? "enabled" : "disabled"}
 - AI editing actions: ${configuration.ai_canvas_actions ? "enabled" : "disabled"}
 - Drafting gate: ${configuration.drafting_gate} (threshold ${configuration.threshold})
 - Process tracking: ${configuration.tracking ? "enabled" : "disabled"}

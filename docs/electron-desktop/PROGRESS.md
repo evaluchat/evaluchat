@@ -59,7 +59,7 @@ Branch `feat/electron-desktop` · Plan: `PLAN.md` · Runbook: `RUNBOOK.md`
 
 ### 2026-08-09 — intensive MVP sprint (W1–W4) ✅
 
-- Collapsed remaining Phase 0–1 editor MVP into four workstreams (AI out of scope; no `apps/web` edits; no shared-package extraction).
+- Collapsed remaining Phase 0–1 Workspace MVP into four workstreams (AI out of scope; no `apps/web` edits; no shared-package extraction).
 - **W1** `53f4962` — file IPC (`file:open`/`save`/`saveAs`/`openPath`), recent-files.json, File menu accelerators, unsaved close/discard guard.
 - **W2** `6167e9b` — BlockNote DocumentEditor port (schema, Mermaid, math/KaTeX, toolbar, PrintView leaves) without GraphContext/AI.
 - **W3** `54dee32` — DocumentStore + App shell (dirty indicator, path title, Raw toggle, Print, menu/electronAPI wiring, path autosave).

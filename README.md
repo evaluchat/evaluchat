@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Open-source AI writing and education research workspace.** Evaluchat combines
-an authoring canvas with reviewed, reproducible research apparatuses so
+an authoring workspace with reviewed, reproducible research apparatuses so
 educators, administrators, and researchers can run classroom writing workflows
 and inspect the evidence they produce.
 
@@ -20,7 +20,7 @@ Try the public beta at [evaluchat.org](https://evaluchat.org), or run it yoursel
 - **Live markdown editing & rendering** — see the rendered document while you edit, no toggling
 - **Rich formatting toolbar** — bold, italic, lists, quotes, code blocks and more
 - **LaTeX equations & Mermaid diagrams** — rendered inline, in markdown and code artifacts
-- **AI track changes** — the assistant proposes edits; you approve or reject them inline
+- **Optional AI assistance** — the assistant proposes edits when enabled; you approve or reject them inline
 - **Artifact versioning** — every artifact carries a version history; travel back in time
 - **Built-in memory** — a reflection agent remembers style rules and facts about you across sessions
 - **Custom & pre-built quick actions** — one-click prompts for common writing and coding tasks

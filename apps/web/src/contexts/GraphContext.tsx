@@ -242,7 +242,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   }, [artifact]);
 
   // Cursor position — updated by TextRenderer, read by streamMessageV2.
-  // Only updates when the canvas editor has focus, so the position persists
+  // Only updates when the Workspace has focus, so the position persists
   // when the user clicks into the chat input to type.
   const cursorPositionRef = useRef<EditorCursorPosition | undefined>(undefined);
   const editorHasFocusRef = useRef(false);

@@ -256,7 +256,7 @@ export function TrackingMetrics({ threadId }: TrackingMetricsProps) {
           />
           <MetricBadge
             icon={MousePointerClick}
-            label="Editor edits"
+            label="Workspace edits"
             value={metrics.totalCanvasEdits}
           />
         </div>
