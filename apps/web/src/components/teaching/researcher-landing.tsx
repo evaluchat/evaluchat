@@ -179,7 +179,7 @@ export function ResearcherLanding() {
             Available research apparatuses
           </h2>
           <p className="mb-3 text-sm text-muted-foreground">
-            Research questions instrumented in the AI canvas as reproducible,
+            Research questions instrumented in the canvas editor as reproducible,
             configurable apparatuses.
           </p>
 

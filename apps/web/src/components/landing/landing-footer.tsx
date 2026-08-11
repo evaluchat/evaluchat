@@ -25,14 +25,14 @@ export function LandingFooter() {
           </div>
           <div className="foot-col">
             <h4>Platform</h4>
-            <a href="#canvas">AI canvas</a>
+            <a href="#canvas">Canvas editor</a>
             <a href="#research">Research</a>
             <a
               href="https://knowledge.evaluchat.org"
               target="_blank"
               rel="noopener noreferrer"
             >
-              AI canvas documentation
+              Editor documentation
             </a>
             <a href="#open-source">Open source</a>
           </div>

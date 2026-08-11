@@ -56,7 +56,7 @@ const FALLBACK_STUB_CATALOG: ApparatusCatalogEntry[] = [
     required_capabilities: ["assignment-context", "student-authoring", "submission"],
     knobs: [
       { id: "ai_assistance", type: "boolean", default: true, effect: "AI assistance" },
-      { id: "ai_canvas_actions", type: "boolean", default: true, effect: "AI canvas actions" },
+      { id: "ai_canvas_actions", type: "boolean", default: true, effect: "AI editing actions" },
       { id: "drafting_gate", type: "enum", values: ["none", "discussion-first", "thesis-approved"], default: "discussion-first", effect: "Drafting gate" },
       { id: "threshold", type: "integer", min: 0, max: 100, default: 4, effect: "Escape hatch threshold" },
       { id: "tracking", type: "boolean", default: true, effect: "Process telemetry" },

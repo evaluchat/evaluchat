@@ -39,7 +39,7 @@ export function HeroSection() {
           </p>
           <div className="hero-ctas">
             <OpenCanvasButton className="btn btn-primary">
-              Open AI canvas
+              Open editor
               <ArrowRight className="arrow" width={15} height={15} />
             </OpenCanvasButton>
             <a className="btn btn-outline" href="#research">
@@ -47,7 +47,7 @@ export function HeroSection() {
             </a>
           </div>
           <div className="hero-trust" aria-label="Platform foundations">
-            <span>AI canvas workspace</span>
+            <span>Canvas editor</span>
             <span>OKF knowledge</span>
             <span>Git provenance</span>
           </div>
@@ -211,9 +211,9 @@ export function BuildingSection() {
     <section className="canvas-platform section" id="canvas">
       <div className="container">
         <span className="eyebrow">The common workspace</span>
-        <h2>The AI canvas gives a method somewhere practical to live.</h2>
+        <h2>A practical place for methods to take shape.</h2>
         <p className="lede">
-          The implemented AI canvas features are useful on their own—and give
+          The editor is useful on its own—and gives
           teachers and researchers an open surface for designing, running and
           explaining new ways of working with AI.
         </p>
@@ -236,7 +236,7 @@ export function BuildingSection() {
         </div>
         <div className="dark-ctas">
           <OpenCanvasButton className="btn btn-primary">
-            Open AI canvas
+            Open editor
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
           <a
@@ -245,7 +245,7 @@ export function BuildingSection() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Read AI canvas documentation
+            Read editor documentation
           </a>
         </div>
       </div>
@@ -278,7 +278,7 @@ export function ResearchSection() {
           <i>→</i>
           <span>Method</span>
           <i>→</i>
-          <span>AI canvas activity</span>
+          <span>Editor activity</span>
           <i>→</i>
           <span>Public record</span>
           <i>→</i>
@@ -336,7 +336,7 @@ export function ResearchSection() {
 
 const OPEN_LAYERS = [
   {
-    label: "AI canvas",
+    label: "Canvas editor",
     text: "An MIT-licensed Markdown workspace: useful on its own and open to inspection, extension and self-hosting.",
   },
   {
@@ -378,7 +378,7 @@ export function OssSection() {
             View on GitHub
           </a>
           <OpenCanvasButton className="btn btn-ghost">
-            Open AI canvas
+            Open editor
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
         </div>
@@ -394,12 +394,12 @@ export function FinalCtaSection() {
         <span className="eyebrow">The invitation</span>
         <h2>Bring a question. Try a method. Show your work.</h2>
         <p>
-          The AI canvas gives the experiment a place to happen. Open methods and
+          The editor gives the experiment a place to happen. Open methods and
           portable knowledge give the result a chance to matter.
         </p>
         <div className="final-ctas">
           <OpenCanvasButton className="btn btn-primary">
-            Open AI canvas
+            Open editor
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
           <a

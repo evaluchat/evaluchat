@@ -4,7 +4,7 @@
 
 ![Screenshot of app](./public/screenshot.png)
 
-Evaluchat is an open-source web application for collaborating with agents to write and revise documents in an AI canvas.
+Evaluchat is an open-source web application for collaborating with agents to write and revise documents in a WYSIWYG Markdown editor.
 
 1. **Open Source**: All the code, from the frontend, to the content generation agent, to the reflection agent is open source and MIT licensed.
 2. **Built in memory**: Evaluchat ships out of the box with a [reflection agent](https://langchain-ai.github.io/langgraphjs/tutorials/reflection/reflection/) which stores style rules and user insights in a [shared memory store](https://langchain-ai.github.io/langgraphjs/concepts/memory/). This allows Evaluchat to remember facts about you across sessions.

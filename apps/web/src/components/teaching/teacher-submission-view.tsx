@@ -253,13 +253,13 @@ export function TeacherSubmissionView({
               </CardContent>
             </Card>
 
-            {/* AI canvas content */}
+            {/* Document content */}
             <Card
               className={`${REVIEW_PANEL_HEIGHT_CLASS} flex flex-col lg:col-span-2`}
               data-testid="teacher-review-canvas-panel"
             >
               <CardHeader className={REVIEW_CARD_HEADER_CLASS}>
-                <CardTitle className="text-lg">AI canvas content</CardTitle>
+                <CardTitle className="text-lg">Document content</CardTitle>
               </CardHeader>
               <CardContent className={REVIEW_CARD_CONTENT_CLASS}>
                 {replayEnabled ? (

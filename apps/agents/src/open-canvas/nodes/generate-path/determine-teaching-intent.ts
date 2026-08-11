@@ -183,7 +183,7 @@ async function determineTeachingIntentFunc({
     route !== "replyToGeneralInput"
   ) {
     route = "replyToGeneralInput";
-    reasoning = `AI canvas actions are disabled — ${reasoning} → coaching chat.`;
+    reasoning = `AI editing actions are disabled — ${reasoning} → coaching chat.`;
   }
 
   // Phase hard guards (safety net if the model ignores prompt rules).
@@ -199,7 +199,7 @@ async function determineTeachingIntentFunc({
   }
   if (hasContent && route === "generateArtifact") {
     route = "replyToGeneralInput";
-    reasoning = `AI canvas has content — ${reasoning} → coaching chat.`;
+    reasoning = `The canvas has content — ${reasoning} → coaching chat.`;
   }
   if (!hasContent && route === "integrateCanvasDirection") {
     route = "generateArtifact";

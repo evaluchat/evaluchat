@@ -669,7 +669,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       canvasActionRequested
     ) {
       toast({
-        title: "AI canvas actions are disabled",
+        title: "AI editing actions are disabled",
         description:
           "Edit the document directly or continue the assignment conversation.",
         variant: "destructive",

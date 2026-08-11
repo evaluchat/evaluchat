@@ -18,7 +18,7 @@ import {
 import { LandingFooter } from "./landing-footer";
 
 const NAV_LINKS = [
-  { href: "#canvas", label: "AI canvas" },
+  { href: "#canvas", label: "Canvas editor" },
   { href: "#research", label: "Research" },
   { href: "#open-source", label: "Open source" },
 ];
@@ -64,7 +64,7 @@ function LandingHeader() {
             </Link>
           )}
           <Link className="nav-cta" href={openCanvasHref}>
-            <span>Open AI canvas</span>
+            <span>Open editor</span>
             <ArrowUpRight width={14} height={14} />
           </Link>
           <button
@@ -94,7 +94,7 @@ function LandingHeader() {
           <a href="/auth/login">Sign in</a>
         )}
         <a className="nav-cta mcta" href={openCanvasHref}>
-          <span>Open AI canvas</span>
+          <span>Open editor</span>
           <ArrowUpRight width={14} height={14} />
         </a>
       </div>
