@@ -19,7 +19,7 @@ describe("generated apparatus catalog", () => {
     }
   });
 
-  it("rejects unknown capabilities, incompatible Canvas versions, and non-viable workflows", () => {
+  it("rejects unknown capabilities, incompatible canvas versions, and non-viable workflows", () => {
     const essays = APPARATUS_CATALOG.find((entry) => entry.id === "ai-assisted-essay")!;
 
     expect(() =>
@@ -33,7 +33,7 @@ describe("generated apparatus catalog", () => {
 
     expect(() =>
       validateApparatusCatalog([{ ...essays, min_canvas_version: "99.0.0" }])
-    ).toThrow(/requires Canvas/);
+    ).toThrow(/requires canvas/);
 
     expect(() =>
       validateApparatusCatalog([

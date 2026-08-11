@@ -1,6 +1,6 @@
-# Contributing to Evaluchat Canvas
+# Contributing to Evaluchat
 
-Thanks for your interest! Evaluchat Canvas is a small, independent open-source
+Thanks for your interest! Evaluchat is a small, independent open-source
 project — a continuation of LangChain Open Canvas. Contributions are welcome.
 
 ## Ground rules
@@ -14,8 +14,8 @@ project — a continuation of LangChain Open Canvas. Contributions are welcome.
 ## Setup
 
 ```bash
-git clone https://github.com/evaluchat/canvas.git
-cd canvas
+git clone https://github.com/evaluchat/evaluchat.git
+cd evaluchat
 yarn install
 ```
 

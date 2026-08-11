@@ -18,7 +18,7 @@ import {
 import { LandingFooter } from "./landing-footer";
 
 const NAV_LINKS = [
-  { href: "#canvas", label: "Canvas" },
+  { href: "#canvas", label: "AI canvas" },
   { href: "#research", label: "Research" },
   { href: "#open-source", label: "Open source" },
 ];
@@ -36,11 +36,11 @@ function LandingHeader() {
           <Image
             className="brand-mark"
             src="/evaluchat.png"
-            alt="evaluchat"
+            alt="Evaluchat"
             width={32}
             height={32}
           />
-          <span>evaluchat</span>
+          <span>Evaluchat</span>
         </Link>
 
         <nav className="main" aria-label="Primary">
@@ -64,7 +64,7 @@ function LandingHeader() {
             </Link>
           )}
           <Link className="nav-cta" href={openCanvasHref}>
-            <span>Open Canvas</span>
+            <span>Open AI canvas</span>
             <ArrowUpRight width={14} height={14} />
           </Link>
           <button
@@ -94,7 +94,7 @@ function LandingHeader() {
           <a href="/auth/login">Sign in</a>
         )}
         <a className="nav-cta mcta" href={openCanvasHref}>
-          <span>Open Canvas</span>
+          <span>Open AI canvas</span>
           <ArrowUpRight width={14} height={14} />
         </a>
       </div>

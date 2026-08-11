@@ -1,10 +1,10 @@
-# AGENTS.md — Evaluchat Canvas
+# AGENTS.md — Evaluchat
 
 Guidance for AI coding agents (and humans) working in this repository.
 
 ## What this is
 
-Evaluchat Canvas is an open-source, AI-native Markdown document workspace — an
+Evaluchat is an open-source, AI-native Markdown document workspace — an
 independent continuation of LangChain Open Canvas (MIT), and the public beta
 application for the Evaluchat education research platform. See [README.md](README.md)
 for the product story and setup, [CONTRIBUTING.md](CONTRIBUTING.md) for the

@@ -127,7 +127,7 @@ export function validateApparatusCatalog(
       (major === canvasMajor && minor > canvasMinor) ||
       (major === canvasMajor && minor === canvasMinor && patch > canvasPatch)
     ) {
-      throw new Error(`Apparatus ${entry.id} requires Canvas ${entry.min_canvas_version}`);
+      throw new Error(`Apparatus ${entry.id} requires canvas ${entry.min_canvas_version}`);
     }
     if (!entry.required_capabilities.includes("assignment-context") ||
         !entry.required_capabilities.includes("student-authoring") ||

@@ -10,7 +10,7 @@ export const DEFAULT_DOCUMENT_META: DocumentMeta = {
   path: null,
 };
 
-const APP_TITLE = "Evaluchat Canvas";
+const APP_TITLE = "Evaluchat";
 
 export function formatWindowTitle(meta: DocumentMeta): string {
   const name =

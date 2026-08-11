@@ -40,7 +40,7 @@ export function buildAssignmentSystemPrompt(
     assignment.agentInstructions.trim() ||
     "Act as a Socratic writing coach. Help the student develop their own thesis and draft; do not ghostwrite the essay.";
 
-  return `You are the student's AI writing coach for a classroom assignment on Open Canvas.
+  return `You are the student's AI writing coach for a classroom assignment in Evaluchat.
 
 ## Assignment
 - **Course:** ${assignment.courseLabel}

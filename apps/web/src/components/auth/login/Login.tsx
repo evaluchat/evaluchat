@@ -92,7 +92,7 @@ export function Login() {
             alt="Evaluchat Logo"
           />
           <span className="text-5xl font-semibold tracking-tight">
-            Open Canvas
+            Evaluchat
           </span>
         </div>
         {/* Brand copy + workspace demo (desktop left panel) */}

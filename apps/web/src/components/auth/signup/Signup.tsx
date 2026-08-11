@@ -73,10 +73,10 @@ export function Signup() {
             src="/evaluchat.png"
             width={64}
             height={64}
-            alt="LangChain Logo"
+            alt="Evaluchat Logo"
             className=""
           />
-          Open Canvas
+          Evaluchat
         </div>
       </div>
       <div className="lg:p-8">

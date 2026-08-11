@@ -32,14 +32,14 @@ export function HeroSection() {
             <em>What should we be measuring?</em>
           </h1>
           <p className="hero-sub">
-            Canvas is an open-source workspace for testing how education
+            Evaluchat is an open-source workspace for testing how education
             responds to AI: using it, constraining it or examining evidence of
             its use. We make the methods visible so we can see what each one
             actually measures.
           </p>
           <div className="hero-ctas">
             <OpenCanvasButton className="btn btn-primary">
-              Open Canvas
+              Open AI canvas
               <ArrowRight className="arrow" width={15} height={15} />
             </OpenCanvasButton>
             <a className="btn btn-outline" href="#research">
@@ -47,7 +47,7 @@ export function HeroSection() {
             </a>
           </div>
           <div className="hero-trust" aria-label="Platform foundations">
-            <span>Canvas workspace</span>
+            <span>AI canvas workspace</span>
             <span>OKF knowledge</span>
             <span>Git provenance</span>
           </div>
@@ -211,9 +211,9 @@ export function BuildingSection() {
     <section className="canvas-platform section" id="canvas">
       <div className="container">
         <span className="eyebrow">The common workspace</span>
-        <h2>Canvas gives a method somewhere practical to live.</h2>
+        <h2>The AI canvas gives a method somewhere practical to live.</h2>
         <p className="lede">
-          The implemented Canvas features are useful on their own—and give
+          The implemented AI canvas features are useful on their own—and give
           teachers and researchers an open surface for designing, running and
           explaining new ways of working with AI.
         </p>
@@ -236,7 +236,7 @@ export function BuildingSection() {
         </div>
         <div className="dark-ctas">
           <OpenCanvasButton className="btn btn-primary">
-            Open Canvas
+            Open AI canvas
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
           <a
@@ -245,7 +245,7 @@ export function BuildingSection() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Read Canvas documentation
+            Read AI canvas documentation
           </a>
         </div>
       </div>
@@ -278,7 +278,7 @@ export function ResearchSection() {
           <i>→</i>
           <span>Method</span>
           <i>→</i>
-          <span>Canvas activity</span>
+          <span>AI canvas activity</span>
           <i>→</i>
           <span>Public record</span>
           <i>→</i>
@@ -336,7 +336,7 @@ export function ResearchSection() {
 
 const OPEN_LAYERS = [
   {
-    label: "Canvas",
+    label: "AI canvas",
     text: "An MIT-licensed Markdown workspace: useful on its own and open to inspection, extension and self-hosting.",
   },
   {
@@ -371,14 +371,14 @@ export function OssSection() {
         <div className="dark-ctas">
           <a
             className="btn btn-primary"
-            href="https://github.com/evaluchat/canvas"
+            href="https://github.com/evaluchat/evaluchat"
             target="_blank"
             rel="noopener noreferrer"
           >
             View on GitHub
           </a>
           <OpenCanvasButton className="btn btn-ghost">
-            Open Canvas
+            Open AI canvas
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
         </div>
@@ -394,12 +394,12 @@ export function FinalCtaSection() {
         <span className="eyebrow">The invitation</span>
         <h2>Bring a question. Try a method. Show your work.</h2>
         <p>
-          Canvas gives the experiment a place to happen. Open methods and
+          The AI canvas gives the experiment a place to happen. Open methods and
           portable knowledge give the result a chance to matter.
         </p>
         <div className="final-ctas">
           <OpenCanvasButton className="btn btn-primary">
-            Open Canvas
+            Open AI canvas
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
           <a

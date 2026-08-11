@@ -1,5 +1,5 @@
 appId: com.evaluchat.canvas
-productName: Evaluchat Canvas
+productName: Evaluchat
 electronVersion: 33.4.11
 directories:
   output: release

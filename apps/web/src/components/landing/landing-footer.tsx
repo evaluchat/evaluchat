@@ -13,11 +13,11 @@ export function LandingFooter() {
               <Image
                 className="brand-mark"
                 src="/evaluchat.png"
-                alt="evaluchat"
+                alt="Evaluchat"
                 width={32}
                 height={32}
               />
-              <span>evaluchat</span>
+              <span>Evaluchat</span>
             </Link>
             <p>
               Open-source infrastructure for experimenting with AI in education.
@@ -25,14 +25,14 @@ export function LandingFooter() {
           </div>
           <div className="foot-col">
             <h4>Platform</h4>
-            <a href="#canvas">Canvas</a>
+            <a href="#canvas">AI canvas</a>
             <a href="#research">Research</a>
             <a
               href="https://knowledge.evaluchat.org"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Canvas documentation
+              AI canvas documentation
             </a>
             <a href="#open-source">Open source</a>
           </div>
@@ -40,7 +40,7 @@ export function LandingFooter() {
             <h4>About</h4>
             <a href="#about">About</a>
             <a
-              href="https://github.com/evaluchat/canvas"
+              href="https://github.com/evaluchat/evaluchat"
               target="_blank"
               rel="noopener noreferrer"
             >

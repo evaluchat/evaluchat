@@ -48,7 +48,7 @@ export function resolvePremiumOpenRouterApiKey(): string {
 }
 
 /**
- * Map Open Canvas model ids to OpenRouter slugs when the name has no vendor prefix.
+ * Map legacy canvas model ids to OpenRouter slugs when the name has no vendor prefix.
  */
 export function resolveOpenRouterModelName(modelName: string): string {
   if (modelName.includes("/")) {

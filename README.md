@@ -1,6 +1,6 @@
-# Evaluchat Canvas
+# Evaluchat
 
-[![CI](https://github.com/evaluchat/canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/evaluchat/canvas/actions/workflows/ci.yml)
+[![CI](https://github.com/evaluchat/evaluchat/actions/workflows/ci.yml/badge.svg)](https://github.com/evaluchat/evaluchat/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Open-source AI writing and education research workspace.** Evaluchat combines
@@ -8,7 +8,7 @@ an authoring canvas with reviewed, reproducible research apparatuses so
 educators, administrators, and researchers can run classroom writing workflows
 and inspect the evidence they produce.
 
-Evaluchat Canvas is an independent, open-source continuation of
+Evaluchat is an independent, open-source continuation of
 [LangChain Open Canvas](https://github.com/langchain-ai/open-canvas) (MIT). We're
 grateful for the original project — see [Acknowledgments](#acknowledgments).
 
@@ -46,8 +46,8 @@ Try the public beta at [evaluchat.org](https://evaluchat.org), or run it yoursel
 Prerequisites: **Node 22** and **Yarn 1.22** (corepack: `corepack enable`).
 
 ```bash
-git clone https://github.com/evaluchat/canvas.git
-cd canvas
+git clone https://github.com/evaluchat/evaluchat.git
+cd evaluchat
 yarn install
 ```
 
@@ -102,7 +102,7 @@ before large changes.
 
 ## Related surfaces
 
-Evaluchat Canvas is one of Evaluchat's open surfaces. The same document workspace
+Evaluchat is one of Evaluchat's open surfaces. The same document workspace
 also powers:
 
 - **Evaluchat Essays** — the built-in education apparatus and assignment workflow
@@ -122,7 +122,7 @@ turnkey self-host install and database migration are not launch deliverables.
 
 ## Acknowledgments
 
-Evaluchat Canvas is derived from and inspired by
+Evaluchat is derived from and inspired by
 [LangChain Open Canvas](https://github.com/langchain-ai/open-canvas), licensed under
 the MIT License. The original copyright notice and license text are preserved in
 [LICENSE-LANGCHAIN](LICENSE-LANGCHAIN). We extend our appreciation to the LangChain

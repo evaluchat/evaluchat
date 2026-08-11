@@ -42,7 +42,7 @@ export function AssignmentWorkspaceBanner({
             alt="Evaluchat"
             className="w-7 h-7 object-contain"
           />
-          <TighterText className="text-xl">evaluchat</TighterText>
+          <TighterText className="text-xl">Evaluchat</TighterText>
           {phaseState && (
             <Badge
               variant={phaseState === "drafting" ? "outline" : "secondary"}

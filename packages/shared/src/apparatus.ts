@@ -1,7 +1,7 @@
 /**
  * Public apparatus runtime contract.
  *
- * Research repositories describe apparatuses and immutable profiles. Canvas
+ * Research repositories describe apparatuses and immutable profiles. The canvas
  * only executes implementations that are already mapped to a known id; this
  * module contains the small, dependency-free contract shared by the web app
  * and the agent graph.

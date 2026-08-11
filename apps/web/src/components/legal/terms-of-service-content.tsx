@@ -101,7 +101,7 @@ export function TermsOfServiceContent() {
         <p>
           The Evaluchat product, branding, and software (aside from open-source
           components under their own licences, including lineage from LangChain
-          Open Canvas) remain ours or our licensors’.
+          Evaluchat) remain ours or our licensors’.
         </p>
       </section>
 

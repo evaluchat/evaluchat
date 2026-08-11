@@ -16,7 +16,7 @@ export const ESSAYS_KNOWLEDGE_SOURCES: KnowledgeSource[] = [
   {
     id: "research-apparatus",
     title:
-      "Research apparatus — reproducible research on Canvas (knowledge catalog)",
+      "Research apparatus — reproducible research on the AI canvas (knowledge catalog)",
     resource:
       "https://github.com/evaluchat/knowledge/blob/main/concepts/research-apparatus.en.md",
   },

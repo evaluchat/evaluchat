@@ -199,7 +199,7 @@ async function determineTeachingIntentFunc({
   }
   if (hasContent && route === "generateArtifact") {
     route = "replyToGeneralInput";
-    reasoning = `Canvas has content — ${reasoning} → coaching chat.`;
+    reasoning = `AI canvas has content — ${reasoning} → coaching chat.`;
   }
   if (!hasContent && route === "integrateCanvasDirection") {
     route = "generateArtifact";

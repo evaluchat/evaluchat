@@ -1,5 +1,5 @@
 /**
- * Lightweight shared "starter recipe" library surfaced on the generic Canvas
+ * Lightweight shared "starter recipe" library surfaced on the generic canvas
  * welcome screen. Each recipe is a prompt that kicks off an AI-assisted
  * coaching session for a specific writing/preparation task.
  *

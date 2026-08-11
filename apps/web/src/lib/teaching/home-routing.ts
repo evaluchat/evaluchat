@@ -1,20 +1,20 @@
 /**
  * Teaching role routing.
  *
- * `/` is the public marketing landing (for everyone). The Canvas workspace
+ * `/` is the public marketing landing (for everyone). The canvas workspace
  * lives at `/canvas` and requires auth via middleware. Role dashboards
  * (`/teacher`, `/owner`) are server-gated here so a gate that
  * is only client-side cannot be bypassed.
  */
 
-/** Whether `/` may render the legacy Open Canvas workspace. */
+/** Whether `/` may render the legacy canvas workspace. */
 export function allowsTeachingHomeCanvas(_opts: {
   isTeaching: boolean;
   isOwner: boolean;
   isTeacher: boolean;
   hasAssignment: boolean;
 }): boolean {
-  // `/` is now the public landing — never rendered as the Canvas workspace.
+  // `/` is now the public landing — never rendered as the canvas workspace.
   return false;
 }
 

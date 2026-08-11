@@ -2,7 +2,7 @@
   "name": "@opencanvas/web",
   "author": "Brace Sproul",
   "homepage": "https://evaluchat.org",
-  "repository": "https://github.com/evaluchat/canvas",
+  "repository": "https://github.com/evaluchat/evaluchat",
   "version": "0.5.9",
   "private": true,
   "scripts": {

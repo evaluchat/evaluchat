@@ -6,7 +6,7 @@ import {
 } from "./home-routing";
 
 describe("allowsTeachingHomeCanvas", () => {
-  it("never enables the legacy Canvas workspace at / (now the landing)", () => {
+  it("never enables the legacy canvas workspace at / (now the landing)", () => {
     expect(
       allowsTeachingHomeCanvas({
         isTeaching: false,

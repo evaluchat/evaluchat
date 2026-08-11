@@ -1,6 +1,6 @@
-# CodeRabbit configuration — evaluchat/canvas
+# CodeRabbit configuration — evaluchat/evaluchat
 # Triage policy: security/data-integrity findings are actioned before merge;
-# everything else is tracked as debt on the Canvas Board, not fixed inline.
+# everything else is tracked as debt on the project board, not fixed inline.
 language: en-US
 early_access: false
 review:

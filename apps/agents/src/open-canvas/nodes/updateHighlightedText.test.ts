@@ -1,5 +1,5 @@
 /**
- * Test: Canvas text editing — "replace" routing
+ * Test: canvas text editing — "replace" routing
  *
  * ROOT CAUSE: The word "replace" was not in the writing intent patterns
  * in generatePath, AND generatePath always routed to generateArtifact

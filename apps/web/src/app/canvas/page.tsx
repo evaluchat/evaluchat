@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { TeachingAssignmentProvider } from "@/contexts/TeachingAssignmentContext";
 
 // /canvas is an authenticated route. The client-side gate is a
-// belt-and-suspenders guard: any signed-in user may use the Canvas workspace.
+// belt-and-suspenders guard: any signed-in user may use the canvas workspace.
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUserContext();
   const router = useRouter();

@@ -1,9 +1,10 @@
 {
   "name": "@opencanvas/desktop",
   "version": "0.1.0",
-  "description": "Evaluchat Canvas desktop Markdown editor (AI-off MVP)",
+  "description": "Evaluchat desktop AI canvas editor (AI-off MVP)",
   "author": "Evaluchat <noreply@users.noreply.github.com>",
-  "homepage": "https://github.com/evaluchat/canvas",
+  "homepage": "https://github.com/evaluchat/evaluchat",
+  "repository": "https://github.com/evaluchat/evaluchat",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
