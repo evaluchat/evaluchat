@@ -59,7 +59,11 @@ export const customAction = async (
   const customActionsNamespace = ["custom_actions", userId];
   const actionsKey = "actions";
 
-  const memoryNamespace = ["memories", assistantId];
+  const memoryNamespace = [
+    "memories",
+    config.configurable?.supabase_user_id ?? "anonymous",
+    assistantId,
+  ];
   const memoryKey = "reflection";
 
   const [customActionsItem, memories] = await Promise.all([

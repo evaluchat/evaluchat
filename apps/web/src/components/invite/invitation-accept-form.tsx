@@ -101,11 +101,6 @@ export function InvitationAcceptForm({ token }: InvitationAcceptFormProps) {
         const { data, error: signUpError } = await client.auth.signUp({
           email: invitation.email,
           password,
-          options: {
-            data: {
-              role: invitation.role,
-            },
-          },
         });
 
         if (signUpError) {

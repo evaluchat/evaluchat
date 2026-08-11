@@ -102,7 +102,7 @@ export const replyToGeneralInput = async (
   const prompt = `You are an AI writing coach helping a student with their essay assignment.
 
 ${phaseInstructions}
-${cursorContext}
+{cursorContext}
 
 The student has generated artifacts in the past. Use the following artifacts as context when responding to the students question.
 
@@ -122,7 +122,11 @@ You also have the following reflections on style guidelines and general memories
   if (!assistantId) {
     throw new Error("`assistant_id` not found in configurable");
   }
-  const memoryNamespace = ["memories", assistantId];
+  const memoryNamespace = [
+    "memories",
+    config.configurable?.supabase_user_id ?? "anonymous",
+    assistantId,
+  ];
   const memoryKey = "reflection";
   const memories = await store.get(memoryNamespace, memoryKey);
   const memoriesAsString = memories?.value
@@ -139,7 +143,8 @@ You also have the following reflections on style guidelines and general memories
             currentArtifactContent
           )
         : NO_ARTIFACT_PROMPT
-    );
+    )
+    .replace("{cursorContext}", cursorContext);
 
   const userSystemPrompt = optionallyGetSystemPromptFromConfig(config);
   const fullSystemPrompt = userSystemPrompt

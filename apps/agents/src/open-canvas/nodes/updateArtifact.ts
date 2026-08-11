@@ -56,7 +56,11 @@ export const updateArtifact = async (
   if (!assistantId) {
     throw new Error("`assistant_id` not found in configurable");
   }
-  const memoryNamespace = ["memories", assistantId];
+  const memoryNamespace = [
+    "memories",
+    config.configurable?.supabase_user_id ?? "anonymous",
+    assistantId,
+  ];
   const memoryKey = "reflection";
   const memories = await store.get(memoryNamespace, memoryKey);
   const memoriesAsString = memories?.value

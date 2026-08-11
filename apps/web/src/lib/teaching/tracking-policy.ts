@@ -4,7 +4,8 @@ import { getSeedAssignmentById } from "./seed-loader";
 
 /** Resolve tracking policy from the server-owned thread/assignment snapshot. */
 export async function isTrackingAllowedForThread(
-  threadId: string
+  threadId: string,
+  userId?: string
 ): Promise<boolean> {
   if (!threadId || threadId === "unknown") return false;
   try {
@@ -13,6 +14,8 @@ export async function isTrackingAllowedForThread(
     });
     if (!response.ok) return false;
     const thread = await response.json();
+    const metadataUserId = thread?.metadata?.user_id;
+    if (typeof metadataUserId !== "string" || metadataUserId !== userId) return false;
     const assignmentId = thread?.metadata?.assignment_id;
     if (typeof assignmentId !== "string") return true;
     const assignment =

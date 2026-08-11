@@ -47,7 +47,10 @@ export function resolveStoreNamespace(
       if (!assistantId || rest.length !== 1) {
         return { ok: false, error: "Invalid memories namespace" };
       }
-      return { ok: true, namespace: ["memories", assistantId] };
+      return {
+        ok: true,
+        namespace: ["memories", authenticatedUserId, assistantId],
+      };
     }
 
     case "context_documents":

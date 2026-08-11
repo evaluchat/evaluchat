@@ -27,11 +27,9 @@ export function postLoginPath(
   // Org admin (app_metadata) — teaches + manages org from /teacher
   if (user?.app_metadata?.role === "admin") return "/teacher";
 
-  // Check user_metadata role
-  if (user?.user_metadata?.role === "teacher") return "/teacher";
+  if (user?.app_metadata?.role === "teacher") return "/teacher";
 
-  // Explicit student claim — must run before the incomplete-signup fallback
-  if (user?.user_metadata?.role === "student") return "/student";
+  if (user?.app_metadata?.role === "student") return "/student";
 
   // OAuth users do not carry a role until the callback finalises registration.
   // Keep the destination deterministic if claim propagation is delayed.

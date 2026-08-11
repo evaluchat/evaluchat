@@ -214,7 +214,7 @@ describe("replyToGeneralInput", () => {
 
     // Verify store was accessed with correct parameters
     expect(mockStore.get).toHaveBeenCalledWith(
-      ["memories", "test-assistant-456"],
+      ["memories", "anonymous", "test-assistant-456"],
       "reflection"
     );
   });

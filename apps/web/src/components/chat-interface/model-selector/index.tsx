@@ -140,7 +140,9 @@ export default function ModelSelector({
   const modelCatalog =
     process.env.NEXT_PUBLIC_OPENROUTER_ENABLED === "true"
       ? OPENROUTER_MODELS
-      : ALL_MODELS;
+      : ALL_MODELS.filter(
+          (m) => !OPENROUTER_MODELS.some((om) => om.name === m.name)
+        );
 
   const allAllowedModels = modelCatalog.filter((model) => {
     if (

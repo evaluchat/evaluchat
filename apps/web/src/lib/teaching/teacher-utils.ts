@@ -51,7 +51,7 @@ export function isResearcher(user: MaybeUser): boolean {
 /** Student — access the student assignment dashboard. */
 export function canAccessStudentDashboard(user: MaybeUser): boolean {
   if (!user) return false;
-  return user.user_metadata?.role === "student";
+  return user.app_metadata?.role === "student";
 }
 
 /** Owners may invite org admins. */
@@ -72,8 +72,7 @@ export function isTeacher(user: MaybeUser): boolean {
   // Org admins teach (and manage their org) from the teacher UI.
   if (isOrgAdmin(user)) return true;
 
-  // Check user metadata for role
-  if (user.user_metadata?.role === "teacher") return true;
+  if (user.app_metadata?.role === "teacher") return true;
 
   return false;
 }

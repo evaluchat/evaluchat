@@ -2029,11 +2029,13 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     } else {
       castValues.artifact = undefined;
     }
-    // If artifact is empty/missing, check localStorage backup
-    if (!castValues.artifact && threadData.threadId) {
+    // If artifact is empty/missing, check localStorage backup for THIS thread.
+    // Use thread.thread_id — threadData.threadId may still be the previous id
+    // until React re-renders after setThreadId.
+    if (!castValues.artifact) {
       try {
         const backupRaw = localStorage.getItem(
-          `canvas_backup_${threadData.threadId}`
+          `canvas_backup_${thread.thread_id}`
         );
         if (backupRaw) {
           const { artifact: backupArtifact, timestamp } = JSON.parse(backupRaw);
@@ -2046,7 +2048,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
             // Restore to server in the background
             const client = createClient();
             void client.threads
-              .updateState(threadData.threadId, {
+              .updateState(thread.thread_id, {
                 values: { artifact: backupArtifact },
               })
               .catch(console.warn);

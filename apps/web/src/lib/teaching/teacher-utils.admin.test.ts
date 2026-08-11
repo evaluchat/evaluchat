@@ -66,7 +66,8 @@ describe("owner / org admin / teacher roles", () => {
 
   it("isTeacher is true for org admins and teachers, false for owners", () => {
     expect(isTeacher(user({ app_metadata: { role: "admin" } }))).toBe(true);
-    expect(isTeacher(user({ user_metadata: { role: "teacher" } }))).toBe(true);
+    expect(isTeacher(user({ app_metadata: { role: "teacher" } }))).toBe(true);
+    expect(isTeacher(user({ user_metadata: { role: "teacher" } }))).toBe(false);
     expect(isTeacher(user({ app_metadata: { role: "owner" } }))).toBe(false);
     expect(
       isTeacher(
@@ -81,7 +82,7 @@ describe("owner / org admin / teacher roles", () => {
   it("capability helpers gate on owner vs org admin", () => {
     const owner = user({ app_metadata: { role: "owner" } });
     const orgAdmin = user({ app_metadata: { role: "admin" } });
-    const teacher = user({ user_metadata: { role: "teacher" } });
+    const teacher = user({ app_metadata: { role: "teacher" } });
 
     expect(canInviteAdmins(owner)).toBe(true);
     expect(canInviteAdmins(orgAdmin)).toBe(false);
@@ -110,14 +111,20 @@ describe("owner / org admin / teacher roles", () => {
   });
 
   it("postLoginPath routes teacher to /teacher", () => {
+    expect(postLoginPath({ app_metadata: { role: "teacher" } })).toBe(
+      "/teacher"
+    );
     expect(postLoginPath({ user_metadata: { role: "teacher" } })).toBe(
       "/teacher"
     );
   });
 
   it("postLoginPath routes student to /student", () => {
-    expect(postLoginPath({ user_metadata: { role: "student" } })).toBe(
+    expect(postLoginPath({ app_metadata: { role: "student" } })).toBe(
       "/student"
+    );
+    expect(postLoginPath({ user_metadata: { role: "student" } })).toBe(
+      "/teacher"
     );
   });
 
@@ -136,8 +143,11 @@ describe("owner / org admin / teacher roles", () => {
     );
     expect(isResearcher(user({ app_metadata: { role: "owner" } }))).toBe(false);
     expect(
-      canAccessStudentDashboard(user({ user_metadata: { role: "student" } }))
+      canAccessStudentDashboard(user({ app_metadata: { role: "student" } }))
     ).toBe(true);
+    expect(
+      canAccessStudentDashboard(user({ user_metadata: { role: "student" } }))
+    ).toBe(false);
     expect(
       canAccessStudentDashboard(user({ user_metadata: { role: "teacher" } }))
     ).toBe(false);

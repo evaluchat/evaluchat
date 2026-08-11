@@ -95,7 +95,9 @@ export function validateApparatusConfiguration(
   configuration: ApparatusConfiguration
 ): string[] {
   const errors: string[] = [];
-  const definitionById = new Map(specification.knobs.map((knob) => [knob.id, knob]));
+  const definitionById = new Map(
+    specification.knobs.map((knob) => [knob.id, knob])
+  );
 
   for (const knobId of Object.keys(configuration)) {
     if (!definitionById.has(knobId)) {
@@ -120,15 +122,23 @@ export function validateApparatusConfiguration(
     if (knob.type === "boolean" && typeof value !== "boolean") {
       errors.push(`knob ${knob.id} must be boolean`);
     }
-    if (knob.type === "integer" && (!Number.isInteger(value) || typeof value !== "number")) {
+    if (
+      knob.type === "integer" &&
+      (!Number.isInteger(value) || typeof value !== "number")
+    ) {
       errors.push(`knob ${knob.id} must be an integer`);
     }
-    if (knob.type === "enum" && (typeof value !== "string" || !knob.values?.includes(value))) {
+    if (
+      knob.type === "enum" &&
+      (typeof value !== "string" || !knob.values?.includes(value))
+    ) {
       errors.push(`knob ${knob.id} has an unsupported value`);
     }
     if (typeof value === "number") {
-      if (knob.min !== undefined && value < knob.min) errors.push(`knob ${knob.id} is below its minimum`);
-      if (knob.max !== undefined && value > knob.max) errors.push(`knob ${knob.id} is above its maximum`);
+      if (knob.min !== undefined && value < knob.min)
+        errors.push(`knob ${knob.id} is below its minimum`);
+      if (knob.max !== undefined && value > knob.max)
+        errors.push(`knob ${knob.id} is above its maximum`);
     }
     for (const [otherId, expected] of Object.entries(knob.requires ?? {})) {
       const actual = configuration[otherId as keyof ApparatusConfiguration];
@@ -147,7 +157,11 @@ export function validateApparatusConfiguration(
   // A student must always have a place to read the assignment, author, and
   // submit. Those are capabilities, not optional treatment knobs.
   const required = new Set(specification.required_capabilities);
-  for (const capability of ["assignment-context", "student-authoring", "submission"] as const) {
+  for (const capability of [
+    "assignment-context",
+    "student-authoring",
+    "submission",
+  ] as const) {
     if (!required.has(capability)) {
       errors.push(`apparatus must provide ${capability}`);
     }

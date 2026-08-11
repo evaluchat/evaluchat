@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import { createClient } from "@/lib/supabase/server";
 import { isTrackingAllowedForThread } from "@/lib/teaching/tracking-policy";
+import { isValidTrackingId } from "@/lib/teaching/tracking-validation";
 
 const DATA_DIR = join(process.cwd(), "data", "tracking");
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { events } = await req.json();
 
     if (!Array.isArray(events) || events.length === 0) {
@@ -18,10 +29,17 @@ export async function POST(req: NextRequest) {
 
     // Extract thread_id and session_id from first event
     const firstEvent = events[0];
-    const threadId = firstEvent.threadId || "unknown";
-    const sessionId = firstEvent.sessionId || "unknown";
+    const threadId = firstEvent.threadId;
+    const sessionId = firstEvent.sessionId;
 
-    if (!(await isTrackingAllowedForThread(threadId))) {
+    if (!isValidTrackingId(threadId) || !isValidTrackingId(sessionId)) {
+      return NextResponse.json(
+        { error: "Invalid threadId or sessionId" },
+        { status: 400 }
+      );
+    }
+
+    if (!(await isTrackingAllowedForThread(threadId, user.id))) {
       return NextResponse.json({ ok: true, count: 0, trackingDisabled: true });
     }
 

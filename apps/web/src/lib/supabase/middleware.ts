@@ -95,6 +95,14 @@ function redirectWithCookies(
   return applySessionMarker(redirect, request, authed);
 }
 
+/** E2E bypass requires both server env gate and client cookie (fail closed). */
+export function isE2eBypassRequest(
+  envMode: string | undefined,
+  cookieValue: string | undefined
+): boolean {
+  return envMode === "true" && cookieValue === "true";
+}
+
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
@@ -107,8 +115,10 @@ export async function updateSession(request: NextRequest) {
 
   // E2E test mode: skip Supabase auth check
   if (
-    process.env.E2E_TEST_MODE === "true" ||
-    request.cookies.get("__e2e_test__")?.value === "true"
+    isE2eBypassRequest(
+      process.env.E2E_TEST_MODE,
+      request.cookies.get("__e2e_test__")?.value
+    )
   ) {
     return NextResponse.next({
       request,

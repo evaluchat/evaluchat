@@ -136,24 +136,18 @@ export function buildInvitationAuthUpdates(opts: {
 
   if (opts.invitation.role === "teacher") {
     return {
-      ...(opts.existingAppMetadata?.role === "admin"
-        ? { app_metadata: {} }
-        : {}),
+      app_metadata: { role: "teacher" },
       user_metadata: {
         ...baseMeta,
-        role: "teacher",
         adminId: opts.invitation.created_by,
       },
     };
   }
 
   return {
-    ...(opts.existingAppMetadata?.role === "admin"
-      ? { app_metadata: {} }
-      : {}),
+    app_metadata: { role: "student" },
     user_metadata: {
       ...baseMeta,
-      role: "student",
     },
   };
 }

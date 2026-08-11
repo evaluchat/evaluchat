@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
+import { createClient } from "@/lib/supabase/server";
 import { isTrackingAllowedForThread } from "@/lib/teaching/tracking-policy";
+import { isValidTrackingId } from "@/lib/teaching/tracking-validation";
 
 const DATA_DIR = join(process.cwd(), "data", "tracking");
 
@@ -187,13 +189,29 @@ function processSessionFile(sessionId: string, events: any[]): SessionMetrics {
 }
 
 export async function GET(req: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const threadId = req.nextUrl.searchParams.get("threadId");
 
   if (!threadId) {
     return NextResponse.json({ error: "threadId required" }, { status: 400 });
   }
 
-  if (!(await isTrackingAllowedForThread(threadId))) {
+  if (!isValidTrackingId(threadId)) {
+    return NextResponse.json(
+      { error: "Invalid threadId or sessionId" },
+      { status: 400 }
+    );
+  }
+
+  if (!(await isTrackingAllowedForThread(threadId, user.id))) {
     return NextResponse.json({
       ...EMPTY_METRICS,
       threadId,
@@ -220,6 +238,7 @@ export async function GET(req: NextRequest) {
 
     for (const file of jsonlFiles) {
       const sessionId = file.replace(".jsonl", "");
+      if (!isValidTrackingId(sessionId)) continue;
       const content = await readFile(join(threadDir, file), "utf-8");
       const events = content
         .trim()

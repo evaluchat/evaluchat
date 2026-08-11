@@ -7,7 +7,7 @@ import { getSiteUrl } from "@/lib/teaching/admin-client";
 import { finalizeSelfSignupAdmin } from "@/lib/teaching/invitation-accept";
 import { SignupWithEmailInput } from "./Signup";
 
-export async function signup(input: SignupWithEmailInput, baseUrl: string) {
+export async function signup(input: SignupWithEmailInput) {
   const supabase = await createClient();
 
   const metadata: Record<string, string> = {};
@@ -22,7 +22,7 @@ export async function signup(input: SignupWithEmailInput, baseUrl: string) {
     email: input.email,
     password: input.password,
     options: {
-      emailRedirectTo: `${(baseUrl || getSiteUrl()).replace(/\/$/, "")}/auth/confirm?next=${encodeURIComponent("/teacher")}`,
+      emailRedirectTo: `${getSiteUrl().replace(/\/$/, "")}/auth/confirm?next=${encodeURIComponent("/teacher")}`,
       data: metadata,
     },
   };

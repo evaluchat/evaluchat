@@ -153,7 +153,10 @@ export async function POST(req: Request) {
       }
     }
 
-    await writeRegistry(registry);
+    const existing = await readRegistry();
+    const submittedIds = new Set(registry.map((e) => e.assignmentId));
+    const retained = existing.filter((e) => !submittedIds.has(e.assignmentId));
+    await writeRegistry([...retained, ...registry]);
     return NextResponse.json({
       ok: true,
       count: registry.length,

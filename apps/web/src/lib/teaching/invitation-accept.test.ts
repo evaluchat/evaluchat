@@ -105,9 +105,8 @@ describe("invitation-accept helpers", () => {
       name: "Terry Teacher",
     });
 
-    expect(updates.app_metadata).toBeUndefined();
+    expect(updates.app_metadata).toEqual({ role: "teacher" });
     expect(updates.user_metadata).toEqual({
-      role: "teacher",
       adminId: "admin_1",
       name: "Terry Teacher",
       full_name: "Terry Teacher",
@@ -120,10 +119,31 @@ describe("invitation-accept helpers", () => {
       name: "Sam Student",
     });
 
+    expect(updates.app_metadata).toEqual({ role: "student" });
     expect(updates.user_metadata).toMatchObject({
-      role: "student",
       name: "Sam Student",
     });
+    expect(updates.user_metadata.role).toBeUndefined();
+  });
+
+  it("buildInvitationAuthUpdates replaces admin app_metadata on teacher convert", () => {
+    const updates = buildInvitationAuthUpdates({
+      invitation: invitation({ role: "teacher", created_by: "admin_1" }),
+      existingAppMetadata: { role: "admin" },
+      name: "Terry Teacher",
+    });
+
+    expect(updates.app_metadata).toEqual({ role: "teacher" });
+  });
+
+  it("buildInvitationAuthUpdates replaces admin app_metadata on student convert", () => {
+    const updates = buildInvitationAuthUpdates({
+      invitation: invitation({ role: "student", created_by: "teacher_1" }),
+      existingAppMetadata: { role: "admin" },
+      name: "Sam Student",
+    });
+
+    expect(updates.app_metadata).toEqual({ role: "student" });
   });
 
   it("applyInvitationOrgEffects creates org for admin accept", async () => {
@@ -224,8 +244,8 @@ describe("invitation-accept helpers", () => {
 
     expect(redirectTo).toBe("/teacher");
     expect(updateUserByIdMock).toHaveBeenCalledWith("teacher_finalize", {
+      app_metadata: { role: "teacher" },
       user_metadata: {
-        role: "teacher",
         adminId: "admin_1",
         name: "Terry Teacher",
         full_name: "Terry Teacher",

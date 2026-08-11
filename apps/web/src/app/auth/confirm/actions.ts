@@ -32,7 +32,7 @@ export async function exchangeSignupCode(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user && !user.app_metadata?.role && !user.user_metadata?.role) {
+  if (user && !user.app_metadata?.role) {
     try {
       await finalizeSelfSignupAdmin({
         user,

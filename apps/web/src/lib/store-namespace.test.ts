@@ -20,12 +20,18 @@ describe("resolveStoreNamespace", () => {
   it("keeps assistant id for memories", () => {
     expect(resolveStoreNamespace(["memories", "asst-1"], userId)).toEqual({
       ok: true,
-      namespace: ["memories", "asst-1"],
+      namespace: ["memories", userId, "asst-1"],
     });
   });
 
   it("scopes context_documents to the user", () => {
     expect(resolveStoreNamespace(["context_documents"], userId)).toEqual({
+      ok: true,
+      namespace: ["context_documents", userId],
+    });
+    expect(
+      resolveStoreNamespace(["context_documents", "evil-user"], userId)
+    ).toEqual({
       ok: true,
       namespace: ["context_documents", userId],
     });
