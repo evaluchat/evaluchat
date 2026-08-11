@@ -10,9 +10,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Evaluchat — What should we be measuring when AI is available?",
+  title:
+    "Evaluchat Canvas — Open-source research infrastructure for AI in education",
   description:
-    "AI isn't going away. Evaluchat builds tools and experiments around a simple question: what should people know, decide, explain and demonstrate when AI is available?",
+    "Evaluchat Canvas is an open-source workspace for running research apparatuses, trying methods and building inspectable evidence about AI in education.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },

@@ -20,15 +20,15 @@ export function LandingFooter() {
               <span>evaluchat</span>
             </Link>
             <p>
-              Tools and experiments for learning, thinking and working with AI.
+              Open-source infrastructure for experimenting with AI in education.
             </p>
           </div>
           <div className="foot-col">
-            <h4>Projects</h4>
+            <h4>Platform</h4>
             <a href="#canvas">Canvas</a>
-            <a href="#essays">Essays</a>
-            <a href="#research">Research</a>
-            <a href="#tools">Tools</a>
+            <a href="#apparatuses">Apparatuses</a>
+            <a href="#evidence">Evidence</a>
+            <a href="#open-source">Open source</a>
           </div>
           <div className="foot-col">
             <h4>About</h4>

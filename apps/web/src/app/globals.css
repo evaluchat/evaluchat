@@ -1600,6 +1600,283 @@
   color: #fff;
 }
 
+/* Canvas research platform */
+.landing .research-schematic {
+  width: min(100%, 520px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.landing .schematic-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.landing .schematic-file {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.landing .schematic-body {
+  padding: 26px;
+}
+.landing .schematic-label,
+.landing .platform-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-soft);
+}
+.landing .schematic-question {
+  margin-top: 8px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: clamp(20px, 2.3vw, 25px);
+  line-height: 1.34;
+  color: var(--brand);
+}
+.landing .schematic-flow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 20px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--brand-soft);
+}
+.landing .schematic-flow span {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+}
+.landing .schematic-flow i,
+.landing .evidence-flow i {
+  font-style: normal;
+  color: var(--salmon-dark);
+}
+.landing .schematic-evidence {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.landing .evidence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: none;
+  background: var(--salmon);
+}
+
+.landing .canvas-platform {
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.landing .canvas-platform h2,
+.landing .apparatuses h2,
+.landing .research h2,
+.landing .oss h2 {
+  margin-top: 14px;
+}
+.landing .platform-map {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-top: 40px;
+}
+.landing .platform-step {
+  position: relative;
+}
+.landing .platform-node {
+  height: 100%;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.landing .platform-step:nth-child(2) .platform-node {
+  background: var(--brand-mist);
+  border-color: var(--blue-border);
+}
+.landing .platform-number {
+  display: block;
+  margin-bottom: 28px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--salmon-dark);
+}
+.landing .platform-node h3 {
+  margin-top: 9px;
+  font-size: 18px;
+}
+.landing .platform-node p:not(.platform-label) {
+  margin-top: 10px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.landing .platform-arrow {
+  position: absolute;
+  top: 50%;
+  right: -16px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  border: 1px solid var(--blue-border);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--brand);
+  font-size: 16px;
+}
+
+.landing .apparatuses {
+  background: linear-gradient(
+    180deg,
+    var(--brand-mist) 0%,
+    rgba(232, 238, 246, 0.46) 100%
+  );
+  border-bottom: 1px solid var(--line);
+}
+.landing .apparatus-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 36px;
+}
+.landing .apparatus-card {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
+}
+.landing .apparatus-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--brand-soft);
+}
+.landing .apparatus-meta span:last-child {
+  color: var(--salmon-dark);
+}
+.landing .apparatus-card h3 {
+  margin-top: 30px;
+  font-size: 22px;
+}
+.landing .apparatus-card p {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.landing .apparatus-note {
+  max-width: 62ch;
+  margin-top: 24px;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-style: italic;
+  color: var(--brand);
+}
+
+.landing .research .lede {
+  max-width: 60ch;
+}
+.landing .evidence-flow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin: 38px 0 48px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.landing .evidence-flow span {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--brand);
+}
+.landing .research-principles {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.landing .research-principles > div {
+  padding: 17px 4px;
+  border-top: 1px solid var(--line);
+}
+.landing .research-principles > div:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.landing .research-principles b {
+  display: block;
+  font-size: 15px;
+}
+.landing .research-principles p {
+  margin-top: 3px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.landing .oss .lede {
+  max-width: 62ch;
+}
+.landing .open-layers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 38px;
+}
+.landing .open-layer {
+  padding: 22px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.05);
+}
+.landing .open-layer span {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+.landing .open-layer p {
+  margin-top: 9px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--dk-2);
+}
+.landing .oss .btn-primary {
+  background: var(--salmon);
+}
+.landing .oss .btn-primary:hover {
+  background: var(--salmon-hover);
+}
+
 /* responsive */
 @media (max-width: 1020px) {
   .landing .hero-inner,
@@ -1626,6 +1903,24 @@
     grid-template-columns: 1fr 1fr;
     gap: 32px;
   }
+  .landing .platform-map,
+  .landing .open-layers {
+    grid-template-columns: 1fr;
+  }
+  .landing .platform-step {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+  }
+  .landing .platform-step .platform-node {
+    width: 100%;
+  }
+  .landing .platform-arrow {
+    position: static;
+    transform: rotate(90deg);
+    margin: 0 auto;
+    flex: none;
+  }
 }
 @media (max-width: 820px) {
   .landing nav.main,
@@ -1643,7 +1938,8 @@
     grid-template-columns: 1fr 1fr;
   }
   .landing .meas-grid,
-  .landing .audcols {
+  .landing .audcols,
+  .landing .apparatus-grid {
     grid-template-columns: 1fr;
   }
   .landing .ab-grid {
@@ -1661,6 +1957,14 @@
   }
   .landing .audcol .role {
     min-height: 0;
+  }
+  .landing .evidence-flow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .landing .evidence-flow i {
+    transform: rotate(90deg);
   }
 }
 @media (max-width: 560px) {

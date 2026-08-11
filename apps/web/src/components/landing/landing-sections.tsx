@@ -12,6 +12,7 @@ function OpenCanvasButton({
 }) {
   const { user } = useUserContext();
   const href = user ? "/canvas" : "/auth/login";
+
   return (
     <a className={className} href={href}>
       {children}
@@ -24,38 +25,64 @@ export function HeroSection() {
     <section className="hero">
       <div className="container hero-inner">
         <div>
-          <span className="eyebrow">Learning in the age of AI</span>
+          <span className="eyebrow">
+            Open-source research infrastructure for AI in education
+          </span>
           <h1>
-            AI isn&apos;t going away.
+            Don&apos;t settle the question.
             <br />
-            <em>What should we be measuring?</em>
+            <em>Instrument it.</em>
           </h1>
           <p className="hero-sub">
-            <strong>Nobody knows yet. Let&apos;s find out.</strong>
+            Evaluchat Canvas is the open-source workspace for trying methods,
+            running research apparatuses and learning from what happens when AI
+            is available.
           </p>
           <div className="hero-ctas">
-            <a className="btn btn-primary" href="#canvas">
+            <OpenCanvasButton className="btn btn-primary">
               Open Canvas
               <ArrowRight className="arrow" width={15} height={15} />
+            </OpenCanvasButton>
+            <a className="btn btn-outline" href="#apparatuses">
+              Explore the apparatuses
             </a>
-            <a className="btn btn-outline" href="#present">
-              Explore the questions
-            </a>
+          </div>
+          <div className="hero-trust" aria-label="Platform foundations">
+            <span>Canvas workspace</span>
+            <span>OKF knowledge</span>
+            <span>Git provenance</span>
           </div>
         </div>
 
         <div className="hero-visual">
-          <div className="doc">
-            <video
-              className="aspect-video w-full object-cover"
-              src="/login-demo.mp4"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              aria-label="Short demo of Evaluchat coaching a writing assignment"
-            />
+          <div
+            className="research-schematic"
+            aria-label="A Canvas research apparatus turns a question into inspectable evidence"
+          >
+            <div className="schematic-head">
+              <span className="schematic-file">experiment.md</span>
+              <span className="mono-chip live">Canvas apparatus</span>
+            </div>
+            <div className="schematic-body">
+              <p className="schematic-label">Research question</p>
+              <p className="schematic-question">
+                What changes when AI is used as a critic rather than a
+                generator?
+              </p>
+              <div className="schematic-flow" aria-hidden="true">
+                <span>Canvas session</span>
+                <i>→</i>
+                <span>method</span>
+                <i>→</i>
+                <span>evidence</span>
+              </div>
+              <div className="schematic-evidence">
+                <span className="evidence-dot" />
+                <span>
+                  Reviewed contribution · methods and provenance attached
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -68,30 +95,32 @@ export function HypothesisSection() {
     <section className="hypothesis section" id="about">
       <div className="container hypo-grid">
         <div>
-          <h2>The problem is already here.</h2>
+          <h2>AI changed the conditions. Not the need for evidence.</h2>
           <p className="hypo-stand">
-            An AI can write the paper, solve the problem, find the sources.
+            An AI can write the paper, solve the problem and find the sources.
+            That does not tell us what the person using it understands.
           </p>
           <p className="hypo-stand">
-            That doesn&apos;t necessarily tell us whether the person using it
-            understands the subject.
+            Removing AI does not answer every question either. It can hide the
+            judgement, reasoning and decisions people make when AI is part of
+            the work.
           </p>
           <p className="hypo-stand">
-            But removing AI doesn&apos;t necessarily tell us what we most want
-            to know, either.
-          </p>
-          <p className="hypo-stand">
-            <strong>So what are we actually trying to measure?</strong>
+            <strong>
+              We don&apos;t know what learning and assessment should measure
+              now.
+            </strong>
           </p>
         </div>
         <div className="guide-card">
+          <p className="g-label">The shared question</p>
           <p className="g-q">
             What should people still know, decide, explain and demonstrate when
             AI is available?
           </p>
           <p className="g-sub">
-            We don&apos;t have a settled answer. We think the best way forward
-            is to test the alternatives.
+            Evaluchat does not offer a settled answer. It makes the alternatives
+            easier to try, inspect and improve together.
           </p>
         </div>
       </div>
@@ -131,9 +160,6 @@ export function MeasuresSection() {
         <p className="lede" style={{ marginTop: 28 }}>
           These abilities overlap. They aren&apos;t interchangeable.
         </p>
-        <p className="lede">
-          <strong>We don&apos;t yet know how the balance should change.</strong>
-        </p>
       </div>
     </section>
   );
@@ -156,17 +182,16 @@ const PROBLEMS = [
     p: "AI can produce ten plausible answers.",
     q: "Is producing another answer really the skill?",
   },
-  {
-    p: "AI can tutor indefinitely.",
-    q: "What should a teacher spend their time doing?",
-  },
 ];
 
 export function ProblemsSection() {
   return (
-    <section className="problems section" id="present">
+    <section className="problems section" id="questions">
       <div className="container">
-        <h2>The questions aren&apos;t theoretical.</h2>
+        <h2>Questions worth testing, not declaring.</h2>
+        <p className="lede">
+          The uncomfortable questions are already in classrooms and workplaces.
+        </p>
         <div className="prob-list">
           {PROBLEMS.map((row) => (
             <div className="prob-row" key={row.p}>
@@ -181,149 +206,114 @@ export function ProblemsSection() {
   );
 }
 
-export function BuildingSection() {
-  return (
-    <section className="section" id="building">
-      <div className="container">
-        <h2>We&apos;re building things to investigate the question.</h2>
-        <div className="meas-grid" style={{ marginTop: 36 }}>
-          <div className="meas" id="canvas">
-            <b>Canvas</b>
-            <p>
-              <strong>A document workspace for working with AI.</strong>
-            </p>
-            <p>
-              Markdown, structure, diagrams, mathematics, AI assistance and
-              clean output — without turning the document into a proprietary
-              blob.
-            </p>
-            <p>
-              <strong>Education is one audience. Not the only one.</strong>
-            </p>
-            <div className="dark-ctas" style={{ marginTop: 18 }}>
-              <OpenCanvasButton className="btn btn-primary">
-                Open Canvas
-                <ArrowRight className="arrow" width={15} height={15} />
-              </OpenCanvasButton>
-              <a
-                className="btn btn-outline"
-                href="https://github.com/evaluchat/canvas"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                View on GitHub
-              </a>
-            </div>
-          </div>
-          <div className="meas" id="essays">
-            <b>Essays</b>
-            <p>
-              <strong>A different way to use AI for writing.</strong>
-            </p>
-            <p>
-              Research. Arguments. Challenges. Drafts. Revisions. Reflection.
-            </p>
-            <p>
-              AI can be the critic, the opponent, the Socratic partner — or
-              simply a source of ideas.
-            </p>
-            <p>
-              <strong>
-                The interesting part is what the student does with it.
-              </strong>
-            </p>
-            <div className="dark-ctas" style={{ marginTop: 18 }}>
-              <a className="btn btn-outline" href="/auth/signup">
-                Explore Essays
-              </a>
-            </div>
-          </div>
-          <div className="meas" id="research-build">
-            <b>Research</b>
-            <p>
-              <strong>Find out what actually happens.</strong>
-            </p>
-            <p>
-              Experiments with learning, assessment and different ways of
-              working with AI.
-            </p>
-            <p>
-              <strong>Questions first. Evidence when we have it.</strong>
-            </p>
-            <div className="dark-ctas" style={{ marginTop: 18 }}>
-              <a
-                className="btn btn-outline"
-                href="https://github.com/evaluchat/research"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Read the research
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function StressTestSection() {
-  return (
-    <section className="freetools section">
-      <div className="container">
-        <div className="ft-feature">
-          <div>
-            <h2>Give us the assignment.</h2>
-            <p>AI can probably do more of it than you think.</p>
-            <p>
-              The interesting question is what the assignment asks the student
-              to do that AI can&apos;t simply do for them.
-            </p>
-            <p>Paste it in. We&apos;ll take a look.</p>
-            <div className="ftf-meta">
-              <span className="mono-chip wip">In development</span>
-              <button type="button" className="btn btn-outline">
-                Try the Stress Test
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const TOOL_COLS = [
+const CANVAS_LAYERS = [
   {
-    h: "For teachers",
-    tools: "Assignment analysis · Assessment redesign · AI policy · Rubrics",
+    label: "Canvas",
+    title: "A workspace for the work itself.",
+    body: "Markdown documents, workspaces, AI sessions and meaningful activity stay together instead of disappearing into a black-box chat.",
   },
   {
-    h: "For students",
-    tools:
-      "Study coaching · Argument testing · Source evaluation · Thesis challenges",
+    label: "Apparatus",
+    title: "A method made runnable.",
+    body: "A reproducible configuration of Canvas capabilities, workflow and measurement for investigating a specific research question.",
   },
   {
-    h: "For everyone",
-    tools: "Markdown → PDF · Mermaid · LaTeX · Document formatting",
+    label: "Evidence",
+    title: "An outcome others can inspect.",
+    body: "Reviewed contributions connect question, method, activity and claim—leaving room for challenge, replication and inconclusive results.",
   },
 ];
 
-export function FreeToolsSection() {
+export function BuildingSection() {
   return (
-    <section className="freetools section" id="tools">
+    <section className="canvas-platform section" id="canvas">
       <div className="container">
-        <h2>Try something useful.</h2>
-        <div className="audcols">
-          {TOOL_COLS.map((col) => (
-            <div className="audcol" key={col.h}>
-              <h3>{col.h}</h3>
-              <p>{col.tools}</p>
+        <span className="eyebrow">The common workspace</span>
+        <h2>Canvas is where research becomes practical.</h2>
+        <p className="lede">
+          Canvas is not an Essays chatbot. It is the shared, open surface where
+          documents, AI, research methods and the evidence they produce can
+          meet.
+        </p>
+        <div className="platform-map">
+          {CANVAS_LAYERS.map((layer, index) => (
+            <div className="platform-step" key={layer.label}>
+              <div className="platform-node">
+                <span className="platform-number">0{index + 1}</span>
+                <p className="platform-label">{layer.label}</p>
+                <h3>{layer.title}</h3>
+                <p>{layer.body}</p>
+              </div>
+              {index < CANVAS_LAYERS.length - 1 && (
+                <span className="platform-arrow" aria-hidden="true">
+                  →
+                </span>
+              )}
             </div>
           ))}
         </div>
-        <p className="lede" style={{ marginTop: 28 }}>
-          <strong>Free to use.</strong>
+        <div className="dark-ctas">
+          <OpenCanvasButton className="btn btn-primary">
+            Open Canvas
+            <ArrowRight className="arrow" width={15} height={15} />
+          </OpenCanvasButton>
+          <a
+            className="btn btn-outline"
+            href="https://github.com/evaluchat/canvas"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View the source
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const APPARATUSES = [
+  {
+    number: "01",
+    title: "AI-assisted Essays",
+    status: "Implemented",
+    description:
+      "A research apparatus for trying AI-assisted writing workflows, recording the process and examining the thinking behind the final artefact.",
+  },
+  {
+    number: "02",
+    title: "AI Assignment Stress Test",
+    status: "In development",
+    description:
+      "A research apparatus for examining what an assignment measures when current AI can complete part of the task—and for testing alternatives.",
+  },
+];
+
+export function ApparatusesSection() {
+  return (
+    <section className="apparatuses section" id="apparatuses">
+      <div className="container">
+        <span className="eyebrow">Research apparatuses</span>
+        <h2>First experiments, not feature tabs.</h2>
+        <p className="lede">
+          Each apparatus makes a research question runnable on Canvas. Essays
+          and the Assignment Stress Test are the first examples of an open
+          catalogue that can grow with the questions worth asking.
+        </p>
+        <div className="apparatus-grid">
+          {APPARATUSES.map((apparatus) => (
+            <article className="apparatus-card" key={apparatus.number}>
+              <div className="apparatus-meta">
+                <span>Apparatus {apparatus.number}</span>
+                <span>{apparatus.status}</span>
+              </div>
+              <h3>{apparatus.title}</h3>
+              <p>{apparatus.description}</p>
+            </article>
+          ))}
+        </div>
+        <p className="apparatus-note">
+          <strong>One Canvas, many methods.</strong> The point is not to prove
+          one answer—it is to make competing approaches testable.
         </p>
       </div>
     </section>
@@ -339,32 +329,68 @@ const RESEARCH_QUESTIONS = [
 
 export function ResearchSection() {
   return (
-    <section className="research section" id="research">
+    <section className="research section" id="evidence">
       <div className="container">
-        <h2>These are empirical questions.</h2>
-        <div className="prog-list" style={{ marginTop: 28 }}>
-          {RESEARCH_QUESTIONS.map((q, i) => (
-            <div className="prog" key={q}>
-              <span className="p-n">0{i + 1}</span>
-              <div>
-                <b>{q}</b>
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="lede" style={{ marginTop: 28 }}>
-          <strong>
-            When we have something worth reporting, we&apos;ll show our work.
-          </strong>
+        <span className="eyebrow">Evidence, not announcements</span>
+        <h2>Let the work be questioned.</h2>
+        <p className="lede">
+          Research should show what was tried, how it was measured and where a
+          claim came from—not just offer a polished conclusion.
         </p>
-        <div className="dark-ctas" style={{ marginTop: 22 }}>
+        <div className="evidence-flow" aria-label="Evidence lifecycle">
+          <span>Question</span>
+          <i>→</i>
+          <span>Method</span>
+          <i>→</i>
+          <span>Canvas activity</span>
+          <i>→</i>
+          <span>Reviewed contribution</span>
+          <i>→</i>
+          <span>Claim, challenge or replication</span>
+        </div>
+        <div className="research-grid">
+          <div>
+            <p className="measure-label">Questions we can investigate</p>
+            <div className="prog-list">
+              {RESEARCH_QUESTIONS.map((question, index) => (
+                <div className="prog" key={question}>
+                  <span className="p-n">0{index + 1}</span>
+                  <div>
+                    <b>{question}</b>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="research-principles">
+            <p className="measure-label">What makes it inspectable</p>
+            <div>
+              <b>Transparent methods</b>
+              <p>Configuration and measurements travel with the work.</p>
+            </div>
+            <div>
+              <b>Human review</b>
+              <p>
+                Teachers and researchers remain the authority on what happened.
+              </p>
+            </div>
+            <div>
+              <b>Room to disagree</b>
+              <p>
+                Challenges, replications and negative results are useful
+                outcomes.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="dark-ctas">
           <a
             className="btn btn-outline"
             href="https://github.com/evaluchat/research"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Read the research
+            Explore the research
           </a>
         </div>
       </div>
@@ -372,34 +398,53 @@ export function ResearchSection() {
   );
 }
 
+const OPEN_LAYERS = [
+  {
+    label: "Canvas",
+    text: "An MIT-licensed Markdown workspace: useful on its own and open to inspection, extension and self-hosting.",
+  },
+  {
+    label: "OKF",
+    text: "Portable Markdown and YAML knowledge that people and AI can use from the same, inspectable source material.",
+  },
+  {
+    label: "Git",
+    text: "History, attribution, review and distribution for methods, knowledge and public research contributions.",
+  },
+];
+
 export function OssSection() {
   return (
-    <section className="oss section" id="opensource">
-      <div className="container oss-inner">
-        <div>
-          <h2>Open source.</h2>
-          <p className="lede">Canvas is MIT-licensed and self-hostable.</p>
-          <p className="lede">
-            Use the hosted version if you want convenience. Run it yourself if
-            you don&apos;t.
-          </p>
-          <p className="lede">
-            The documents stay portable. The core stays open.
-          </p>
-          <div className="dark-ctas">
-            <a
-              className="btn btn-primary"
-              href="https://github.com/evaluchat/canvas"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              GitHub
-            </a>
-            <OpenCanvasButton className="btn btn-outline">
-              Open Canvas
-              <ArrowRight className="arrow" width={15} height={15} />
-            </OpenCanvasButton>
-          </div>
+    <section className="oss section" id="open-source">
+      <div className="container">
+        <span className="eyebrow on-dark">Open by design</span>
+        <h2>Research becomes more useful when it can travel.</h2>
+        <p className="lede">
+          The novelty is not a hidden model. It is applying the technologies and
+          practices of open-source projects to the work of figuring out AI in
+          education.
+        </p>
+        <div className="open-layers">
+          {OPEN_LAYERS.map((layer) => (
+            <div className="open-layer" key={layer.label}>
+              <span>{layer.label}</span>
+              <p>{layer.text}</p>
+            </div>
+          ))}
+        </div>
+        <div className="dark-ctas">
+          <a
+            className="btn btn-primary"
+            href="https://github.com/evaluchat/canvas"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View on GitHub
+          </a>
+          <OpenCanvasButton className="btn btn-ghost">
+            Open Canvas
+            <ArrowRight className="arrow" width={15} height={15} />
+          </OpenCanvasButton>
         </div>
       </div>
     </section>
@@ -410,18 +455,24 @@ export function FinalCtaSection() {
   return (
     <section className="final-cta">
       <div className="container">
-        <h2>We&apos;re going to keep asking the question.</h2>
-        <p>And build things that help us get better answers.</p>
+        <span className="eyebrow">The invitation</span>
+        <h2>Bring a question. Try a method. Show your work.</h2>
+        <p>
+          Canvas gives the experiment a place to happen. Open methods and
+          portable knowledge give the result a chance to matter.
+        </p>
         <div className="final-ctas">
           <OpenCanvasButton className="btn btn-primary">
             Open Canvas
             <ArrowRight className="arrow" width={15} height={15} />
           </OpenCanvasButton>
-          <button type="button" className="btn btn-outline">
-            Read the research
-          </button>
-          <a className="btn btn-outline" href="#tools">
-            Try a tool
+          <a
+            className="btn btn-outline"
+            href="https://github.com/evaluchat/research"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Explore the research
           </a>
         </div>
       </div>
