@@ -51,6 +51,6 @@
     "vitest": "^3.0.4"
   },
   "dependencies": {
-    "@langchain/core": "^0.3.80"
+    "@langchain/core": "^1.2.5"
   }
 }

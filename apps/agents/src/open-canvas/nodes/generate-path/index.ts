@@ -89,7 +89,7 @@ export async function generatePath(
     newMessages.push(docMessage);
   } else if (existingDocMessage) {
     const fixedMessages = await fixMisFormattedContextDocMessage(
-      existingDocMessage,
+      existingDocMessage as HumanMessage,
       config
     );
     if (fixedMessages) {

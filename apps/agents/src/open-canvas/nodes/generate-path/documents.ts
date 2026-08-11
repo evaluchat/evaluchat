@@ -60,18 +60,22 @@ export async function fixMisFormattedContextDocMessage(
 
   if (modelProvider === "openai") {
     const newContentPromises = message.content.map(async (m) => {
+      const source =
+        "source" in m && m.source && typeof m.source === "object"
+          ? (m.source as { type?: unknown; data?: unknown })
+          : undefined;
       if (
         m.type === "document" &&
-        m.source.type === "base64" &&
-        m.source.data
+        source?.type === "base64" &&
+        typeof source.data === "string"
       ) {
         changesMade = true;
         // Anthropic format
         return {
           type: "text",
-          text: await convertPDFToText(m.source.data),
+          text: await convertPDFToText(source.data),
         };
-      } else if (m.type === "application/pdf") {
+      } else if (m.type === "application/pdf" && typeof m.data === "string") {
         changesMade = true;
         // Gemini format
         return {
@@ -112,12 +116,16 @@ export async function fixMisFormattedContextDocMessage(
     }
   } else if (modelProvider === "google-genai") {
     const newContent = message.content.map((m) => {
-      if (m.type === "document") {
+      const source =
+        "source" in m && m.source && typeof m.source === "object"
+          ? (m.source as { data?: unknown })
+          : undefined;
+      if (m.type === "document" && typeof source?.data === "string") {
         changesMade = true;
         // Anthropic format
         return {
           type: "application/pdf",
-          data: m.source.data,
+          data: source.data,
         };
       }
       return m;

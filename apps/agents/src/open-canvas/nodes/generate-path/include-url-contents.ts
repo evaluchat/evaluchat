@@ -1,5 +1,5 @@
 import { FireCrawlLoader } from "@langchain/community/document_loaders/web/firecrawl";
-import { HumanMessage } from "@langchain/core/messages";
+import { BaseMessage, HumanMessage } from "@langchain/core/messages";
 import { initChatModel } from "langchain/chat_models/universal";
 import { traceable } from "langsmith/traceable";
 import z from "zod";
@@ -56,7 +56,7 @@ const fetchUrlContents = traceable(fetchUrlContentsFunc, {
  * the contents using FireCrawl. Else, it continues as normal.
  */
 async function includeURLContentsFunc(
-  message: HumanMessage,
+  message: BaseMessage,
   urls: string[]
 ): Promise<HumanMessage | undefined> {
   try {
