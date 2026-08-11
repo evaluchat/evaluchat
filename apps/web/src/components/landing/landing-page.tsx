@@ -11,7 +11,6 @@ import {
   MeasuresSection,
   ProblemsSection,
   BuildingSection,
-  ApparatusesSection,
   ResearchSection,
   OssSection,
   FinalCtaSection,
@@ -20,8 +19,7 @@ import { LandingFooter } from "./landing-footer";
 
 const NAV_LINKS = [
   { href: "#canvas", label: "Canvas" },
-  { href: "#apparatuses", label: "Apparatuses" },
-  { href: "#evidence", label: "Evidence" },
+  { href: "#research", label: "Research" },
   { href: "#open-source", label: "Open source" },
 ];
 
@@ -114,7 +112,6 @@ export function LandingPage() {
         <MeasuresSection />
         <ProblemsSection />
         <BuildingSection />
-        <ApparatusesSection />
         <ResearchSection />
         <OssSection />
         <FinalCtaSection />

@@ -1601,33 +1601,6 @@
 }
 
 /* Canvas research platform */
-.landing .research-schematic {
-  width: min(100%, 520px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-}
-.landing .schematic-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-}
-.landing .schematic-file {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--fg);
-}
-.landing .schematic-body {
-  padding: 26px;
-}
-.landing .schematic-label,
 .landing .platform-label {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -1636,50 +1609,9 @@
   text-transform: uppercase;
   color: var(--brand-soft);
 }
-.landing .schematic-question {
-  margin-top: 8px;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: clamp(20px, 2.3vw, 25px);
-  line-height: 1.34;
-  color: var(--brand);
-}
-.landing .schematic-flow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 28px 0 20px;
-  padding: 13px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  color: var(--brand-soft);
-}
-.landing .schematic-flow span {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  text-align: center;
-}
-.landing .schematic-flow i,
 .landing .evidence-flow i {
   font-style: normal;
   color: var(--salmon-dark);
-}
-.landing .schematic-evidence {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-.landing .evidence-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-top: 5px;
-  flex: none;
-  background: var(--salmon);
 }
 
 .landing .canvas-platform {
@@ -1687,7 +1619,6 @@
   border-bottom: 1px solid var(--line);
 }
 .landing .canvas-platform h2,
-.landing .apparatuses h2,
 .landing .research h2,
 .landing .oss h2 {
   margin-top: 14px;
@@ -1745,60 +1676,6 @@
   background: var(--bg);
   color: var(--brand);
   font-size: 16px;
-}
-
-.landing .apparatuses {
-  background: linear-gradient(
-    180deg,
-    var(--brand-mist) 0%,
-    rgba(232, 238, 246, 0.46) 100%
-  );
-  border-bottom: 1px solid var(--line);
-}
-.landing .apparatus-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-top: 36px;
-}
-.landing .apparatus-card {
-  padding: 28px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg);
-  box-shadow: var(--shadow-sm);
-}
-.landing .apparatus-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--brand-soft);
-}
-.landing .apparatus-meta span:last-child {
-  color: var(--salmon-dark);
-}
-.landing .apparatus-card h3 {
-  margin-top: 30px;
-  font-size: 22px;
-}
-.landing .apparatus-card p {
-  margin-top: 10px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--muted);
-}
-.landing .apparatus-note {
-  max-width: 62ch;
-  margin-top: 24px;
-  font-family: var(--font-serif);
-  font-size: 17px;
-  font-style: italic;
-  color: var(--brand);
 }
 
 .landing .research .lede {
@@ -1938,8 +1815,7 @@
     grid-template-columns: 1fr 1fr;
   }
   .landing .meas-grid,
-  .landing .audcols,
-  .landing .apparatus-grid {
+  .landing .audcols {
     grid-template-columns: 1fr;
   }
   .landing .ab-grid {

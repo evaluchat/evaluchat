@@ -25,26 +25,25 @@ export function HeroSection() {
     <section className="hero">
       <div className="container hero-inner">
         <div>
-          <span className="eyebrow">
-            Open-source research infrastructure for AI in education
-          </span>
+          <span className="eyebrow">Learning in the age of AI</span>
           <h1>
-            Don&apos;t settle the question.
+            AI isn&apos;t going away.
             <br />
-            <em>Instrument it.</em>
+            <em>What should we be measuring?</em>
           </h1>
           <p className="hero-sub">
-            Evaluchat Canvas is the open-source workspace for trying methods,
-            running research apparatuses and learning from what happens when AI
-            is available.
+            Canvas is an open-source workspace for testing how education
+            responds to AI: using it, constraining it or examining evidence of
+            its use. We make the methods visible so we can see what each one
+            actually measures.
           </p>
           <div className="hero-ctas">
             <OpenCanvasButton className="btn btn-primary">
               Open Canvas
               <ArrowRight className="arrow" width={15} height={15} />
             </OpenCanvasButton>
-            <a className="btn btn-outline" href="#apparatuses">
-              Explore the apparatuses
+            <a className="btn btn-outline" href="#research">
+              Explore the research
             </a>
           </div>
           <div className="hero-trust" aria-label="Platform foundations">
@@ -55,34 +54,17 @@ export function HeroSection() {
         </div>
 
         <div className="hero-visual">
-          <div
-            className="research-schematic"
-            aria-label="A Canvas research apparatus turns a question into inspectable evidence"
-          >
-            <div className="schematic-head">
-              <span className="schematic-file">experiment.md</span>
-              <span className="mono-chip live">Canvas apparatus</span>
-            </div>
-            <div className="schematic-body">
-              <p className="schematic-label">Research question</p>
-              <p className="schematic-question">
-                What changes when AI is used as a critic rather than a
-                generator?
-              </p>
-              <div className="schematic-flow" aria-hidden="true">
-                <span>Canvas session</span>
-                <i>→</i>
-                <span>method</span>
-                <i>→</i>
-                <span>evidence</span>
-              </div>
-              <div className="schematic-evidence">
-                <span className="evidence-dot" />
-                <span>
-                  Reviewed contribution · methods and provenance attached
-                </span>
-              </div>
-            </div>
+          <div className="doc">
+            <video
+              className="aspect-video w-full object-cover"
+              src="/login-demo.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              aria-label="Short demo of Evaluchat coaching a writing assignment"
+            />
           </div>
         </div>
       </div>
@@ -206,21 +188,21 @@ export function ProblemsSection() {
   );
 }
 
-const CANVAS_LAYERS = [
+const CANVAS_CAPABILITIES = [
   {
-    label: "Canvas",
-    title: "A workspace for the work itself.",
-    body: "Markdown documents, workspaces, AI sessions and meaningful activity stay together instead of disappearing into a black-box chat.",
+    label: "Documents",
+    title: "Markdown-native workspace",
+    body: "Write in Markdown or rich text, move between raw and rendered views, and keep the document open instead of turning it into a proprietary blob.",
   },
   {
-    label: "Apparatus",
-    title: "A method made runnable.",
-    body: "A reproducible configuration of Canvas capabilities, workflow and measurement for investigating a specific research question.",
+    label: "Thinking tools",
+    title: "Structure the method",
+    body: "Use AI-assisted editing alongside outlines, diagrams, Mermaid and LaTeX to design a method clearly enough for others to examine.",
   },
   {
-    label: "Evidence",
-    title: "An outcome others can inspect.",
-    body: "Reviewed contributions connect question, method, activity and claim—leaving room for challenge, replication and inconclusive results.",
+    label: "Portable output",
+    title: "Take the work with you",
+    body: "Create clean, shareable documents and print/PDF output without losing the structure that makes a method understandable.",
   },
 ];
 
@@ -229,14 +211,14 @@ export function BuildingSection() {
     <section className="canvas-platform section" id="canvas">
       <div className="container">
         <span className="eyebrow">The common workspace</span>
-        <h2>Canvas is where research becomes practical.</h2>
+        <h2>Canvas gives a method somewhere practical to live.</h2>
         <p className="lede">
-          Canvas is not an Essays chatbot. It is the shared, open surface where
-          documents, AI, research methods and the evidence they produce can
-          meet.
+          The implemented Canvas features are useful on their own—and give
+          teachers and researchers an open surface for designing, running and
+          explaining new ways of working with AI.
         </p>
         <div className="platform-map">
-          {CANVAS_LAYERS.map((layer, index) => (
+          {CANVAS_CAPABILITIES.map((layer, index) => (
             <div className="platform-step" key={layer.label}>
               <div className="platform-node">
                 <span className="platform-number">0{index + 1}</span>
@@ -244,7 +226,7 @@ export function BuildingSection() {
                 <h3>{layer.title}</h3>
                 <p>{layer.body}</p>
               </div>
-              {index < CANVAS_LAYERS.length - 1 && (
+              {index < CANVAS_CAPABILITIES.length - 1 && (
                 <span className="platform-arrow" aria-hidden="true">
                   →
                 </span>
@@ -259,62 +241,13 @@ export function BuildingSection() {
           </OpenCanvasButton>
           <a
             className="btn btn-outline"
-            href="https://github.com/evaluchat/canvas"
+            href="https://knowledge.evaluchat.org"
             target="_blank"
             rel="noopener noreferrer"
           >
-            View the source
+            Read Canvas documentation
           </a>
         </div>
-      </div>
-    </section>
-  );
-}
-
-const APPARATUSES = [
-  {
-    number: "01",
-    title: "AI-assisted Essays",
-    status: "Implemented",
-    description:
-      "A research apparatus for trying AI-assisted writing workflows, recording the process and examining the thinking behind the final artefact.",
-  },
-  {
-    number: "02",
-    title: "AI Assignment Stress Test",
-    status: "In development",
-    description:
-      "A research apparatus for examining what an assignment measures when current AI can complete part of the task—and for testing alternatives.",
-  },
-];
-
-export function ApparatusesSection() {
-  return (
-    <section className="apparatuses section" id="apparatuses">
-      <div className="container">
-        <span className="eyebrow">Research apparatuses</span>
-        <h2>First experiments, not feature tabs.</h2>
-        <p className="lede">
-          Each apparatus makes a research question runnable on Canvas. Essays
-          and the Assignment Stress Test are the first examples of an open
-          catalogue that can grow with the questions worth asking.
-        </p>
-        <div className="apparatus-grid">
-          {APPARATUSES.map((apparatus) => (
-            <article className="apparatus-card" key={apparatus.number}>
-              <div className="apparatus-meta">
-                <span>Apparatus {apparatus.number}</span>
-                <span>{apparatus.status}</span>
-              </div>
-              <h3>{apparatus.title}</h3>
-              <p>{apparatus.description}</p>
-            </article>
-          ))}
-        </div>
-        <p className="apparatus-note">
-          <strong>One Canvas, many methods.</strong> The point is not to prove
-          one answer—it is to make competing approaches testable.
-        </p>
       </div>
     </section>
   );
@@ -325,17 +258,20 @@ const RESEARCH_QUESTIONS = [
   "Can students recognise when AI is wrong?",
   "What remains when the AI is taken away?",
   "Does AI change what people retain and transfer?",
+  "Can revision history provide trustworthy evidence of student process—and for which learners, tasks and AI-use patterns does it mislead?",
 ];
 
 export function ResearchSection() {
   return (
-    <section className="research section" id="evidence">
+    <section className="research section" id="research">
       <div className="container">
-        <span className="eyebrow">Evidence, not announcements</span>
-        <h2>Let the work be questioned.</h2>
+        <span className="eyebrow">Research in the open</span>
+        <h2>A research programme that can evolve.</h2>
         <p className="lede">
-          Research should show what was tried, how it was measured and where a
-          claim came from—not just offer a polished conclusion.
+          No position comes preloaded. The research catalogue records evolving
+          methods that invite AI, constrain it or investigate claims about its
+          use—and asks whether each one actually serves the learning objective
+          it was designed for.
         </p>
         <div className="evidence-flow" aria-label="Evidence lifecycle">
           <span>Question</span>
@@ -344,7 +280,7 @@ export function ResearchSection() {
           <i>→</i>
           <span>Canvas activity</span>
           <i>→</i>
-          <span>Reviewed contribution</span>
+          <span>Public record</span>
           <i>→</i>
           <span>Claim, challenge or replication</span>
         </div>
@@ -386,11 +322,11 @@ export function ResearchSection() {
         <div className="dark-ctas">
           <a
             className="btn btn-outline"
-            href="https://github.com/evaluchat/research"
+            href="https://research.evaluchat.org/apparatus/index.html"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Explore the research
+            Explore the research catalogue
           </a>
         </div>
       </div>
@@ -468,11 +404,11 @@ export function FinalCtaSection() {
           </OpenCanvasButton>
           <a
             className="btn btn-outline"
-            href="https://github.com/evaluchat/research"
+            href="https://research.evaluchat.org/apparatus/index.html"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Explore the research
+            Explore the research catalogue
           </a>
         </div>
       </div>

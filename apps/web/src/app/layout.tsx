@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title:
     "Evaluchat Canvas — Open-source research infrastructure for AI in education",
   description:
-    "Evaluchat Canvas is an open-source workspace for running research apparatuses, trying methods and building inspectable evidence about AI in education.",
+    "Evaluchat Canvas is an open-source workspace for testing how education responds to AI and building inspectable evidence about what works.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
