@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -95,6 +94,12 @@ function AcceptInvitationForm() {
   const [emailConfirmationMessage, setEmailConfirmationMessage] = useState<
     string | null
   >(null);
+
+  useEffect(() => {
+    if (!token) {
+      router.replace("/auth/signup");
+    }
+  }, [router, token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -587,19 +592,7 @@ function AcceptInvitationForm() {
   );
 }
 
-export default function AcceptInvitationPage({
-  searchParams,
-}: {
-  searchParams?: { token?: string | string[] };
-}) {
-  // Direct registration has its own route. `/invite/accept` is reserved for
-  // invitations, so old no-token links cannot recreate the former unclaimed
-  // user flow.
-  const token = searchParams?.token;
-  if (!token || (Array.isArray(token) && !token[0])) {
-    redirect("/auth/signup");
-  }
-
+export default function AcceptInvitationPage() {
   return (
     <>
       <Suspense

@@ -1,16 +1,15 @@
 "use client";
 
 import { Suspense } from "react";
+import { useParams } from "next/navigation";
 import { UserProvider } from "@/contexts/UserContext";
 import { ThreadProvider } from "@/contexts/ThreadProvider";
 import { TeacherSubmissionView } from "@/components/teaching/teacher-submission-view";
 import { TeacherNestedWorkspaceShell } from "@/components/teaching/teacher-workspace-shell";
 
-interface SubmissionPageProps {
-  params: { id: string; threadId: string };
-}
+export default function SubmissionPage() {
+  const { id, threadId } = useParams<{ id: string; threadId: string }>();
 
-export default function SubmissionPage({ params }: SubmissionPageProps) {
   return (
     <Suspense
       fallback={
@@ -20,10 +19,7 @@ export default function SubmissionPage({ params }: SubmissionPageProps) {
       <UserProvider>
         <ThreadProvider>
           <TeacherNestedWorkspaceShell>
-            <TeacherSubmissionView
-              assignmentId={params.id}
-              threadId={params.threadId}
-            />
+            <TeacherSubmissionView assignmentId={id} threadId={threadId} />
           </TeacherNestedWorkspaceShell>
         </ThreadProvider>
       </UserProvider>

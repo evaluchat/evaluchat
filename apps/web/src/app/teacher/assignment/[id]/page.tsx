@@ -1,16 +1,15 @@
 "use client";
 
 import { Suspense } from "react";
+import { useParams } from "next/navigation";
 import { UserProvider } from "@/contexts/UserContext";
 import { ThreadProvider } from "@/contexts/ThreadProvider";
 import { TeacherAssignmentDetail } from "@/components/teaching/teacher-assignment-detail";
 import { TeacherNestedWorkspaceShell } from "@/components/teaching/teacher-workspace-shell";
 
-interface AssignmentPageProps {
-  params: { id: string };
-}
+export default function AssignmentDetailPage() {
+  const { id } = useParams<{ id: string }>();
 
-export default function AssignmentDetailPage({ params }: AssignmentPageProps) {
   return (
     <Suspense
       fallback={
@@ -20,7 +19,7 @@ export default function AssignmentDetailPage({ params }: AssignmentPageProps) {
       <UserProvider>
         <ThreadProvider>
           <TeacherNestedWorkspaceShell>
-            <TeacherAssignmentDetail assignmentId={params.id} />
+            <TeacherAssignmentDetail assignmentId={id} />
           </TeacherNestedWorkspaceShell>
         </ThreadProvider>
       </UserProvider>

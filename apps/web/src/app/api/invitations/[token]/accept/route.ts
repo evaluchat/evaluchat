@@ -10,7 +10,7 @@ import {
   getInvitation,
 } from "@/lib/teaching/invitation-store";
 
-type RouteContext = { params: { token: string } };
+type RouteContext = { params: Promise<{ token: string }> };
 
 /**
  * POST /api/invitations/[token]/accept
@@ -18,7 +18,7 @@ type RouteContext = { params: { token: string } };
  */
 export async function POST(req: Request, context: RouteContext) {
   try {
-    const { token } = context.params;
+    const { token } = await context.params;
     const supabase = await createClient();
     const {
       data: { user },

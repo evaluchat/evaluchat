@@ -6,7 +6,7 @@ import {
 } from "@/lib/teaching/class-store";
 import { requireAuthenticatedTeacher } from "@/lib/teaching/invitation-helpers";
 
-type RouteContext = { params: { classId: string } };
+type RouteContext = { params: Promise<{ classId: string }> };
 
 function toStudentId(supabaseUserId: string, email: string): string {
   return supabaseUserId || email;
@@ -18,7 +18,7 @@ function toStudentId(supabaseUserId: string, email: string): string {
  */
 export async function GET(_req: Request, context: RouteContext) {
   try {
-    const { classId } = context.params;
+    const { classId } = await context.params;
     const supabase = await createClient();
     const auth = await requireAuthenticatedTeacher(supabase);
     if (auth.response) {
@@ -56,7 +56,7 @@ export async function GET(_req: Request, context: RouteContext) {
  */
 export async function PUT(req: Request, context: RouteContext) {
   try {
-    const { classId } = context.params;
+    const { classId } = await context.params;
     const supabase = await createClient();
     const auth = await requireAuthenticatedTeacher(supabase);
     if (auth.response) {

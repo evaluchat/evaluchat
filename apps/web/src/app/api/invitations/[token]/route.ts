@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getInvitation } from "@/lib/teaching/invitation-store";
 import type { Invitation } from "@/lib/teaching/types";
 
-type RouteContext = { params: { token: string } };
+type RouteContext = { params: Promise<{ token: string }> };
 
 function toPublicInvitation(invitation: Invitation) {
   return {
@@ -22,7 +22,7 @@ function toPublicInvitation(invitation: Invitation) {
  */
 export async function GET(_req: Request, context: RouteContext) {
   try {
-    const { token } = context.params;
+    const { token } = await context.params;
     const invitation = await getInvitation(token);
 
     if (!invitation || invitation.status !== "pending") {

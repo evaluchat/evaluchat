@@ -6,7 +6,7 @@ import { requireAuthenticatedTeacher } from "@/lib/teaching/invitation-helpers";
 import { canReadTeacherWork } from "@/lib/teaching/org-read-scope";
 import { isOrgAdmin } from "@/lib/teaching/teacher-utils";
 
-type RouteContext = { params: { teacherId: string } };
+type RouteContext = { params: Promise<{ teacherId: string }> };
 
 /**
  * GET /api/teacher/org/teachers/[teacherId]
@@ -15,7 +15,8 @@ type RouteContext = { params: { teacherId: string } };
  */
 export async function GET(_req: Request, context: RouteContext) {
   try {
-    const teacherId = context.params.teacherId?.trim();
+    const { teacherId: rawTeacherId } = await context.params;
+    const teacherId = rawTeacherId?.trim();
     if (!teacherId) {
       return NextResponse.json({ error: "Missing teacherId" }, { status: 400 });
     }
