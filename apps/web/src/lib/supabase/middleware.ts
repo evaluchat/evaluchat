@@ -1,19 +1,14 @@
-import { isTeachingPrototype, postLoginPath } from "@/lib/teaching/config";
 import {
-  deniedTeachingRoleRedirect,
   SESSION_MARKER_COOKIE,
   sharedAuthCookieDomain,
 } from "@/lib/teaching/home-routing";
-import { isOwner, isResearcher, isTeacher } from "@/lib/teaching/teacher-utils";
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { getSupabasePublicKey, getSupabaseUrl } from "./env";
 
 /**
- * Paths that must load without a Supabase session (marketing, legal, auth,
- * tokenized invite accept). `/invite/accept` without a token redirects to
- * `/auth/signup` in the page; keep the path public so invite hash recovery
- * still works before cookies exist.
+ * Paths that must load without a Supabase session (marketing, legal, and
+ * authentication). Workspace pages and APIs are session-protected.
  */
 export function isPublicPath(pathname: string): boolean {
   const path = pathname.split("?")[0].replace(/\/+$/, "") || "/";
@@ -22,8 +17,6 @@ export function isPublicPath(pathname: string): boolean {
     path === "/privacy" ||
     path === "/terms" ||
     path.startsWith("/auth") ||
-    path.startsWith("/invite") ||
-    path.startsWith("/api/invitations") ||
     path.startsWith("/api/apparatuses")
   );
 }
@@ -106,10 +99,32 @@ export function isE2eBypassRequest(
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // /admin → /owner (roles rename); keep before auth so bookmarks still work
+  const removedPagePrefixes = [
+    "/teacher",
+    "/student",
+    "/owner",
+    "/researcher",
+    "/invite",
+  ];
+  const removedApiPrefixes = [
+    "/api/teacher",
+    "/api/teaching",
+    "/api/tracking",
+    "/api/admin",
+    "/api/invitations",
+  ];
+
+  if (removedApiPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    return NextResponse.json(
+      { error: "This product surface is no longer available" },
+      { status: 410 }
+    );
+  }
+
+  // Legacy role routes now land on the universal workspace.
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     const url = request.nextUrl.clone();
-    url.pathname = pathname.replace(/^\/admin/, "/owner");
+    url.pathname = "/workspace";
     return NextResponse.redirect(url, 308);
   }
 
@@ -171,6 +186,17 @@ export async function updateSession(request: NextRequest) {
     return applySessionMarker(supabaseResponse, request, false);
   }
 
+  if (
+    removedPagePrefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    )
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/workspace";
+    url.search = "";
+    return redirectWithCookies(url, supabaseResponse, request, true);
+  }
+
   // /auth/confirm handles hash errors + PKCE itself (including for signed-in users
   // who hit a stale confirmation link). Do not bounce them away first.
   if (
@@ -178,26 +204,9 @@ export async function updateSession(request: NextRequest) {
     !pathname.startsWith("/auth/signout") &&
     pathname !== "/auth/confirm"
   ) {
-    const targetPath = isTeachingPrototype() ? postLoginPath(user) : "/";
+    const targetPath = "/workspace";
     const url = new URL(targetPath, request.url);
     return redirectWithCookies(url, supabaseResponse, request, true);
-  }
-
-  // Teaching: role dashboards are server-gated (client guards alone are not enough).
-  if (isTeachingPrototype()) {
-    const deniedPath = deniedTeachingRoleRedirect({
-      isTeaching: true,
-      pathname,
-      isOwner: isOwner(user),
-      isTeacher: isTeacher(user),
-      isResearcher: isResearcher(user),
-    });
-    if (deniedPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = deniedPath;
-      url.search = "";
-      return redirectWithCookies(url, supabaseResponse, request, true);
-    }
   }
 
   return applySessionMarker(supabaseResponse, request, true);

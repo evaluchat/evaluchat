@@ -1,6 +1,6 @@
 "use client";
 
-import { useTeachingAssignment } from "@/contexts/TeachingAssignmentContext";
+import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 import { useGraphContext } from "@/contexts/GraphContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
 import { ArtifactV3 } from "@opencanvas/shared/types";
@@ -16,7 +16,8 @@ import { useEffect, useRef } from "react";
  * reinitialisation.
  */
 export function useAssignmentCanvasBootstrap() {
-  const { assignment } = useTeachingAssignment();
+  const assignmentContext = useTeachingAssignmentOptional();
+  const assignment = assignmentContext?.assignment;
   const { graphData } = useGraphContext();
   const { setThreadId, threadId } = useThreadContext();
   const bootstrappedIdRef = useRef<string | null>(null);

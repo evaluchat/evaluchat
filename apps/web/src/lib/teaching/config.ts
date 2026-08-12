@@ -15,23 +15,11 @@ export function isTeachingPrototype(): boolean {
  * A direct registration (including OAuth) is always completed as an org admin.
  */
 export function postLoginPath(
-  user?: {
+  _user?: {
     email?: string;
     app_metadata?: Record<string, unknown>;
     user_metadata?: Record<string, unknown>;
   } | null
 ): string {
-  // Platform owner — invite org admins
-  if (user?.app_metadata?.role === "owner") return "/owner";
-
-  // Org admin (app_metadata) — teaches + manages org from /teacher
-  if (user?.app_metadata?.role === "admin") return "/teacher";
-
-  if (user?.app_metadata?.role === "teacher") return "/teacher";
-
-  if (user?.app_metadata?.role === "student") return "/student";
-
-  // OAuth users do not carry a role until the callback finalises registration.
-  // Keep the destination deterministic if claim propagation is delayed.
-  return "/teacher";
+  return "/workspace";
 }

@@ -97,40 +97,42 @@ describe("owner / org admin / teacher roles", () => {
     expect(canTopUpCredits(teacher)).toBe(false);
   });
 
-  it("postLoginPath routes owner to /owner", () => {
-    expect(postLoginPath({ app_metadata: { role: "owner" } })).toBe("/owner");
+  it("postLoginPath routes every retained user to /workspace", () => {
+    expect(postLoginPath({ app_metadata: { role: "owner" } })).toBe(
+      "/workspace"
+    );
   });
 
-  it("postLoginPath routes org admin to /teacher", () => {
+  it("postLoginPath ignores legacy organisation roles", () => {
     expect(
       postLoginPath({
         app_metadata: { role: "admin" },
         user_metadata: { role: "teacher" },
       })
-    ).toBe("/teacher");
+    ).toBe("/workspace");
   });
 
-  it("postLoginPath routes teacher to /teacher", () => {
+  it("postLoginPath routes legacy teacher claims to /workspace", () => {
     expect(postLoginPath({ app_metadata: { role: "teacher" } })).toBe(
-      "/teacher"
+      "/workspace"
     );
     expect(postLoginPath({ user_metadata: { role: "teacher" } })).toBe(
-      "/teacher"
+      "/workspace"
     );
   });
 
-  it("postLoginPath routes student to /student", () => {
+  it("postLoginPath routes legacy student claims to /workspace", () => {
     expect(postLoginPath({ app_metadata: { role: "student" } })).toBe(
-      "/student"
+      "/workspace"
     );
     expect(postLoginPath({ user_metadata: { role: "student" } })).toBe(
-      "/teacher"
+      "/workspace"
     );
   });
 
   it("routes legacy researcher claims to the org workspace", () => {
     expect(postLoginPath({ user_metadata: { role: "researcher" } })).toBe(
-      "/teacher"
+      "/workspace"
     );
   });
 
@@ -155,10 +157,10 @@ describe("owner / org admin / teacher roles", () => {
 
   it("routes role-less (fresh OAuth) users to the org workspace", () => {
     expect(postLoginPath({ app_metadata: { provider: "google" } })).toBe(
-      "/teacher"
+      "/workspace"
     );
-    expect(postLoginPath({})).toBe("/teacher");
-    expect(postLoginPath(null)).toBe("/teacher");
+    expect(postLoginPath({})).toBe("/workspace");
+    expect(postLoginPath(null)).toBe("/workspace");
   });
 
   it("keeps direct registration on the org workspace when apparatus env is absent", () => {
@@ -167,7 +169,7 @@ describe("owner / org admin / teacher roles", () => {
     delete process.env.NEXT_PUBLIC_TEACHING_PROTOTYPE;
     delete process.env.NEXT_PUBLIC_APPARATUSES;
     try {
-      expect(postLoginPath({})).toBe("/teacher");
+      expect(postLoginPath({})).toBe("/workspace");
     } finally {
       if (previous === undefined) {
         delete process.env.NEXT_PUBLIC_TEACHING_PROTOTYPE;
@@ -182,12 +184,12 @@ describe("owner / org admin / teacher roles", () => {
     }
   });
 
-  it("postLoginPath routes TEST_TEACHER_EMAIL to /teacher", () => {
+  it("postLoginPath ignores legacy test-user routing", () => {
     const prev = process.env.TEST_TEACHER_EMAIL;
     process.env.TEST_TEACHER_EMAIL = "test-teacher@example.com";
     try {
       expect(postLoginPath({ email: "test-teacher@example.com" })).toBe(
-        "/teacher"
+        "/workspace"
       );
     } finally {
       if (prev === undefined) {

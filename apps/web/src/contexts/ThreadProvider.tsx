@@ -30,7 +30,10 @@ type ThreadContentType = {
   modelConfigs: Record<ALL_MODEL_NAMES, CustomModelConfig>;
   createThreadLoading: boolean;
   getThread: (id: string) => Promise<Thread | undefined>;
-  createThread: (assignmentId?: string) => Promise<Thread | undefined>;
+  createThread: (
+    assignmentId?: string,
+    workspaceItemId?: string
+  ) => Promise<Thread | undefined>;
   findThreadByAssignment: (assignmentId: string) => Promise<Thread | undefined>;
   getActiveThread: (assignmentId: string) => Promise<Thread | undefined>;
   getAllThreadsForAssignment: (assignmentId: string) => Promise<Thread[]>;
@@ -46,7 +49,13 @@ type ThreadContentType = {
 
 const ThreadContext = createContext<ThreadContentType | undefined>(undefined);
 
-export function ThreadProvider({ children }: { children: ReactNode }) {
+export function ThreadProvider({
+  children,
+  workspaceItemId,
+}: {
+  children: ReactNode;
+  workspaceItemId?: string;
+}) {
   const { user, getUser, loading: userLoading } = useUserContext();
   const { toast } = useToast();
   const [threadId, setThreadId] = useQueryState("threadId");
@@ -156,7 +165,8 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
   };
 
   const createThread = async (
-    assignmentId?: string
+    assignmentId?: string,
+    workspaceItemIdOverride?: string
   ): Promise<Thread | undefined> => {
     // Wait for auth to resolve instead of relying on stale closure
     let currentUser = user;
@@ -182,6 +192,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     }
     const client = createClient();
     setCreateThreadLoading(true);
+    const ownedWorkspaceItemId = workspaceItemIdOverride ?? workspaceItemId;
 
     try {
       // Reuse an incomplete active thread; allow minting when only submitted
@@ -205,6 +216,9 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
         metadata: {
           supabase_user_id: currentUser.id,
           ...(assignmentId ? { assignment_id: assignmentId } : {}),
+          ...(ownedWorkspaceItemId
+            ? { workspace_item_id: ownedWorkspaceItemId }
+            : {}),
           customModelName: modelName,
           modelConfig: {
             ...modelConfig,
@@ -217,6 +231,21 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
       });
 
       setThreadId(thread.thread_id);
+      if (ownedWorkspaceItemId) {
+        try {
+          await fetch(
+            `/api/workspace/items/${encodeURIComponent(ownedWorkspaceItemId)}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ threadId: thread.thread_id }),
+            }
+          );
+        } catch (error) {
+          console.error("Failed to attach workspace thread", error);
+        }
+      }
       if (assignmentId) {
         try {
           const cache = JSON.parse(

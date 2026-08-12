@@ -13,13 +13,12 @@ describe("middleware public routes", () => {
     expect(matcher.test("/api/tracking/events")).toBe(true);
   });
 
-  it("treats privacy, terms, auth, and invite accept as unauthenticated public paths", () => {
+  it("treats privacy, terms, and auth as unauthenticated public paths", () => {
     expect(isPublicPath("/privacy")).toBe(true);
     expect(isPublicPath("/terms")).toBe(true);
     expect(isPublicPath("/auth/login")).toBe(true);
     expect(isPublicPath("/auth/signup")).toBe(true);
-    expect(isPublicPath("/invite/accept")).toBe(true);
-    expect(isPublicPath("/invite/accept?token=abc")).toBe(true);
+    expect(isPublicPath("/invite/accept")).toBe(false);
     expect(isPublicPath("/teacher")).toBe(false);
     expect(isPublicPath("/student")).toBe(false);
     expect(isPublicPath("/privacy-extra")).toBe(false);
@@ -37,7 +36,7 @@ describe("middleware public routes", () => {
     expect(unauthenticatedPageRedirect("/auth/login")).toBeNull();
     expect(unauthenticatedPageRedirect("/privacy")).toBeNull();
     expect(unauthenticatedPageRedirect("/terms")).toBeNull();
-    expect(unauthenticatedPageRedirect("/invite/accept")).toBeNull();
+    expect(unauthenticatedPageRedirect("/invite/accept")).toBe("/auth/login");
 
     // Data APIs already 401 server-side — do not HTML-redirect them.
     expect(unauthenticatedPageRedirect("/api/teaching/assignments")).toBeNull();

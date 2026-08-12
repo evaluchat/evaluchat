@@ -12,6 +12,8 @@ import {
 import { getCustomAssignmentById } from "../../../lib/teaching/assignment-file-store";
 import { getSeedAssignmentById } from "../../../lib/teaching/seed-loader";
 import { resolveApparatusConfiguration } from "../../../lib/apparatuses/runtime";
+import { getWorkspaceItem } from "../../../lib/workspace/store";
+import { enforceWorkspaceThreadPolicy } from "../../../lib/workspace/thread-policy";
 
 function getCorsHeaders() {
   return {
@@ -43,6 +45,13 @@ async function assertThreadOwnership(
   const thread = await res.json();
   if (!threadOwnerMatches(thread?.metadata, authenticatedUserId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const workspaceItemId = thread?.metadata?.workspace_item_id;
+  if (typeof workspaceItemId === "string") {
+    const item = await getWorkspaceItem(authenticatedUserId, workspaceItemId);
+    if (!item)
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   return null;
@@ -147,7 +156,9 @@ async function handleRequest(req: NextRequest, method: string) {
             if (classification.kind === "thread_by_id") {
               const threadRes = await fetch(
                 `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
-                { headers: { "x-api-key": process.env.LANGCHAIN_API_KEY || "" } }
+                {
+                  headers: { "x-api-key": process.env.LANGCHAIN_API_KEY || "" },
+                }
               );
               const thread = threadRes.ok ? await threadRes.json() : null;
               assignmentId = thread?.metadata?.assignment_id;
@@ -182,6 +193,55 @@ async function handleRequest(req: NextRequest, method: string) {
             parsedBody.metadata,
             user.id
           );
+        }
+
+        // Workspace threads are server-bound to an owned item. The browser may
+        // propose the item id, but it cannot choose its contents, guidance, or
+        // assistant. Existing workspace threads are resolved again for every
+        // run so forged config values never reach LangGraph.
+        let workspaceItemId: unknown = isThreadCreate(method, classification)
+          ? parsedBody.metadata?.workspace_item_id
+          : undefined;
+        if (classification.kind === "thread_by_id") {
+          const threadRes = await fetch(
+            `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
+            { headers: { "x-api-key": process.env.LANGCHAIN_API_KEY || "" } }
+          );
+          if (threadRes.ok) {
+            const thread = await threadRes.json();
+            workspaceItemId = thread?.metadata?.workspace_item_id;
+          }
+        }
+
+        if (workspaceItemId !== undefined) {
+          if (typeof workspaceItemId !== "string" || !workspaceItemId) {
+            return NextResponse.json(
+              { error: "Invalid workspace item" },
+              { status: 403 }
+            );
+          }
+          const workspaceItem = await getWorkspaceItem(
+            user.id,
+            workspaceItemId
+          );
+          if (!workspaceItem) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+          }
+
+          Object.assign(
+            parsedBody,
+            enforceWorkspaceThreadPolicy(
+              parsedBody,
+              workspaceItem,
+              user.id,
+              process.env.EVALUCHAT_WORKSPACE_ASSISTANT_ID || "agent"
+            )
+          );
+          if (isThreadCreate(method, classification)) {
+            // assistant_id is a run field; keep thread creation payloads
+            // limited to thread metadata/configuration.
+            delete parsedBody.assistant_id;
+          }
         }
 
         // POST /threads/search — force metadata filter to this user.

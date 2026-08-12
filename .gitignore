@@ -65,6 +65,7 @@ data/
 !apps/web/data/
 apps/web/data/*
 !apps/web/data/apparatuses.generated.json
+!apps/web/data/template-catalog.json
 test-results/
 playwright-report/
 .env.drill

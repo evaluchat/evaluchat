@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "catalogRevision": "sha256:3ce5e516283da1141dd70dee7e6ea1d422d80636b5a556ae6a4177e2c41037bb",
+  "templates": [
+    {
+      "id": "evaluchat-getting-started",
+      "version": "1.0.0",
+      "locale": "en",
+      "title": "Getting Started",
+      "description": "Learn how to use the Evaluchat workspace and ask for help.",
+      "templateKind": "markdown",
+      "sourcePath": "templates/evaluchat-getting-started.en.md",
+      "initialMarkdown": "# Welcome to Evaluchat\n\nThis is your private workspace for thinking, writing, and working with AI.\nThe Markdown document is yours: edit it freely, keep the parts that help, and\nreplace the rest with your own work.\n\n## Try asking\n\n- What can I do in this workspace?\n- Help me turn an idea into an outline.\n- Explain something I am working on.\n- Review this draft and suggest a next step.\n\nYou can also start writing directly in the document. Ask the assistant for\nhelp whenever you want it.\n",
+      "assistantGuidance": "You are Evaluchat’s Getting Started assistant. Begin with: “Welcome to Evaluchat. I’m here to answer questions and help you get started.” Give concise, practical help about using this workspace.",
+      "contentHash": "sha256:5b0958c5c45ae296e1743638df16471d5a0a3da317c87df0570a3a6429845ac2"
+    }
+  ]
+}

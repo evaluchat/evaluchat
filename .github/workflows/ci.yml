@@ -125,6 +125,34 @@ jobs:
       - name: Build all packages
         run: yarn build
 
+  template-catalog:
+    name: Verify public template catalog snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check out public Knowledge templates
+        uses: actions/checkout@v6
+        with:
+          repository: evaluchat/knowledge
+          ref: dev
+          path: knowledge-source
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: "yarn"
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      - name: Generate catalog from evaluchat/knowledge@dev
+        run: yarn generate:templates
+        env:
+          EVALUCHAT_TEMPLATE_SOURCE_ROOT: ${{ github.workspace }}/knowledge-source/templates
+          EVALUCHAT_TEMPLATE_CATALOG_OUTPUT: ${{ runner.temp }}/template-catalog.json
+      - name: Verify committed snapshot
+        run: diff -u apps/web/data/template-catalog.json "${{ runner.temp }}/template-catalog.json"
+
   desktop:
     name: Desktop
     runs-on: ubuntu-latest

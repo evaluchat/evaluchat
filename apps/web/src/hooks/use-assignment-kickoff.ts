@@ -2,7 +2,7 @@
 
 import { useAssistantContext } from "@/contexts/AssistantContext";
 import { useGraphContext } from "@/contexts/GraphContext";
-import { useTeachingAssignment } from "@/contexts/TeachingAssignmentContext";
+import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 import { useUserContext } from "@/contexts/UserContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
 import { convertToOpenAIFormat } from "@/lib/convert_messages";
@@ -21,7 +21,9 @@ import { v4 as uuidv4 } from "uuid";
 
 /** After assignment canvas loads, request the coach's opening chat message (LLM). */
 export function useAssignmentKickoff() {
-  const { assignment, apparatusConfiguration } = useTeachingAssignment();
+  const assignmentContext = useTeachingAssignmentOptional();
+  const assignment = assignmentContext?.assignment;
+  const apparatusConfiguration = assignmentContext?.apparatusConfiguration;
   const { user } = useUserContext();
   const { selectedAssistant } = useAssistantContext();
   const { graphData } = useGraphContext();

@@ -71,7 +71,8 @@ import {
 import { debounce } from "lodash";
 import { useThreadContext } from "./ThreadProvider";
 import { useAssistantContext } from "./AssistantContext";
-import { useTeachingAssignment } from "./TeachingAssignmentContext";
+import { useTeachingAssignmentOptional } from "./TeachingAssignmentContext";
+import { useWorkspaceItemOptional } from "./WorkspaceItemContext";
 import { useQueryState } from "nuqs";
 import {
   findBlockInMarkdown,
@@ -165,12 +166,15 @@ function extractStreamDataOutput(output: any) {
 export function GraphProvider({ children }: { children: ReactNode }) {
   const userData = useUserContext();
   const assistantsData = useAssistantContext();
-  const {
-    systemPrompt: assignmentSystemPrompt,
-    assignmentId: assignmentIdParam,
-    assignment: teachingAssignment,
-    apparatusConfiguration,
-  } = useTeachingAssignment();
+  const teachingAssignmentContext = useTeachingAssignmentOptional();
+  const workspaceItem = useWorkspaceItemOptional();
+  const teachingAssignment = teachingAssignmentContext?.assignment;
+  const assignmentIdParam = teachingAssignmentContext?.assignmentId ?? null;
+  const assignmentSystemPrompt =
+    teachingAssignmentContext?.systemPrompt ??
+    workspaceItem?.item?.templateSnapshot.assistantGuidance;
+  const apparatusConfiguration =
+    teachingAssignmentContext?.apparatusConfiguration;
   const threadData = useThreadContext();
   const { toast } = useToast();
   const [chatStarted, setChatStarted] = useState(false);
@@ -1860,6 +1864,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     // Persist teaching progress to thread metadata
     if (
       threadData.threadId &&
+      teachingAssignment &&
       assignmentSystemPrompt &&
       apparatusConfiguration?.tracking !== false
     ) {

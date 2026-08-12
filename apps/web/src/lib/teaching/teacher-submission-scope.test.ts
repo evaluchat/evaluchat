@@ -12,6 +12,7 @@ function thread(userId: string, id = userId): Thread {
     thread_id: id,
     created_at: "",
     updated_at: "",
+    state_updated_at: "",
     metadata: {
       supabase_user_id: userId,
       assignment_id: "great-expectations-essay",

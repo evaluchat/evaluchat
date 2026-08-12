@@ -216,7 +216,11 @@ describe("invitation-accept helpers", () => {
 
   it("finalizeAcceptedInvitation updates Auth and creates org for admin", async () => {
     const { redirectTo } = await finalizeAcceptedInvitation({
-      user: { id: "admin_finalize", user_metadata: { foo: "bar" } },
+      user: {
+        id: "admin_finalize",
+        user_metadata: { foo: "bar" },
+        app_metadata: {},
+      },
       invitation: invitation({ role: "admin", created_by: "owner_1" }),
       name: "Ada Admin",
     });
@@ -237,7 +241,7 @@ describe("invitation-accept helpers", () => {
     await createOrg({ adminUserId: "admin_1" });
 
     const { redirectTo } = await finalizeAcceptedInvitation({
-      user: { id: "teacher_finalize", user_metadata: {} },
+      user: { id: "teacher_finalize", user_metadata: {}, app_metadata: {} },
       invitation: invitation({ role: "teacher", created_by: "admin_1" }),
       name: "Terry Teacher",
     });

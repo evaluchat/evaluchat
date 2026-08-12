@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient, createActionClient } from "@/lib/supabase/server";
 import { postLoginPath } from "@/lib/teaching/config";
+import { ensureDefaultWorkspaceItem } from "@/lib/workspace/store";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
@@ -36,6 +37,12 @@ export async function login(formData: FormData) {
   if (data.session) {
     const ssrClient = await createClient();
     await ssrClient.auth.setSession(data.session);
+  }
+
+  try {
+    await ensureDefaultWorkspaceItem(data.user.id);
+  } catch (workspaceError) {
+    console.error("Failed to initialize workspace", workspaceError);
   }
 
   revalidatePath("/", "layout");

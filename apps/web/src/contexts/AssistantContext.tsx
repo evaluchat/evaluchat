@@ -7,6 +7,7 @@ import {
   ReactNode,
   SetStateAction,
   useContext,
+  useEffect,
   useState,
 } from "react";
 import { createClient } from "@/hooks/utils";
@@ -98,7 +99,13 @@ const AssistantContext = createContext<AssistantContentType | undefined>(
   undefined
 );
 
-export function AssistantProvider({ children }: { children: ReactNode }) {
+export function AssistantProvider({
+  children,
+  workspaceMode: workspaceModeProp = false,
+}: {
+  children: ReactNode;
+  workspaceMode?: boolean;
+}) {
   const { toast } = useToast();
   const [isLoadingAllAssistants, setIsLoadingAllAssistants] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
@@ -106,6 +113,45 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [isEditingAssistant, setIsEditingAssistant] = useState(false);
   const [assistants, setAssistants] = useState<Assistant[]>([]);
   const [selectedAssistant, setSelectedAssistant] = useState<Assistant>();
+
+  const fixedWorkspaceAssistant = (assistantId: string): Assistant =>
+    ({
+      assistant_id: assistantId,
+      graph_id: "agent",
+      name: "Evaluchat",
+      description: "Evaluchat workspace assistant",
+      metadata: { workspace: true },
+      config: { configurable: {} },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }) as unknown as Assistant;
+
+  const [workspaceMode, setWorkspaceMode] = useState(workspaceModeProp);
+
+  useEffect(() => {
+    setWorkspaceMode(workspaceModeProp);
+  }, [workspaceModeProp]);
+
+  useEffect(() => {
+    // The fixed assistant id is server configuration. Fetching it here keeps
+    // the secret-bearing environment variable out of the client bundle.
+    if (!workspaceMode) return;
+    let cancelled = false;
+    setIsLoadingAllAssistants(true);
+    fetch("/api/workspace/config", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .catch(() => ({ assistantId: "agent" }))
+      .then(({ assistantId }: { assistantId: string }) => {
+        if (cancelled) return;
+        const assistant = fixedWorkspaceAssistant(assistantId || "agent");
+        setAssistants([assistant]);
+        setSelectedAssistant(assistant);
+        setIsLoadingAllAssistants(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceMode]);
 
   const getAssistants = async (userId: string): Promise<void> => {
     setIsLoadingAllAssistants(true);
@@ -304,6 +350,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   };
 
   const getOrCreateAssistant = async (userId: string) => {
+    if (workspaceMode) return;
     if (selectedAssistant) {
       return;
     }

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/teaching/admin-client";
-import { finalizeSelfSignupAdmin } from "@/lib/teaching/invitation-accept";
+import { ensureDefaultWorkspaceItem } from "@/lib/workspace/store";
 import { SignupWithEmailInput } from "./Signup";
 
 export async function signup(input: SignupWithEmailInput) {
@@ -22,7 +22,7 @@ export async function signup(input: SignupWithEmailInput) {
     email: input.email,
     password: input.password,
     options: {
-      emailRedirectTo: `${getSiteUrl().replace(/\/$/, "")}/auth/confirm?next=${encodeURIComponent("/teacher")}`,
+      emailRedirectTo: `${getSiteUrl().replace(/\/$/, "")}/auth/confirm?next=${encodeURIComponent("/workspace")}`,
       data: metadata,
     },
   };
@@ -34,23 +34,15 @@ export async function signup(input: SignupWithEmailInput) {
     redirect("/auth/signup?error=true");
   }
 
-  if (signUpData.user) {
-    try {
-      await finalizeSelfSignupAdmin({
-        user: signUpData.user,
-        name: input.name?.trim() || input.email,
-      });
-    } catch (finalizeError) {
-      console.error(
-        "[auth/signup] failed to create organisation:",
-        finalizeError
-      );
-      redirect("/auth/signup?error=true");
-    }
-  }
-
   if (signUpData.session) {
-    redirect("/teacher");
+    if (signUpData.user) {
+      try {
+        await ensureDefaultWorkspaceItem(signUpData.user.id);
+      } catch (workspaceError) {
+        console.error("Failed to initialize workspace", workspaceError);
+      }
+    }
+    redirect("/workspace");
   }
 
   redirect("/auth/signup/success");

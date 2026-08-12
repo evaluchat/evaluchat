@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 // The client you created from the Server-Side Auth instructions
 import { createClient } from "@/lib/supabase/server";
-import { finalizeSelfSignupAdmin } from "@/lib/teaching/invitation-accept";
 import { postLoginPath } from "@/lib/teaching/config";
+import { ensureDefaultWorkspaceItem } from "@/lib/workspace/store";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -17,23 +17,11 @@ export async function GET(request: Request) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (user && !user.app_metadata?.role) {
+      if (user) {
         try {
-          await finalizeSelfSignupAdmin({
-            user,
-            name:
-              (typeof user.user_metadata?.full_name === "string"
-                ? user.user_metadata.full_name
-                : undefined) ||
-              (typeof user.user_metadata?.name === "string"
-                ? user.user_metadata.name
-                : undefined) ||
-              user.email ||
-              "Evaluchat user",
-          });
-        } catch (finalizeError) {
-          console.error("[auth/callback] failed to create organisation:", finalizeError);
-          return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+          await ensureDefaultWorkspaceItem(user.id);
+        } catch (workspaceError) {
+          console.error("Failed to initialize workspace", workspaceError);
         }
       }
       const next =

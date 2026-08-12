@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "generate:apparatus": "tsx scripts/generate-apparatus-mirror.ts",
+    "generate:templates": "tsx scripts/generate-template-catalog.ts",
     "build": "turbo build",
     "turbo:command": "turbo",
     "format": "turbo format",
