@@ -411,6 +411,17 @@ export function GraphProvider({ children }: { children: ReactNode }) {
             values: threadValues,
           };
           const emptyKickoff = isEmptyKickoffThread(scored);
+          const workspaceItemId = workspaceItem?.item?.id;
+          const isWorkspaceThread = Boolean(
+            workspaceItemId &&
+              (thread.metadata as Record<string, unknown> | undefined)
+                ?.workspace_item_id === workspaceItemId
+          );
+          // A workspace item intentionally starts with a short starter
+          // document, so its hidden kickoff must not be mistaken for an
+          // empty teaching thread. The workspace ownership marker is added
+          // server-side and keeps this exception scoped to the current item.
+          const treatAsEmptyKickoff = emptyKickoff && !isWorkspaceThread;
 
           const hasContent =
             threadValues &&
@@ -418,10 +429,10 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               (threadValues.messages as unknown[]).length > 0) ||
               threadValues.artifact);
 
-          if (hasContent && !emptyKickoff) {
+          if (hasContent && !treatAsEmptyKickoff) {
             lastLoadedThreadIdFromQuery.current = threadData.threadId;
             threadLoadRetries.current = 0;
-          } else if (emptyKickoff && assignmentIdParam && !isStreaming) {
+          } else if (treatAsEmptyKickoff && assignmentIdParam && !isStreaming) {
             // URL/cache pointed at an empty kickoff — resume richer *incomplete*
             // sibling if any. Never jump to a submitted thread (read-only, no Send).
             try {
@@ -530,7 +541,14 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     };
 
     tryLoadThread();
-  }, [threadData.threadId, userData.user, isStreaming]);
+  }, [
+    threadData.threadId,
+    userData.user,
+    isStreaming,
+    workspaceItem?.item?.id,
+    workspaceItem?.item?.threadId,
+    workspaceItem?.loading,
+  ]);
 
   const updateArtifact = async (
     artifactToUpdate: ArtifactV3,
