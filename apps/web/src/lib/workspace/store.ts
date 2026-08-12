@@ -11,6 +11,20 @@ import { getTemplateById, getTemplateCatalog } from "./template-catalog";
 const MANIFEST_KEY = "manifest";
 const locks = new Map<string, Promise<void>>();
 
+export class WorkspaceItemNotFoundError extends Error {
+  constructor() {
+    super("Workspace item not found");
+    this.name = "WorkspaceItemNotFoundError";
+  }
+}
+
+export class WorkspaceThreadOwnershipError extends Error {
+  constructor() {
+    super("Workspace thread does not belong to the workspace item");
+    this.name = "WorkspaceThreadOwnershipError";
+  }
+}
+
 function client(): Client {
   return new Client({
     apiUrl: LANGGRAPH_API_URL,
@@ -26,9 +40,10 @@ async function readManifest(userId: string): Promise<WorkspaceManifest> {
   const item = await client().store.getItem(namespace(userId), MANIFEST_KEY);
   const value = item?.value as Partial<WorkspaceManifest> | undefined;
   if (!value || typeof value !== "object" || !value.items) {
-    return { items: {} };
+    return { initialized: false, items: {} };
   }
   return {
+    initialized: value.initialized === true,
     defaultItemId:
       typeof value.defaultItemId === "string" ? value.defaultItemId : undefined,
     items: value.items as Record<string, WorkspaceItem>,
@@ -103,7 +118,7 @@ function createItem(userId: string, templateId: string): WorkspaceItem {
 
 export async function ensureDefaultWorkspaceItem(
   userId: string
-): Promise<WorkspaceItem> {
+): Promise<WorkspaceItem | undefined> {
   return withUserLock(userId, async () => {
     const manifest = await readManifest(userId);
     const existing = manifest.defaultItemId
@@ -112,14 +127,21 @@ export async function ensureDefaultWorkspaceItem(
           a.createdAt.localeCompare(b.createdAt)
         )[0];
     if (existing) {
-      if (!manifest.defaultItemId) {
+      if (!manifest.defaultItemId || !manifest.initialized) {
         manifest.defaultItemId = existing.id;
+        manifest.initialized = true;
         await writeManifest(userId, manifest);
       }
       return existing;
     }
 
+    // Once a user has explicitly initialized their workspace, an empty
+    // manifest is intentional. In particular, deleting the original
+    // Getting Started item must not recreate it on the next login/list.
+    if (manifest.initialized) return undefined;
+
     const item = createItem(userId, DEFAULT_WORKSPACE_TEMPLATE_ID);
+    manifest.initialized = true;
     manifest.defaultItemId = item.id;
     manifest.items[item.id] = item;
     await writeManifest(userId, manifest);
@@ -143,9 +165,73 @@ export async function createWorkspaceItem(
   return withUserLock(userId, async () => {
     const manifest = await readManifest(userId);
     const item = createItem(userId, templateId);
+    manifest.initialized = true;
     manifest.items[item.id] = item;
     await writeManifest(userId, manifest);
     return item;
+  });
+}
+
+function isMissingThreadError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown };
+    message?: unknown;
+  };
+  return (
+    candidate.status === 404 ||
+    candidate.statusCode === 404 ||
+    candidate.response?.status === 404 ||
+    (typeof candidate.message === "string" &&
+      /(?:404|not found)/i.test(candidate.message))
+  );
+}
+
+export async function deleteWorkspaceItem(
+  userId: string,
+  itemId: string
+): Promise<void> {
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const item = manifest.items[itemId];
+    if (!item || item.ownerId !== userId || item.status !== "active") {
+      throw new WorkspaceItemNotFoundError();
+    }
+
+    if (item.threadId) {
+      let thread: Awaited<ReturnType<Client["threads"]["get"]>> | undefined;
+      try {
+        thread = await client().threads.get(item.threadId);
+      } catch (error) {
+        if (!isMissingThreadError(error)) throw error;
+      }
+
+      if (thread) {
+        const metadata = (thread.metadata || {}) as Record<string, unknown>;
+        if (
+          metadata.user_id !== userId ||
+          metadata.workspace_item_id !== itemId
+        ) {
+          throw new WorkspaceThreadOwnershipError();
+        }
+        try {
+          await client().threads.delete(item.threadId);
+        } catch (error) {
+          // A concurrent cleanup is safe: deletion is intentionally
+          // idempotent for already-missing LangGraph threads.
+          if (!isMissingThreadError(error)) throw error;
+        }
+      }
+    }
+
+    delete manifest.items[itemId];
+    if (manifest.defaultItemId === itemId) {
+      delete manifest.defaultItemId;
+    }
+    manifest.initialized = true;
+    await writeManifest(userId, manifest);
   });
 }
 

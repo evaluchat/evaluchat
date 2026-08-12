@@ -42,6 +42,7 @@ export interface ArtifactRendererProps {
   setIsEditing: React.Dispatch<React.SetStateAction<boolean>>;
   chatCollapsed: boolean;
   setChatCollapsed: (c: boolean) => void;
+  minimalCanvas?: boolean;
 }
 
 interface SelectionBox {
@@ -56,6 +57,8 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const teachingAssignment = useTeachingAssignmentOptional();
   const aiCanvasActions =
     teachingAssignment?.apparatusConfiguration?.ai_canvas_actions !== false;
+  const minimalCanvas = props.minimalCanvas ?? true;
+  const showCanvasActions = aiCanvasActions && !minimalCanvas;
   const { user } = useUserContext();
   const {
     artifact,
@@ -97,6 +100,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const [showPrintView, setShowPrintView] = useState(false);
 
   const handleMouseUp = useCallback(() => {
+    if (!showCanvasActions) return;
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0 && contentRef.current) {
       const range = selection.getRangeAt(0);
@@ -146,7 +150,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         }
       }
     }
-  }, []);
+  }, [showCanvasActions]);
 
   const handleCleanupState = () => {
     setIsInputVisible(false);
@@ -227,6 +231,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   );
 
   useEffect(() => {
+    if (!showCanvasActions) return;
     document.addEventListener("mouseup", handleMouseUp);
     document.addEventListener("mousedown", handleDocumentMouseDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -236,13 +241,18 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
       document.removeEventListener("mousedown", handleDocumentMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleMouseUp, handleDocumentMouseDown, handleKeyDown]);
+  }, [
+    handleMouseUp,
+    handleDocumentMouseDown,
+    handleKeyDown,
+    showCanvasActions,
+  ]);
 
   // Re-render highlights when the scroll container scrolls so they move with the text.
   // The highlight overlay lives outside the TextRenderer's overflow-y-auto container,
   // so without this listener the highlights stay at fixed viewport positions while text scrolls.
   useEffect(() => {
-    if (!isSelectionActive) return;
+    if (!showCanvasActions || !isSelectionActive) return;
 
     let rafId: number | null = null;
     const handleScroll = () => {
@@ -265,7 +275,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
       } as EventListenerOptions);
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [isSelectionActive]);
+  }, [isSelectionActive, showCanvasActions]);
 
   useEffect(() => {
     try {
@@ -276,7 +286,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         // Clear existing highlights
         highlightLayer.innerHTML = "";
 
-        if (isSelectionActive && selectionBox) {
+        if (showCanvasActions && isSelectionActive && selectionBox) {
           const range = selectionRangeRef.current;
 
           if (range && content.contains(range.commonAncestorContainer)) {
@@ -339,9 +349,10 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     } catch (e) {
       console.error("Failed to get artifact selection", e);
     }
-  }, [isSelectionActive, selectionBox, scrollTick]);
+  }, [isSelectionActive, selectionBox, scrollTick, showCanvasActions]);
 
   useEffect(() => {
+    if (!showCanvasActions) return;
     const handleKeyPress = (e: KeyboardEvent) => {
       // Check if we're in an input/textarea element
       const activeElement = document.activeElement;
@@ -368,7 +379,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
 
     document.addEventListener("keydown", handleKeyPress);
     return () => document.removeEventListener("keydown", handleKeyPress);
-  }, [isInputVisible, selectionBox, isSelectionActive]);
+  }, [isInputVisible, selectionBox, isSelectionActive, showCanvasActions]);
 
   const currentArtifactContent = artifact
     ? getArtifactContent(artifact)
@@ -385,6 +396,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   return (
     <div className="relative w-full h-full max-h-screen overflow-auto">
       <ArtifactHeader
+        minimalCanvas={minimalCanvas}
         isArtifactSaved={isArtifactSaved}
         currentArtifactContent={currentArtifactContent}
         selectedAssistant={selectedAssistant}
@@ -428,6 +440,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
             {currentArtifactContent.type === "text" ? (
               <Suspense fallback={<div>Loading...</div>}>
                 <TextRenderer
+                  minimalCanvas={minimalCanvas}
                   isInputVisible={isInputVisible}
                   isEditing={props.isEditing}
                   isHovering={isHoveringOverArtifact}
@@ -449,23 +462,26 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
             className="absolute top-0 left-0 w-full h-full pointer-events-none"
           />
         </div>
-        {aiCanvasActions && selectionBox && isSelectionActive && isValidSelectionOrigin && (
-          <AskOpenCanvas
-            ref={selectionBoxRef}
-            inputValue={inputValue}
-            setInputValue={setInputValue}
-            isInputVisible={isInputVisible}
-            selectionBox={selectionBox}
-            setIsInputVisible={setIsInputVisible}
-            handleSubmitMessage={handleSubmit}
-            handleSelectionBoxMouseDown={handleSelectionBoxMouseDown}
-            artifact={artifact}
-            selectionIndexes={selectionIndexes}
-            handleCleanupState={handleCleanupState}
-          />
-        )}
+        {showCanvasActions &&
+          selectionBox &&
+          isSelectionActive &&
+          isValidSelectionOrigin && (
+            <AskOpenCanvas
+              ref={selectionBoxRef}
+              inputValue={inputValue}
+              setInputValue={setInputValue}
+              isInputVisible={isInputVisible}
+              selectionBox={selectionBox}
+              setIsInputVisible={setIsInputVisible}
+              handleSubmitMessage={handleSubmit}
+              handleSelectionBoxMouseDown={handleSelectionBoxMouseDown}
+              artifact={artifact}
+              selectionIndexes={selectionIndexes}
+              handleCleanupState={handleCleanupState}
+            />
+          )}
       </div>
-      {aiCanvasActions && (
+      {showCanvasActions && (
         <>
           <CustomQuickActions
             streamMessage={streamMessage}

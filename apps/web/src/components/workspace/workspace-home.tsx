@@ -2,14 +2,68 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, LogOut } from "lucide-react";
+import {
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  LogOut,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateWorkspaceItemDialog } from "./create-workspace-item-dialog";
 import type { WorkspaceItem } from "@/lib/workspace/types";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  workspaceNavGhostClass,
+  WorkspaceSiteHeader,
+} from "@/components/teaching/workspace-site-header";
+import { DOCS_URL } from "@/components/auth/login/login-branding";
+import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
+import { useToast } from "@/hooks/use-toast";
+import {
+  formatWorkspaceItemDate,
+  workspaceItemType,
+} from "@/lib/workspace/display";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+function WorkspaceItemTypeIcon({ item }: { item: WorkspaceItem }) {
+  const type = workspaceItemType(item);
+  const Icon =
+    item.kind === "form_template"
+      ? ClipboardList
+      : item.kind === "method"
+        ? FlaskConical
+        : FileText;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${type.colorClass}`}
+            role="img"
+            aria-label={type.label}
+          >
+            <Icon className={`h-5 w-5 ${type.iconClass}`} aria-hidden />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{type.label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 export function WorkspaceHome() {
   const [items, setItems] = useState<WorkspaceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [itemToDelete, setItemToDelete] = useState<WorkspaceItem>();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetch("/api/workspace/items", { credentials: "include" })
@@ -19,75 +73,129 @@ export function WorkspaceHome() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function deleteItem() {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(
+        `/api/workspace/items/${encodeURIComponent(itemToDelete.id)}`,
+        { method: "DELETE", credentials: "include" }
+      );
+      if (!response.ok) throw new Error("Could not delete workspace item");
+      setItems((current) =>
+        current.filter((item) => item.id !== itemToDelete.id)
+      );
+      setItemToDelete(undefined);
+    } catch (error) {
+      console.error("Failed to delete workspace item", error);
+      toast({
+        title: "Could not delete item",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link
-            href="/workspace"
-            className="text-lg font-semibold tracking-tight"
-          >
-            Evaluchat
-          </Link>
-          <div className="flex items-center gap-2">
-            <CreateWorkspaceItemDialog
-              onCreated={(item) => setItems((current) => [item, ...current])}
-            />
-            <Link href="/auth/signout" aria-label="Sign out">
-              <Button variant="ghost" size="icon">
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-      <section className="mx-auto max-w-6xl px-6 py-12">
-        <div className="mb-8 max-w-2xl">
-          <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
-            Your workspace
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-            Start with a question. Make something useful.
-          </h1>
-          <p className="mt-3 text-slate-600">
-            Each item is private to you. Open a guide, ask for help, or replace
-            the template with your own Markdown.
-          </p>
+      <WorkspaceSiteHeader workspaceLabel="Workspace" maxWidthClass="max-w-6xl">
+        <a
+          href={DOCS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={workspaceNavGhostClass}
+        >
+          Docs
+        </a>
+        <Link href="/auth/signout" className={workspaceNavGhostClass}>
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </Link>
+      </WorkspaceSiteHeader>
+      <section className="mx-auto flex h-[calc(100vh-60px)] max-w-5xl flex-col overflow-hidden px-4 py-6 sm:px-6">
+        <div className="mb-4 flex justify-end">
+          <CreateWorkspaceItemDialog
+            onCreated={(item) => setItems((current) => [item, ...current])}
+          />
         </div>
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading workspace…</p>
+        ) : items.length === 0 ? (
+          <Card className="border-dashed bg-white/70">
+            <CardContent className="flex min-h-40 flex-col items-center justify-center gap-3 text-center">
+              <p className="font-medium text-slate-900">
+                Your workspace is empty
+              </p>
+              <p className="max-w-md text-sm text-slate-600">
+                Create a reviewed workspace item when you are ready to start.
+              </p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
             {items.map((item) => (
-              <article
+              <Card
                 key={item.id}
-                className="flex min-h-56 flex-col justify-between rounded-xl border bg-white p-5 shadow-sm"
+                className="shrink-0 bg-white transition-colors hover:bg-slate-50"
               >
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {item.templateSnapshot.title.toUpperCase()}
-                  </p>
-                  <h2 className="mt-4 text-xl font-medium text-slate-900">
-                    {item.templateSnapshot.title}
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {item.templateSnapshot.description}
-                  </p>
-                </div>
-                <Link href={`/workspace/items/${item.id}`}>
-                  <Button
-                    variant="outline"
-                    className="mt-6 w-full justify-between"
+                <CardContent className="flex items-center gap-3 px-4 py-3 sm:gap-4">
+                  <WorkspaceItemTypeIcon item={item} />
+                  <Link
+                    href={`/workspace/items/${item.id}`}
+                    className="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    Open guide
-                    <ArrowUpRight className="h-4 w-4" />
+                    <p className="truncate text-base font-medium text-slate-900">
+                      {item.templateSnapshot.title}
+                    </p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <p
+                            className="truncate text-sm text-slate-500"
+                            title={item.templateSnapshot.description}
+                          >
+                            {item.templateSnapshot.description}
+                          </p>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-sm">
+                          {item.templateSnapshot.description}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </Link>
+                  <time
+                    dateTime={item.createdAt}
+                    title={new Date(item.createdAt).toLocaleString()}
+                    className="shrink-0 text-[11px] tabular-nums text-slate-500 sm:text-xs"
+                  >
+                    {formatWorkspaceItemDate(item.createdAt)}
+                  </time>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Delete ${item.templateSnapshot.title}`}
+                    data-testid={`delete-workspace-item-${item.id}`}
+                    onClick={() => setItemToDelete(item)}
+                  >
+                    <Trash2 className="h-4 w-4 text-slate-500" />
                   </Button>
-                </Link>
-              </article>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
       </section>
+      {itemToDelete && (
+        <WorkspaceItemDeleteDialog
+          open={Boolean(itemToDelete)}
+          onOpenChange={(open) => !open && setItemToDelete(undefined)}
+          onConfirm={() => void deleteItem()}
+          itemTitle={itemToDelete.templateSnapshot.title}
+          isDeleting={isDeleting}
+        />
+      )}
     </main>
   );
 }

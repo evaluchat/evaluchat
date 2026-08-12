@@ -3,7 +3,7 @@ export const DEFAULT_WORKSPACE_TEMPLATE_ID = "evaluchat-getting-started";
 export type WorkspaceItem = {
   id: string;
   ownerId: string;
-  kind: "markdown_template";
+  kind: "markdown_template" | "form_template" | "method";
   status: "active";
   createdAt: string;
   updatedAt: string;
@@ -24,6 +24,7 @@ export type WorkspaceItem = {
 };
 
 export type WorkspaceManifest = {
+  initialized: boolean;
   defaultItemId?: string;
   items: Record<string, WorkspaceItem>;
 };

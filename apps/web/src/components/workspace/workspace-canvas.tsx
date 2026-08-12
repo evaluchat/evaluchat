@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HumanMessage } from "@langchain/core/messages";
 import { v4 as uuidv4 } from "uuid";
 import { Canvas } from "@/components/canvas";
@@ -10,14 +10,45 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useWorkspaceItem } from "@/contexts/WorkspaceItemContext";
 import { convertToOpenAIFormat } from "@/lib/convert_messages";
 import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
+import { WorkspaceItemBanner } from "./workspace-item-banner";
+import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
 
 export function WorkspaceCanvas() {
   const { item, loading } = useWorkspaceItem();
   const { user } = useUserContext();
   const { threadId, setThreadId } = useThreadContext();
   const { graphData } = useGraphContext();
+  const router = useRouter();
+  const { toast } = useToast();
   const bootstrappedItem = useRef<string | null>(null);
   const kickedOffItem = useRef<string | null>(null);
+  const [abandonOpen, setAbandonOpen] = useState(false);
+  const [isAbandoning, setIsAbandoning] = useState(false);
+
+  async function abandonItem() {
+    if (!item) return;
+    setIsAbandoning(true);
+    try {
+      const response = await fetch(
+        `/api/workspace/items/${encodeURIComponent(item.id)}`,
+        { method: "DELETE", credentials: "include" }
+      );
+      if (!response.ok) throw new Error("Could not abandon workspace item");
+      setAbandonOpen(false);
+      router.push("/workspace");
+    } catch (error) {
+      console.error("Failed to abandon workspace item", error);
+      toast({
+        title: "Could not abandon item",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAbandoning(false);
+    }
+  }
 
   useEffect(() => {
     if (!item || loading || bootstrappedItem.current === item.id) return;
@@ -100,5 +131,24 @@ export function WorkspaceCanvas() {
     );
   }
 
-  return <Canvas />;
+  return (
+    <>
+      <Canvas
+        editorBanner={
+          <WorkspaceItemBanner
+            item={item}
+            onAbandon={() => setAbandonOpen(true)}
+          />
+        }
+      />
+      <WorkspaceItemDeleteDialog
+        open={abandonOpen}
+        onOpenChange={setAbandonOpen}
+        onConfirm={() => void abandonItem()}
+        itemTitle={item.templateSnapshot.title}
+        isDeleting={isAbandoning}
+        confirmLabel="Abandon"
+      />
+    </>
+  );
 }

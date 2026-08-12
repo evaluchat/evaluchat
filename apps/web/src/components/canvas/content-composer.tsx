@@ -49,6 +49,7 @@ export interface ContentComposerChatInterfaceProps {
   ) => void;
   chatCollapsed: boolean;
   setChatCollapsed: (c: boolean) => void;
+  minimalCanvas?: boolean;
   hideQuickStartButtons?: boolean;
   quickStartPrompts?: string[];
 }
@@ -176,6 +177,7 @@ export function ContentComposerChatInterfaceComponent(
           switchSelectedThreadCallback={props.switchSelectedThreadCallback}
           searchEnabled={searchEnabled}
           setChatCollapsed={props.setChatCollapsed}
+          minimalCanvas={props.minimalCanvas}
           hideQuickStartButtons={props.hideQuickStartButtons}
           quickStartPrompts={props.quickStartPrompts}
         />

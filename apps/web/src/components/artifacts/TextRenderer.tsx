@@ -125,6 +125,7 @@ export interface TextRendererProps {
   isEditing: boolean;
   isHovering: boolean;
   isInputVisible: boolean;
+  minimalCanvas?: boolean;
   editorRef?: React.MutableRefObject<any | null>;
 }
 
@@ -531,7 +532,7 @@ export function TextRendererComponent(props: TextRendererProps) {
         onKeep={handleKeep}
         onUndo={handleUndo}
       />
-      {(props.isHovering || isRawView) && artifact && (
+      {!props.minimalCanvas && (props.isHovering || isRawView) && artifact && (
         <div className="absolute flex gap-2 top-2 right-4 z-10">
           <CopyText currentArtifactContent={getArtifactContent(artifact)} />
           <ViewRawText isRawView={isRawView} onToggle={toggleRawView} />
@@ -563,17 +564,21 @@ export function TextRendererComponent(props: TextRendererProps) {
             data-tracking-id="canvas-editor"
             data-testid="canvas-editor"
           >
-            <FormattingToolbarController
-              formattingToolbar={CustomFormattingToolbar as any}
-            />
-            <SuggestionMenuController
-              getItems={async () =>
-                getDefaultReactSlashMenuItems(editor).filter(
-                  (z) => z.group !== "Media"
-                )
-              }
-              triggerCharacter={"/"}
-            />
+            {!props.minimalCanvas && (
+              <FormattingToolbarController
+                formattingToolbar={CustomFormattingToolbar as any}
+              />
+            )}
+            {!props.minimalCanvas && (
+              <SuggestionMenuController
+                getItems={async () =>
+                  getDefaultReactSlashMenuItems(editor).filter(
+                    (z) => z.group !== "Media"
+                  )
+                }
+                triggerCharacter={"/"}
+              />
+            )}
           </BlockNoteView>
         </>
       )}

@@ -43,6 +43,7 @@ export interface ThreadProps {
   switchSelectedThreadCallback: (thread: ThreadType) => void;
   searchEnabled: boolean;
   setChatCollapsed: (c: boolean) => void;
+  minimalCanvas?: boolean;
   disabled?: boolean;
   hideQuickStartButtons?: boolean;
   quickStartPrompts?: string[];
@@ -55,6 +56,7 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
     handleQuickStart,
     switchSelectedThreadCallback,
   } = props;
+  const minimalCanvas = props.minimalCanvas ?? true;
   const { toast } = useToast();
   const {
     graphData: { clearState, runId, feedbackSubmitted, setFeedbackSubmitted },
@@ -97,10 +99,12 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
     <ThreadPrimitive.Root className="flex h-full min-h-0 w-full flex-col">
       <div className="pr-3 pl-6 pt-3 pb-2 flex flex-row gap-4 items-center justify-between">
         <div className="flex items-center justify-start gap-2 text-gray-600">
-          <ThreadHistory
-            switchSelectedThreadCallback={switchSelectedThreadCallback}
-          />
-          {!hasChatStarted && (
+          {!minimalCanvas && (
+            <ThreadHistory
+              switchSelectedThreadCallback={switchSelectedThreadCallback}
+            />
+          )}
+          {!minimalCanvas && !hasChatStarted && (
             <ModelSelector
               modelName={modelName}
               setModelName={setModelName}
@@ -121,24 +125,26 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
             >
               <PanelRightOpen className="text-gray-600" />
             </TooltipIconButton>
-            <TooltipIconButton
-              tooltip="New chat"
-              variant="ghost"
-              className="w-8 h-8"
-              delayDuration={400}
-              onClick={handleNewSession}
-            >
-              <SquarePen className="text-gray-600" />
-            </TooltipIconButton>
+            {!minimalCanvas && (
+              <TooltipIconButton
+                tooltip="New chat"
+                variant="ghost"
+                className="w-8 h-8"
+                delayDuration={400}
+                onClick={handleNewSession}
+              >
+                <SquarePen className="text-gray-600" />
+              </TooltipIconButton>
+            )}
           </div>
-        ) : (
+        ) : !minimalCanvas ? (
           <div className="flex flex-row gap-2 items-center">
             <ReflectionsDialog selectedAssistant={selectedAssistant} />
           </div>
-        )}
+        ) : null}
       </div>
       <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto scroll-smooth bg-inherit px-4 pt-4">
-        {!hasChatStarted && (
+        {!hasChatStarted && !minimalCanvas && (
           <ThreadWelcome
             handleQuickStart={handleQuickStart}
             composer={
@@ -172,22 +178,32 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
       <div className="mt-auto flex w-full shrink-0 flex-col items-center justify-end rounded-t-lg border-t bg-inherit px-4 pb-4 pt-3">
         <ThreadScrollToBottom />
         <div className="w-full max-w-2xl">
-          {hasChatStarted && (
-            <div className="flex flex-col space-y-2">
-              <ModelSelector
-                modelName={modelName}
-                setModelName={setModelName}
-                modelConfig={modelConfig}
-                setModelConfig={setModelConfig}
-                modelConfigs={modelConfigs}
-              />
-              <Composer
-                chatStarted={true}
-                userId={props.userId}
-                searchEnabled={props.searchEnabled}
-                disabled={props.disabled}
-              />
-            </div>
+          {minimalCanvas ? (
+            <Composer
+              chatStarted={hasChatStarted}
+              userId={props.userId}
+              searchEnabled={props.searchEnabled}
+              disabled={props.disabled}
+              minimalCanvas
+            />
+          ) : (
+            hasChatStarted && (
+              <div className="flex flex-col space-y-2">
+                <ModelSelector
+                  modelName={modelName}
+                  setModelName={setModelName}
+                  modelConfig={modelConfig}
+                  setModelConfig={setModelConfig}
+                  modelConfigs={modelConfigs}
+                />
+                <Composer
+                  chatStarted
+                  userId={props.userId}
+                  searchEnabled={props.searchEnabled}
+                  disabled={props.disabled}
+                />
+              </div>
+            )
           )}
         </div>
       </div>

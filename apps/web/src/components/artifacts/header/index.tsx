@@ -16,6 +16,7 @@ interface ArtifactHeaderProps {
   blockNoteEditorRef?: React.MutableRefObject<any | null>;
   onTitleChange?: (newTitle: string) => void;
   onPrint?: () => void;
+  minimalCanvas?: boolean;
 }
 
 export function ArtifactHeader(props: ArtifactHeaderProps) {
@@ -55,7 +56,9 @@ export function ArtifactHeader(props: ArtifactHeaderProps) {
         {props.blockNoteEditorRef && (
           <UndoRedoButtons editorRef={props.blockNoteEditorRef} />
         )}
-        <ReflectionsDialog selectedAssistant={props.selectedAssistant} />
+        {!props.minimalCanvas && (
+          <ReflectionsDialog selectedAssistant={props.selectedAssistant} />
+        )}
       </div>
     </div>
   );

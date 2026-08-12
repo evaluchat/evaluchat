@@ -46,7 +46,17 @@ import { CanvasLoading } from "@/components/canvas/canavas-loading";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 
-export function CanvasComponent() {
+export interface CanvasProps {
+  /** Optional editor-level banner rendered inside the canvas height budget. */
+  editorBanner?: React.ReactNode;
+  /** The default canvas is intentionally reduced to the core writing flow. */
+  minimalCanvas?: boolean;
+}
+
+export function CanvasComponent({
+  editorBanner,
+  minimalCanvas = true,
+}: CanvasProps = {}) {
   const { graphData } = useGraphContext();
   const { setModelName, setModelConfig, threadId } = useThreadContext();
   const {
@@ -243,6 +253,7 @@ export function CanvasComponent() {
 
   return (
     <div className="flex h-screen flex-col">
+      {editorBanner}
       {activeAssignment && (
         <>
           <AssignmentWorkspaceBanner
@@ -259,6 +270,7 @@ export function CanvasComponent() {
           <NoSSRWrapper>
             <Suspense fallback={<div>Loading...</div>}>
               <ContentComposerChatInterface
+                minimalCanvas={minimalCanvas}
                 chatCollapsed={chatCollapsed}
                 setChatCollapsed={(c) => {
                   setChatCollapsed(c);
@@ -326,6 +338,7 @@ export function CanvasComponent() {
             <NoSSRWrapper>
               <Suspense fallback={<div>Loading...</div>}>
                 <ContentComposerChatInterface
+                  minimalCanvas={minimalCanvas}
                   chatCollapsed={chatCollapsed}
                   setChatCollapsed={(c) => {
                     setChatCollapsed(c);
@@ -396,6 +409,7 @@ export function CanvasComponent() {
               <div className="w-full ml-auto">
                 <Suspense fallback={<div>Loading...</div>}>
                   <ArtifactRenderer
+                    minimalCanvas={minimalCanvas}
                     chatCollapsed={chatCollapsed}
                     setChatCollapsed={(c) => {
                       setChatCollapsed(c);
