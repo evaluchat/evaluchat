@@ -8,6 +8,8 @@ export function listApparatuses(): ApparatusCatalogEntry[] {
   return APPARATUS_CATALOG;
 }
 
-export function getApparatusById(id: string): ApparatusCatalogEntry | undefined {
+export function getApparatusById(
+  id: string
+): ApparatusCatalogEntry | undefined {
   return APPARATUS_CATALOG.find((a) => a.id === id);
 }

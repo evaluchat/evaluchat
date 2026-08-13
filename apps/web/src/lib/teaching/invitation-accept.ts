@@ -40,7 +40,9 @@ async function hasRegistryEntriesForAssignments(
  * their personal organisation is genuinely empty. This protects existing
  * rosters and submissions from silently changing ownership.
  */
-async function assertAdminOrganisationCanConvert(userId: string): Promise<void> {
+async function assertAdminOrganisationCanConvert(
+  userId: string
+): Promise<void> {
   const org = await getOrgByAdmin(userId);
   if (!org) return;
 

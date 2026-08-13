@@ -1,4 +1,8 @@
-import type { AssignmentLifecycleStatus, AssignmentTier, StudentAssignment } from "./types";
+import type {
+  AssignmentLifecycleStatus,
+  AssignmentTier,
+  StudentAssignment,
+} from "./types";
 
 /**
  * Education assignments are free in the public beta.  These helpers keep

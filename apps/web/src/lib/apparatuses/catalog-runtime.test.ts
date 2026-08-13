@@ -4,7 +4,9 @@ import { validateApparatusConfiguration } from "@opencanvas/shared";
 
 describe("generated apparatus catalog", () => {
   it("contains the canonical Essays profile and contrasting valid paths", () => {
-    const essays = APPARATUS_CATALOG.find((entry) => entry.id === "ai-assisted-essay");
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    );
     expect(essays).toBeDefined();
     expect(essays?.profiles.map((profile) => profile.id)).toEqual([
       "canonical-constrained-dialogue",
@@ -15,12 +17,16 @@ describe("generated apparatus catalog", () => {
     ]);
 
     for (const profile of essays?.profiles ?? []) {
-      expect(validateApparatusConfiguration(essays!, profile.configuration)).toEqual([]);
+      expect(
+        validateApparatusConfiguration(essays!, profile.configuration)
+      ).toEqual([]);
     }
   });
 
   it("rejects unknown capabilities, incompatible canvas versions, and non-viable workflows", () => {
-    const essays = APPARATUS_CATALOG.find((entry) => entry.id === "ai-assisted-essay")!;
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
 
     expect(() =>
       validateApparatusCatalog([
@@ -48,7 +54,9 @@ describe("generated apparatus catalog", () => {
   });
 
   it("rejects profiles whose knobs violate treatment dependencies", () => {
-    const essays = APPARATUS_CATALOG.find((entry) => entry.id === "ai-assisted-essay")!;
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
     expect(() =>
       validateApparatusCatalog([
         {
@@ -69,12 +77,18 @@ describe("generated apparatus catalog", () => {
   });
 
   it("accepts every supported optional-capability combination with a viable workflow", () => {
-    const essays = APPARATUS_CATALOG.find((entry) => entry.id === "ai-assisted-essay")!;
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
     const valid: unknown[] = [];
 
     for (const ai_assistance of [false, true]) {
       for (const ai_canvas_actions of [false, true]) {
-        for (const drafting_gate of ["none", "discussion-first", "thesis-approved"] as const) {
+        for (const drafting_gate of [
+          "none",
+          "discussion-first",
+          "thesis-approved",
+        ] as const) {
           for (const threshold of [0, 1, 4]) {
             for (const tracking of [false, true]) {
               const configuration = {
@@ -84,7 +98,10 @@ describe("generated apparatus catalog", () => {
                 threshold,
                 tracking,
               };
-              if (validateApparatusConfiguration(essays, configuration).length === 0) {
+              if (
+                validateApparatusConfiguration(essays, configuration).length ===
+                0
+              ) {
                 valid.push(configuration);
               }
             }
@@ -96,8 +113,16 @@ describe("generated apparatus catalog", () => {
     expect(valid.length).toBeGreaterThan(0);
     expect(valid).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ ai_assistance: false, ai_canvas_actions: false, drafting_gate: "none" }),
-        expect.objectContaining({ ai_assistance: true, drafting_gate: "none", threshold: 0 }),
+        expect.objectContaining({
+          ai_assistance: false,
+          ai_canvas_actions: false,
+          drafting_gate: "none",
+        }),
+        expect.objectContaining({
+          ai_assistance: true,
+          drafting_gate: "none",
+          threshold: 0,
+        }),
         expect.objectContaining({ tracking: false }),
       ])
     );

@@ -53,13 +53,45 @@ const FALLBACK_STUB_CATALOG: ApparatusCatalogEntry[] = [
     status: "stable",
     research_questions: ["threshold-calibration"],
     roles: ["student", "teacher", "org-admin"],
-    required_capabilities: ["assignment-context", "student-authoring", "submission"],
+    required_capabilities: [
+      "assignment-context",
+      "student-authoring",
+      "submission",
+    ],
     knobs: [
-      { id: "ai_assistance", type: "boolean", default: true, effect: "AI assistance" },
-      { id: "ai_canvas_actions", type: "boolean", default: true, effect: "AI editing actions" },
-      { id: "drafting_gate", type: "enum", values: ["none", "discussion-first", "thesis-approved"], default: "discussion-first", effect: "Drafting gate" },
-      { id: "threshold", type: "integer", min: 0, max: 100, default: 4, effect: "Escape hatch threshold" },
-      { id: "tracking", type: "boolean", default: true, effect: "Process telemetry" },
+      {
+        id: "ai_assistance",
+        type: "boolean",
+        default: true,
+        effect: "AI assistance",
+      },
+      {
+        id: "ai_canvas_actions",
+        type: "boolean",
+        default: true,
+        effect: "AI editing actions",
+      },
+      {
+        id: "drafting_gate",
+        type: "enum",
+        values: ["none", "discussion-first", "thesis-approved"],
+        default: "discussion-first",
+        effect: "Drafting gate",
+      },
+      {
+        id: "threshold",
+        type: "integer",
+        min: 0,
+        max: 100,
+        default: 4,
+        effect: "Escape hatch threshold",
+      },
+      {
+        id: "tracking",
+        type: "boolean",
+        default: true,
+        effect: "Process telemetry",
+      },
     ],
     telemetry: ["process_signals", "transcript", "output"],
     provenance: { sources: [] },
@@ -91,7 +123,9 @@ function loadCatalog(): ApparatusCatalogEntry[] {
   const raw = readFileSync(artifactPath, "utf8");
   const parsed = JSON.parse(raw) as ApparatusArtifact;
   if (!Array.isArray(parsed.apparatuses)) {
-    throw new Error("Generated apparatus catalog must contain an apparatuses array");
+    throw new Error(
+      "Generated apparatus catalog must contain an apparatuses array"
+    );
   }
   validateApparatusCatalog(parsed.apparatuses);
   return parsed.apparatuses;
@@ -109,36 +143,51 @@ export function validateApparatusCatalog(
     if (!/^[a-z0-9][a-z0-9-]+$/.test(entry.id)) {
       throw new Error(`Invalid apparatus id: ${entry.id}`);
     }
-    if (known.has(entry.id)) throw new Error(`Duplicate apparatus id: ${entry.id}`);
+    if (known.has(entry.id))
+      throw new Error(`Duplicate apparatus id: ${entry.id}`);
     known.add(entry.id);
     if (!entry.version || !entry.min_canvas_version) {
       throw new Error(`Apparatus ${entry.id} is missing version metadata`);
     }
     for (const capability of entry.required_capabilities) {
       if (!(APPARATUS_CAPABILITIES as readonly string[]).includes(capability)) {
-        throw new Error(`Apparatus ${entry.id} uses unknown capability ${capability}`);
+        throw new Error(
+          `Apparatus ${entry.id} uses unknown capability ${capability}`
+        );
       }
     }
-    const [major, minor, patch] = entry.min_canvas_version.split(".").map(Number);
-    const [canvasMajor, canvasMinor, canvasPatch] = canvasVersion.split(".").map(Number);
+    const [major, minor, patch] = entry.min_canvas_version
+      .split(".")
+      .map(Number);
+    const [canvasMajor, canvasMinor, canvasPatch] = canvasVersion
+      .split(".")
+      .map(Number);
     if (
-      [major, minor, patch, canvasMajor, canvasMinor, canvasPatch].some(Number.isNaN) ||
+      [major, minor, patch, canvasMajor, canvasMinor, canvasPatch].some(
+        Number.isNaN
+      ) ||
       major > canvasMajor ||
       (major === canvasMajor && minor > canvasMinor) ||
       (major === canvasMajor && minor === canvasMinor && patch > canvasPatch)
     ) {
-      throw new Error(`Apparatus ${entry.id} requires canvas ${entry.min_canvas_version}`);
+      throw new Error(
+        `Apparatus ${entry.id} requires canvas ${entry.min_canvas_version}`
+      );
     }
-    if (!entry.required_capabilities.includes("assignment-context") ||
-        !entry.required_capabilities.includes("student-authoring") ||
-        !entry.required_capabilities.includes("submission")) {
+    if (
+      !entry.required_capabilities.includes("assignment-context") ||
+      !entry.required_capabilities.includes("student-authoring") ||
+      !entry.required_capabilities.includes("submission")
+    ) {
       throw new Error(`Apparatus ${entry.id} has no viable student workflow`);
     }
     const profileIds = new Set<string>();
     for (const profile of entry.profiles) {
-      if (profileIds.has(profile.id)) throw new Error(`Duplicate profile ${entry.id}/${profile.id}`);
+      if (profileIds.has(profile.id))
+        throw new Error(`Duplicate profile ${entry.id}/${profile.id}`);
       profileIds.add(profile.id);
-      if (profile.immutable !== true) throw new Error(`Profile ${entry.id}/${profile.id} must be immutable`);
+      if (profile.immutable !== true)
+        throw new Error(`Profile ${entry.id}/${profile.id} must be immutable`);
       assertValidApparatusConfiguration(entry, profile.configuration);
     }
   }

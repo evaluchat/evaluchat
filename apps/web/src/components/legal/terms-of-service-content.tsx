@@ -115,10 +115,9 @@ export function TermsOfServiceContent() {
         <p>
           To the fullest extent permitted by law, Evaluchat’s total liability
           arising out of or relating to the Service is limited to US$50. We are
-          not liable for indirect, incidental, or
-          consequential damages. Some jurisdictions do not allow certain
-          limitations; in those cases, the limitation applies only to the extent
-          allowed.
+          not liable for indirect, incidental, or consequential damages. Some
+          jurisdictions do not allow certain limitations; in those cases, the
+          limitation applies only to the extent allowed.
         </p>
       </section>
 

@@ -212,7 +212,8 @@ export function TeacherOverviewDashboard({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
         <p className="text-sm text-muted-foreground">
-          Manage your organisation, assignments, classes, invitations, and research apparatuses.
+          Manage your organisation, assignments, classes, invitations, and
+          research apparatuses.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

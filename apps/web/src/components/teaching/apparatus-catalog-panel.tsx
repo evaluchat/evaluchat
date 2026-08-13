@@ -95,9 +95,13 @@ export function ApparatusCatalogPanel() {
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading catalog…</p>
         ) : error ? (
-          <p className="text-sm text-destructive" role="alert">{error}</p>
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
         ) : apparatuses.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No reviewed apparatuses are available yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No reviewed apparatuses are available yet.
+          </p>
         ) : (
           <ul className="space-y-4">
             {apparatuses.map((apparatus) => {
@@ -146,8 +150,10 @@ export function ApparatusCatalogPanel() {
                       <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
                         {apparatus.profiles.map((profile) => (
                           <li key={profile.id}>
-                            <span className="font-medium text-foreground">{profile.label}</span>
-                            {" "}· v{profile.version} — {profile.description}
+                            <span className="font-medium text-foreground">
+                              {profile.label}
+                            </span>{" "}
+                            · v{profile.version} — {profile.description}
                           </li>
                         ))}
                       </ul>

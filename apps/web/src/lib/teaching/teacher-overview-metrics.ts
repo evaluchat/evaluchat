@@ -63,13 +63,12 @@ export function buildTeacherOverviewMetrics(
   input: TeacherOverviewMetricsInput
 ): TeacherOverviewMetrics {
   return {
-    credits:
-      input.balanceError
-        ? null
-        : typeof (input.credits ?? input.balance) === "number" &&
-            Number.isFinite(input.credits ?? input.balance)
-          ? (input.credits ?? input.balance)!
-          : null,
+    credits: input.balanceError
+      ? null
+      : typeof (input.credits ?? input.balance) === "number" &&
+          Number.isFinite(input.credits ?? input.balance)
+        ? (input.credits ?? input.balance)!
+        : null,
     teachersActive: metricFromArrayLength(input.orgError, input.orgTeacherIds),
     teachersInvited: metricFromInviteCount(
       input.teacherInvitesError,

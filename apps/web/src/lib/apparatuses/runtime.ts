@@ -12,13 +12,13 @@ export function getApparatusSpecification(
   return APPARATUS_CATALOG.find((entry) => entry.id === apparatusId);
 }
 
-export function getDefaultApparatusProfile(
-  apparatusId = "ai-assisted-essay"
-) {
+export function getDefaultApparatusProfile(apparatusId = "ai-assisted-essay") {
   const entry = getApparatusSpecification(apparatusId);
-  return entry?.profiles.find(
-    (profile) => profile.id === "canonical-constrained-dialogue"
-  ) ?? entry?.profiles[0];
+  return (
+    entry?.profiles.find(
+      (profile) => profile.id === "canonical-constrained-dialogue"
+    ) ?? entry?.profiles[0]
+  );
 }
 
 export function resolveApparatusConfiguration(input: {

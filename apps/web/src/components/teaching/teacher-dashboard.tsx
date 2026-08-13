@@ -124,8 +124,8 @@ export function TeacherDashboard() {
           <DialogHeader>
             <DialogTitle>Invite teacher</DialogTitle>
             <DialogDescription>
-              Delegated teachers can manage their own classes and students.
-              They cannot invite other teachers.
+              Delegated teachers can manage their own classes and students. They
+              cannot invite other teachers.
             </DialogDescription>
           </DialogHeader>
           <InviteTeacherDialog />

@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  getEnvEnabledApparatusIds,
-  isApparatusEnabled,
-} from "./enablement";
+import { getEnvEnabledApparatusIds, isApparatusEnabled } from "./enablement";
 
 describe("enablement", () => {
   afterEach(() => {

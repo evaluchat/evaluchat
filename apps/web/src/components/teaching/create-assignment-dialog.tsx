@@ -43,9 +43,7 @@ import type {
   StudentAssignment,
   StudentClassData,
 } from "@/lib/teaching/types";
-import {
-  FREE_STUDENTS_PER_ASSIGNMENT_CAP,
-} from "@/lib/teaching/assignment-policy";
+import { FREE_STUDENTS_PER_ASSIGNMENT_CAP } from "@/lib/teaching/assignment-policy";
 
 interface CreateAssignmentDialogProps {
   open: boolean;
@@ -88,7 +86,11 @@ export function CreateAssignmentDialog({
   const [agentInstructions, setAgentInstructions] = useState("");
   const [tier, setTier] = useState<AssignmentTier>("free");
   const [apparatuses, setApparatuses] = useState<
-    Array<{ id: string; name: string; profiles?: Array<{ id: string; label: string }> }>
+    Array<{
+      id: string;
+      name: string;
+      profiles?: Array<{ id: string; label: string }>;
+    }>
   >([]);
   const [apparatusProfileId, setApparatusProfileId] = useState(
     "canonical-constrained-dialogue"

@@ -16,7 +16,8 @@ export function SessionRecorderWrapper({
 
   // Only enable tracking if we have a threadId
   const enabled =
-    !!threadId && teachingAssignment?.apparatusConfiguration?.tracking !== false;
+    !!threadId &&
+    teachingAssignment?.apparatusConfiguration?.tracking !== false;
 
   return (
     <SessionRecorder

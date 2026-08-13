@@ -31,7 +31,9 @@ describe("catalog integrity", () => {
       expect(entry.roles.length).toBeGreaterThan(0);
       expect(entry.telemetry.length).toBeGreaterThan(0);
       expect(entry.description.length).toBeGreaterThan(0);
-      expect(entry.knobs.some((knob) => knob.id === "ai_assistance")).toBe(true);
+      expect(entry.knobs.some((knob) => knob.id === "ai_assistance")).toBe(
+        true
+      );
       expect(entry.profiles.length).toBeGreaterThan(0);
     }
   });
