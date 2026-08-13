@@ -1,3 +1,5 @@
+import { DOCS_URL } from "@/components/auth/login/login-branding";
+
 export type TeacherWorkspaceSection =
   | "overview"
   | "apparatuses"
@@ -32,7 +34,7 @@ export const TEACHER_WORKSPACE_NAV: TeacherNavItem[] = [
     id: "docs",
     label: "Docs",
     kind: "external",
-    href: "https://docs.evaluchat.org",
+    href: DOCS_URL,
   },
 ];
 

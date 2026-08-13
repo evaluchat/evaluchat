@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ExternalLink, LogOut, PlusCircle } from "lucide-react";
+import { DOCS_URL } from "@/components/auth/login/login-branding";
 import { useRouter } from "next/navigation";
 import { canAccessStudentDashboard } from "@/lib/teaching/teacher-utils";
 import { postLoginPath } from "@/lib/teaching/config";
@@ -239,7 +240,7 @@ export function StudentAssignmentsLanding() {
   const headerActions = (
     <>
       <a
-        href="https://docs.evaluchat.org"
+        href={DOCS_URL}
         target="_blank"
         rel="noopener noreferrer"
         className={workspaceNavGhostClass}
