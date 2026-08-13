@@ -11,11 +11,35 @@ project — a continuation of LangChain Open Canvas. Contributions are welcome.
 - This is a TypeScript monorepo with strict linting and formatting — the CI runs
   `format:check` and `lint` on every PR, so make sure they pass locally.
 
+## Issues and the project board
+
+This project runs on a simple contract for what lives where:
+
+- **Issues are the public record.** They hold two things only:
+  - **Bug reports** — problems against the published code on `main`. Please
+    include steps to reproduce, expected vs. actual behaviour, and your
+    environment.
+  - **Feature requests** — labelled `enhancement`; together they are the
+    project's public roadmap, so please search before opening and add a 👍 to
+    existing requests instead of duplicating them.
+- **Internal project notes and tech debt are not issues.** They live on the
+  [Evaluchat Board](https://github.com/users/evaluchat/projects/1) as draft
+  items in Backlog.
+- **The board is the state machine.** Columns: Backlog (accepted, not started)
+  → Ready → In progress → In review → Done. Board status and issue state are
+  independent: an issue stays open until the work ships, and issues are always
+  closed with a reason (shipped, or not planned).
+- When a PR delivers an open issue, reference it in the PR body (`Closes #22`)
+  so it auto-closes on merge and the board tracks the link.
+
+Not sure whether something belongs as an issue? Open it anyway — the
+maintainers would rather re-home an item than miss a real report.
+
 ## Setup
 
 ```bash
 git clone https://github.com/evaluchat/evaluchat.git
-cd evaluchat
+cd canvas
 yarn install
 ```
 
