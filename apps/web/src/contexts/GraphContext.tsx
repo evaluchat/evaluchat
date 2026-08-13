@@ -12,6 +12,7 @@ import {
   ArtifactMarkdownV3,
   CustomModelConfig,
   EditorCursorPosition,
+  FormAgentContext,
   GraphInput,
   ProgrammingLanguageOptions,
   RewriteArtifactMetaToolResponse,
@@ -111,6 +112,7 @@ interface GraphData {
   selectedBlocks: TextHighlight | undefined;
   messages: BaseMessage[];
   artifact: ArtifactV3 | undefined;
+  formContext: FormAgentContext | undefined;
   updateRenderedArtifactRequired: boolean;
   artifactSyncGeneration: number;
   isArtifactSaved: boolean;
@@ -124,6 +126,7 @@ interface GraphData {
   setIsStreaming: Dispatch<SetStateAction<boolean>>;
   setFeedbackSubmitted: Dispatch<SetStateAction<boolean>>;
   setArtifact: Dispatch<SetStateAction<ArtifactV3 | undefined>>;
+  setFormContext: Dispatch<SetStateAction<FormAgentContext | undefined>>;
   setSelectedBlocks: Dispatch<SetStateAction<TextHighlight | undefined>>;
   setSelectedArtifact: (index: number) => void;
   setMessages: Dispatch<SetStateAction<BaseMessage[]>>;
@@ -148,6 +151,8 @@ type GraphContentType = {
 
 const GraphContext = createContext<GraphContentType | undefined>(undefined);
 
+const WORKSPACE_DRAFT_AUTOSAVE_MS = 5_000;
+
 // Shim for recent LangGraph bugfix
 function extractStreamDataChunk(chunk: any) {
   if (Array.isArray(chunk)) {
@@ -170,9 +175,17 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const workspaceItem = useWorkspaceItemOptional();
   const teachingAssignment = teachingAssignmentContext?.assignment;
   const assignmentIdParam = teachingAssignmentContext?.assignmentId ?? null;
+  const workspaceItemThreadId =
+    workspaceItem?.item?.kind === "markdown_template" ||
+    workspaceItem?.item?.kind === "form_template"
+      ? workspaceItem.item.threadId
+      : undefined;
   const assignmentSystemPrompt =
     teachingAssignmentContext?.systemPrompt ??
-    workspaceItem?.item?.templateSnapshot.assistantGuidance;
+    (workspaceItem?.item?.kind === "markdown_template" ||
+    workspaceItem?.item?.kind === "form_template"
+      ? workspaceItem.item.templateSnapshot.assistantGuidance
+      : undefined);
   const apparatusConfiguration =
     teachingAssignmentContext?.apparatusConfiguration;
   const threadData = useThreadContext();
@@ -180,18 +193,21 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [chatStarted, setChatStarted] = useState(false);
   const [messages, setMessages] = useState<BaseMessage[]>([]);
   const [artifact, setArtifact] = useState<ArtifactV3>();
+  const [formContext, setFormContext] = useState<FormAgentContext>();
   const artifactRef = useRef<ArtifactV3 | undefined>(undefined);
+  const formContextRef = useRef<FormAgentContext | undefined>(undefined);
   const [selectedBlocks, setSelectedBlocks] = useState<TextHighlight>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [updateRenderedArtifactRequired, setUpdateRenderedArtifactRequired] =
     useState(false);
   const [artifactSyncGeneration, setArtifactSyncGeneration] = useState(0);
   const lastSavedArtifact = useRef<ArtifactV3 | undefined>(undefined);
+  const lastSavedFormContext = useRef<FormAgentContext | undefined>(undefined);
   const debouncedAPIUpdate = useRef(
     debounce(
       (artifact: ArtifactV3, threadId: string) =>
         updateArtifact(artifact, threadId),
-      1000
+      WORKSPACE_DRAFT_AUTOSAVE_MS
     )
   ).current;
   const [isArtifactSaved, setIsArtifactSaved] = useState(true);
@@ -244,6 +260,10 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     artifactRef.current = artifact;
   }, [artifact]);
+
+  useEffect(() => {
+    formContextRef.current = formContext;
+  }, [formContext]);
 
   // Cursor position — updated by TextRenderer, read by streamMessageV2.
   // Only updates when the Workspace has focus, so the position persists
@@ -314,7 +334,13 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!threadData.threadId) return;
     if (!artifact) return;
-    if (updateRenderedArtifactRequired || threadSwitched || isStreaming) return;
+    const isFormWorkspace = workspaceItem?.item?.kind === "form_template";
+    if (
+      (updateRenderedArtifactRequired && !isFormWorkspace) ||
+      threadSwitched ||
+      isStreaming
+    )
+      return;
     const currentIndex = artifact.currentIndex;
     const currentContent = artifact.contents.find(
       (c) => c.index === currentIndex
@@ -330,16 +356,25 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (
+    const artifactChanged =
       !lastSavedArtifact.current ||
-      lastSavedArtifact.current.contents !== artifact.contents
-    ) {
+      lastSavedArtifact.current.contents !== artifact.contents;
+    const formContextChanged = formContext !== lastSavedFormContext.current;
+    if (artifactChanged || formContextChanged) {
       setIsArtifactSaved(false);
       // This means the artifact in state does not match the last saved artifact
       // We need to update
       debouncedAPIUpdate(artifact, threadData.threadId);
     }
-  }, [artifact, threadData.threadId]);
+  }, [
+    artifact,
+    formContext,
+    threadData.threadId,
+    threadSwitched,
+    isStreaming,
+    updateRenderedArtifactRequired,
+    workspaceItem?.item?.kind,
+  ]);
 
   const lastLoadedThreadIdFromQuery = useRef<string | null>(null);
   const threadLoadRetries = useRef<number>(0);
@@ -546,7 +581,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     userData.user,
     isStreaming,
     workspaceItem?.item?.id,
-    workspaceItem?.item?.threadId,
+    workspaceItemThreadId,
     workspaceItem?.loading,
   ]);
 
@@ -562,6 +597,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       const values: Record<string, unknown> = {
         artifact: artifactToUpdate,
       };
+      if (formContextRef.current) {
+        values.formContext = formContextRef.current;
+      }
       // Always carry phase_state so a debounced save never clobbers it
       if (phaseStateRef.current) {
         values.phase_state = phaseStateRef.current;
@@ -569,6 +607,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       await client.threads.updateState(threadId, { values });
       setIsArtifactSaved(true);
       lastSavedArtifact.current = artifactToUpdate;
+      lastSavedFormContext.current = formContextRef.current;
       // Backup to localStorage as safety net against container restarts
       try {
         localStorage.setItem(
@@ -584,6 +623,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const clearState = () => {
     setMessages([]);
     setArtifact(undefined);
+    setFormContext(undefined);
+    lastSavedFormContext.current = undefined;
     setFirstTokenReceived(true);
   };
 
@@ -2080,6 +2121,11 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       } catch (_) {}
     }
     lastSavedArtifact.current = castValues?.artifact;
+    const loadedFormContext = castThreadValues?.formContext as
+      | FormAgentContext
+      | undefined;
+    setFormContext(loadedFormContext);
+    lastSavedFormContext.current = loadedFormContext;
 
     if (!castValues?.messages?.length) {
       setMessages([]);
@@ -2112,6 +2158,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       selectedBlocks,
       messages,
       artifact,
+      formContext,
       updateRenderedArtifactRequired,
       artifactSyncGeneration,
       isArtifactSaved,
@@ -2125,6 +2172,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       setIsStreaming,
       setFeedbackSubmitted,
       setArtifact,
+      setFormContext,
       setSelectedBlocks,
       setSelectedArtifact,
       setMessages,

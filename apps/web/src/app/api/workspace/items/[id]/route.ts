@@ -5,6 +5,7 @@ import {
   getWorkspaceItem,
   reconcileWorkspaceItemThread,
   WorkspaceItemNotFoundError,
+  WorkspaceItemThreadNotAllowedError,
   WorkspaceThreadOwnershipError,
 } from "@/lib/workspace/store";
 
@@ -76,6 +77,12 @@ export async function DELETE(_request: Request, context: RouteContext) {
     }
     if (error instanceof WorkspaceThreadOwnershipError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (error instanceof WorkspaceItemThreadNotAllowedError) {
+      return NextResponse.json(
+        { error: "This item does not support an assistant thread" },
+        { status: 400 }
+      );
     }
     console.error("[workspace] failed to delete item", error);
     return NextResponse.json(

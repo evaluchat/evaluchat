@@ -72,6 +72,13 @@ export async function generatePath(
   if (state.next) {
     return { next: state.next };
   }
+
+  // Form Templates use the assistant as a conversational form-filling
+  // partner. Their structured values are exchanged through formContext;
+  // never route these turns through Markdown artifact-rewrite nodes.
+  if (state.formContext) {
+    return { next: "replyToGeneralInput" };
+  }
   const newMessages: BaseMessage[] = [];
   const docMessage = await convertContextDocumentToHumanMessage(
     _messages,

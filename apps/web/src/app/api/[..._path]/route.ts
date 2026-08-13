@@ -13,7 +13,10 @@ import { getCustomAssignmentById } from "../../../lib/teaching/assignment-file-s
 import { getSeedAssignmentById } from "../../../lib/teaching/seed-loader";
 import { resolveApparatusConfiguration } from "../../../lib/apparatuses/runtime";
 import { getWorkspaceItem } from "../../../lib/workspace/store";
-import { enforceWorkspaceThreadPolicy } from "../../../lib/workspace/thread-policy";
+import {
+  enforceWorkspaceThreadPolicy,
+  supportsWorkspaceThreads,
+} from "../../../lib/workspace/thread-policy";
 
 function getCorsHeaders() {
   return {
@@ -226,6 +229,14 @@ async function handleRequest(req: NextRequest, method: string) {
           );
           if (!workspaceItem) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+          }
+          if (!supportsWorkspaceThreads(workspaceItem)) {
+            return NextResponse.json(
+              {
+                error: "This workspace item does not support assistant threads",
+              },
+              { status: 403 }
+            );
           }
 
           Object.assign(

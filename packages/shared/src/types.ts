@@ -201,6 +201,24 @@ export type ContextDocument = {
   metadata?: Record<string, any>;
 };
 
+export type FormAgentValue = string | number | string[];
+
+export interface FormAgentContext {
+  templateId: string;
+  title: string;
+  description: string;
+  layoutMarkdown: string;
+  fields: Record<
+    string,
+    {
+      label: string;
+      type: string;
+      required: boolean;
+    }
+  >;
+  values: Record<string, FormAgentValue>;
+}
+
 /**
  * The metadata included in search results from Exa.
  */
@@ -224,6 +242,9 @@ export interface GraphInput {
   cursorPosition?: EditorCursorPosition;
 
   artifact?: ArtifactV3;
+
+  /** Current structured Form Template context for the assistant. */
+  formContext?: FormAgentContext;
 
   next?: string;
 

@@ -93,6 +93,7 @@ export function createMockState(
     highlightedCode: undefined,
     highlightedText: undefined,
     artifact: undefined as any,
+    formContext: undefined,
     next: undefined,
     language: undefined,
     artifactLength: undefined,

@@ -11,9 +11,15 @@ import type { WorkspaceItem } from "@/lib/workspace/types";
 export function WorkspaceItemBanner({
   item,
   onAbandon,
+  onSubmit,
+  submitDisabled = false,
+  submitted = false,
 }: {
   item: WorkspaceItem;
   onAbandon: () => void;
+  onSubmit?: () => void;
+  submitDisabled?: boolean;
+  submitted?: boolean;
 }) {
   return (
     <div
@@ -55,6 +61,17 @@ export function WorkspaceItemBanner({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {item.kind === "form_template" && onSubmit && (
+            <Button
+              size="sm"
+              onClick={onSubmit}
+              disabled={submitDisabled}
+              className="bg-white text-[#2c3e56] hover:bg-white/90"
+              data-testid="workspace-form-banner-submit"
+            >
+              {submitted ? "Submitted" : "Submit"}
+            </Button>
+          )}
           <Link
             href="/workspace"
             className={cn(

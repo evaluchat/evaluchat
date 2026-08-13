@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
       id: template.id,
       title: template.title,
       description: template.description,
+      templateKind: template.templateKind,
       disabled: false,
     })),
   });

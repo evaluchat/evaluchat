@@ -18,6 +18,7 @@ type CatalogResult = {
   id: string;
   title: string;
   description: string;
+  templateKind?: "markdown" | "form";
   disabled?: boolean;
   status?: string;
 };
@@ -90,8 +91,9 @@ export function CreateWorkspaceItemDialog({
         <DialogHeader>
           <DialogTitle>Create workspace item</DialogTitle>
           <DialogDescription>
-            Search reviewed templates and methods. You can edit every Markdown
-            document after it opens.
+            Search reviewed templates and methods. Markdown templates are
+            editable; Form templates use a protected layout and validated
+            controls.
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3">
@@ -147,6 +149,11 @@ export function CreateWorkspaceItemDialog({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {result.description}
                 </p>
+                {kind === "template" && result.templateKind === "form" && (
+                  <p className="mt-2 text-xs font-medium text-amber-700">
+                    Protected form · Submit to lock
+                  </p>
+                )}
               </button>
             ))}
         </div>

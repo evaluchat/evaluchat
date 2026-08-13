@@ -44,6 +44,7 @@ vi.mock("@opencanvas/shared/utils/urls.js", () => ({
 }));
 
 import { generatePath } from "../../nodes/generate-path/index.js";
+import { routeAfterGeneralReply } from "../../index.js";
 
 function makeState(overrides: any = {}) {
   return {
@@ -142,6 +143,50 @@ describe("generatePath routing for 'replace all'", () => {
 
     const result = await generatePath(state, {} as any);
     expect(result.next).toBe("replyToGeneralInput");
+  });
+});
+
+describe("generatePath routing for Form Templates", () => {
+  it("routes form turns directly to conversational form assistance", async () => {
+    const state = makeState({
+      _messages: [new HumanMessage("Set the title to A brief")],
+      formContext: {
+        templateId: "assignment-brief",
+        title: "Assignment brief",
+        description: "A brief",
+        layoutMarkdown: "# {{title}}",
+        fields: {
+          title: { label: "Title", type: "text", required: true },
+        },
+        values: { title: "" },
+      },
+      artifact: {
+        currentIndex: 1,
+        contents: [{ index: 1, type: "text", fullMarkdown: "# " }],
+      },
+    });
+
+    const result = await generatePath(state, {} as any);
+
+    expect(result.next).toBe("replyToGeneralInput");
+    expect(mockDetermineTeachingIntent).not.toHaveBeenCalled();
+  });
+
+  it("ends a form turn after the conversational reply", () => {
+    const state = makeState({
+      formContext: {
+        templateId: "assignment-brief",
+        title: "Assignment brief",
+        description: "A brief",
+        layoutMarkdown: "# {{title}}",
+        fields: {
+          title: { label: "Title", type: "text", required: true },
+        },
+        values: { title: "Existing title" },
+      },
+    });
+
+    expect(routeAfterGeneralReply(state)).toBe("cleanState");
   });
 });
 

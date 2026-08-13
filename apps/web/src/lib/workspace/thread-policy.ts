@@ -1,5 +1,9 @@
 import type { WorkspaceItem } from "./types";
 
+export function supportsWorkspaceThreads(item: WorkspaceItem): boolean {
+  return item.kind === "markdown_template" || item.kind === "form_template";
+}
+
 export function enforceWorkspaceThreadPolicy(
   body: Record<string, any>,
   item: WorkspaceItem,

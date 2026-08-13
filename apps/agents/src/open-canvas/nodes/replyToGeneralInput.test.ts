@@ -252,4 +252,42 @@ describe("replyToGeneralInput", () => {
       ...state._messages,
     ]);
   });
+
+  it("includes the structured form context and update protocol", async () => {
+    const state = createMockState({
+      _messages: [new HumanMessage({ content: "Set the title", id: "1" })],
+      formContext: {
+        templateId: "assignment-brief",
+        title: "Assignment brief",
+        description: "A brief for an assignment",
+        layoutMarkdown: "# {{title}}",
+        fields: {
+          title: { label: "Title", type: "text", required: true },
+        },
+        values: { title: "Old title" },
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("<form-context>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"title": "Old title"'),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("<form-updates>"),
+      }),
+      ...state._messages,
+    ]);
+  });
 });

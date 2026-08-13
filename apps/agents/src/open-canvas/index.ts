@@ -31,10 +31,35 @@ const routeNode = (state: typeof OpenCanvasGraphAnnotation.State) => {
   });
 };
 
-const cleanState = (_: typeof OpenCanvasGraphAnnotation.State) => {
+export const cleanState = (state: typeof OpenCanvasGraphAnnotation.State) => {
   return {
     ...DEFAULT_INPUTS,
+    // Form context is durable conversation state for Form workspaces. The
+    // generic defaults intentionally clear per-turn routing inputs, but must
+    // not erase the structured values after the assistant has replied.
+    formContext: state.formContext,
   };
+};
+
+export const routeAfterGeneralReply = (
+  state: typeof OpenCanvasGraphAnnotation.State
+): "cleanState" | "assessThesis" => {
+  if (state.apparatusConfiguration?.ai_assistance === false) {
+    return "cleanState";
+  }
+
+  // Form conversations are not teaching sessions. They should finish after
+  // the conversational reply instead of entering the thesis gatekeeper.
+  if (state.formContext) return "cleanState";
+
+  const phase =
+    state.phase_state ||
+    (state.apparatusConfiguration?.drafting_gate === "none"
+      ? "drafting"
+      : "socratic");
+  return phase === "socratic" && !state.thesis?.passed
+    ? "assessThesis"
+    : "cleanState";
 };
 
 // ~ 4 chars per token, max tokens of 75000. 75000 * 4 = 300000
@@ -162,24 +187,10 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
   .addEdge("webSearch", "routePostWebSearch")
   .addEdge("noAiAssignment", END)
   // End edges — assess thesis only in socratic phase; otherwise go straight to cleanState
-  .addConditionalEdges(
-    "replyToGeneralInput",
-    (state) => {
-      if (state.apparatusConfiguration?.ai_assistance === false) {
-        return "cleanState";
-      }
-      const phase =
-        state.phase_state ||
-        (state.apparatusConfiguration?.drafting_gate === "none"
-          ? "drafting"
-          : "socratic");
-      if (phase === "socratic" && !state.thesis?.passed) {
-        return "assessThesis";
-      }
-      return "cleanState";
-    },
-    ["assessThesis", "cleanState"]
-  )
+  .addConditionalEdges("replyToGeneralInput", routeAfterGeneralReply, [
+    "assessThesis",
+    "cleanState",
+  ])
   // Route assessThesis to generateFollowup if there's an artifact with content, otherwise cleanState.
   // In socratic phase, skip generateFollowup — no canvas changes happened, so the
   // followup message would be a redundant duplicate of replyToGeneralInput's response.

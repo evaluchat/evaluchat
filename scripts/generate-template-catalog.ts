@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 
 /**
- * Build the immutable Markdown-template snapshot consumed by the web app.
+ * Build the immutable template snapshot consumed by the web app.
  *
  * Usage:
- *   EVALUCHAT_TEMPLATE_SOURCE_ROOT=/path/to/knowledge-catalog/templates \
+ *   EVALUCHAT_TEMPLATE_SOURCE_ROOT=/path/to/knowledge/templates \
  *     yarn generate:templates
  */
 
@@ -19,33 +19,75 @@ const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const sourceRootValue = process.env.EVALUCHAT_TEMPLATE_SOURCE_ROOT?.trim();
-if (!sourceRootValue) {
-  throw new Error(
-    "EVALUCHAT_TEMPLATE_SOURCE_ROOT is required; generate from evaluchat/knowledge@dev",
-  );
-}
-const sourceRoot = path.resolve(sourceRootValue);
-const outputPath = path.resolve(
-  process.env.EVALUCHAT_TEMPLATE_CATALOG_OUTPUT ||
-    path.join(repoRoot, "apps/web/data/template-catalog.json"),
-);
 
 const semver = /^\d+\.\d+\.\d+$/;
-const TemplateFrontmatter = z
+const fieldId = /^[a-z][a-z0-9_-]*$/;
+const locale = /^[a-z]{2}(?:-[A-Z]{2})?$/;
+const dateValue = /^\d{4}-\d{2}-\d{2}$/;
+const placeholder = /^\{\{([a-z][a-z0-9_-]*)\}\}$/;
+
+const FormFieldSource = z
   .object({
-    type: z.literal("Markdown Template"),
-    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
-    version: z.string().regex(semver),
-    locale: z.string().regex(/^[a-z]{2}(?:-[A-Z]{2})?$/),
-    title: z.string().min(1),
-    description: z.string().min(1),
-    template_kind: z.literal("markdown"),
-    assistant: z.object({ guidance: z.string().min(1) }),
+    label: z.string().min(1),
+    type: z.enum(["text", "textarea", "number", "date", "select", "roster"]),
+    required: z.boolean().default(false),
+    max_length: z.number().int().positive().optional(),
+    display_chars: z.number().int().positive().optional(),
+    display_lines: z.number().int().positive().optional(),
+    options: z.array(z.string().min(1)).min(1).optional(),
+    min: z.number().finite().optional(),
+    max: z.number().finite().optional(),
+    min_date: z.string().regex(dateValue).optional(),
+    max_date: z.string().regex(dateValue).optional(),
   })
   .passthrough();
 
-type CatalogEntry = {
+const TemplateBase = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+  version: z.string().regex(semver),
+  locale: z.string().regex(locale),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  assistant: z.object({ guidance: z.string().min(1) }),
+});
+
+const MarkdownFrontmatter = TemplateBase.extend({
+  type: z.literal("Markdown Template"),
+  template_kind: z.literal("markdown"),
+}).passthrough();
+
+const FormFrontmatter = TemplateBase.extend({
+  type: z
+    .string()
+    .refine(
+      (value) => value.toLowerCase() === "form template",
+      "type must be Form Template",
+    ),
+  template_kind: z.literal("form"),
+  fields: z
+    .record(z.string(), FormFieldSource)
+    .refine(
+      (fields) => Object.keys(fields).length > 0,
+      "a form template must declare at least one field",
+    ),
+}).passthrough();
+
+export type FormFieldDefinition = {
+  id: string;
+  label: string;
+  type: "text" | "textarea" | "number" | "date" | "select" | "roster";
+  required: boolean;
+  maxLength?: number;
+  displayChars?: number;
+  displayLines?: number;
+  options?: string[];
+  min?: number;
+  max?: number;
+  minDate?: string;
+  maxDate?: string;
+};
+
+export type MarkdownCatalogEntry = {
   id: string;
   version: string;
   locale: string;
@@ -58,66 +100,240 @@ type CatalogEntry = {
   contentHash: string;
 };
 
+export type FormCatalogEntry = {
+  id: string;
+  version: string;
+  locale: string;
+  title: string;
+  description: string;
+  templateKind: "form";
+  sourcePath: string;
+  layoutMarkdown: string;
+  fields: Record<string, FormFieldDefinition>;
+  assistantGuidance: string;
+  contentHash: string;
+};
+
+export type CatalogEntry = MarkdownCatalogEntry | FormCatalogEntry;
+
+export type GeneratedTemplateCatalog = {
+  schemaVersion: 1;
+  catalogRevision: string;
+  templates: CatalogEntry[];
+};
+
 function hash(value: string): string {
   return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
 }
 
-function parseTemplate(sourcePath: string): CatalogEntry {
+function parseDocument(sourcePath: string): {
+  frontmatter: unknown;
+  body: string;
+  source: string;
+} {
   const source = fs.readFileSync(sourcePath, "utf8");
   const match = source.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
   if (!match) {
     throw new Error(`Template has no YAML frontmatter: ${sourcePath}`);
   }
+  return { frontmatter: yaml.load(match[1]), body: match[2].trim(), source };
+}
 
-  const frontmatter = TemplateFrontmatter.parse(yaml.load(match[1]));
-  const initialMarkdown = match[2].trim();
-  if (!initialMarkdown) {
-    throw new Error(`Template body is empty: ${sourcePath}`);
+function validateFormFields(
+  fields: Record<string, z.infer<typeof FormFieldSource>>,
+  sourcePath: string,
+): Record<string, FormFieldDefinition> {
+  const result: Record<string, FormFieldDefinition> = {};
+  for (const id of Object.keys(fields).sort()) {
+    if (!fieldId.test(id)) {
+      throw new Error(`Invalid form field id "${id}" in ${sourcePath}`);
+    }
+    const field = fields[id];
+    if (field.options && new Set(field.options).size !== field.options.length) {
+      throw new Error(`Duplicate select options for "${id}" in ${sourcePath}`);
+    }
+    if (field.type === "select" && !field.options) {
+      throw new Error(`Select field "${id}" needs options in ${sourcePath}`);
+    }
+    if (field.type !== "select" && field.options) {
+      throw new Error(`Only select fields may declare options for "${id}"`);
+    }
+    if (
+      field.type !== "number" &&
+      (field.min !== undefined || field.max !== undefined)
+    ) {
+      throw new Error(`Only number fields may declare min/max for "${id}"`);
+    }
+    if (
+      field.min !== undefined &&
+      field.max !== undefined &&
+      field.min > field.max
+    ) {
+      throw new Error(
+        `Field "${id}" has min greater than max in ${sourcePath}`,
+      );
+    }
+    if (field.type !== "date" && (field.min_date || field.max_date)) {
+      throw new Error(`Only date fields may declare date bounds for "${id}"`);
+    }
+    if (field.min_date && field.max_date && field.min_date > field.max_date) {
+      throw new Error(
+        `Field "${id}" has min_date greater than max_date in ${sourcePath}`,
+      );
+    }
+    result[id] = {
+      id,
+      label: field.label,
+      type: field.type,
+      required: field.required,
+      ...(field.max_length === undefined
+        ? {}
+        : { maxLength: field.max_length }),
+      ...(field.display_chars === undefined
+        ? {}
+        : { displayChars: field.display_chars }),
+      ...(field.display_lines === undefined
+        ? {}
+        : { displayLines: field.display_lines }),
+      ...(field.options === undefined ? {} : { options: field.options }),
+      ...(field.min === undefined ? {} : { min: field.min }),
+      ...(field.max === undefined ? {} : { max: field.max }),
+      ...(field.min_date === undefined ? {} : { minDate: field.min_date }),
+      ...(field.max_date === undefined ? {} : { maxDate: field.max_date }),
+    };
+  }
+  return result;
+}
+
+function assertPlaceholders(
+  layoutMarkdown: string,
+  fields: Record<string, FormFieldDefinition>,
+  sourcePath: string,
+): void {
+  const used = new Set<string>();
+  const tokenPattern = /\{\{[\s\S]*?\}\}/g;
+  for (const token of layoutMarkdown.match(tokenPattern) || []) {
+    const match = token.match(placeholder);
+    if (!match) {
+      throw new Error(`Malformed form placeholder "${token}" in ${sourcePath}`);
+    }
+    used.add(match[1]);
+    if (!fields[match[1]]) {
+      throw new Error(
+        `Unknown form placeholder "${match[1]}" in ${sourcePath}`,
+      );
+    }
+  }
+  const remainder = layoutMarkdown.replace(tokenPattern, "");
+  if (remainder.includes("{{") || remainder.includes("}}")) {
+    throw new Error(`Malformed form placeholder syntax in ${sourcePath}`);
+  }
+  for (const id of Object.keys(fields)) {
+    if (!used.has(id)) {
+      throw new Error(`Declared form field "${id}" is unused in ${sourcePath}`);
+    }
+  }
+}
+
+export function parseTemplate(sourcePath: string): CatalogEntry {
+  const {
+    frontmatter: rawFrontmatter,
+    body,
+    source,
+  } = parseDocument(sourcePath);
+  const base = TemplateBase.parse(rawFrontmatter);
+
+  if (typeof rawFrontmatter === "object" && rawFrontmatter !== null) {
+    const raw = rawFrontmatter as Record<string, unknown>;
+    if (raw.template_kind === "markdown") {
+      MarkdownFrontmatter.parse(rawFrontmatter);
+      if (!body) throw new Error(`Template body is empty: ${sourcePath}`);
+      return {
+        id: base.id,
+        version: base.version,
+        locale: base.locale,
+        title: base.title,
+        description: base.description,
+        templateKind: "markdown",
+        sourcePath: `templates/${path.basename(sourcePath)}`,
+        initialMarkdown: `${body}\n`,
+        assistantGuidance: base.assistant.guidance.trim(),
+        contentHash: hash(source),
+      };
+    }
   }
 
+  const frontmatter = FormFrontmatter.parse(rawFrontmatter);
+  if (!body) throw new Error(`Form template body is empty: ${sourcePath}`);
+  const fields = validateFormFields(frontmatter.fields, sourcePath);
+  assertPlaceholders(body, fields, sourcePath);
   return {
     id: frontmatter.id,
     version: frontmatter.version,
     locale: frontmatter.locale,
     title: frontmatter.title,
     description: frontmatter.description,
-    templateKind: "markdown",
+    templateKind: "form",
     sourcePath: `templates/${path.basename(sourcePath)}`,
-    initialMarkdown: `${initialMarkdown}\n`,
+    layoutMarkdown: `${body}\n`,
+    fields,
     assistantGuidance: frontmatter.assistant.guidance.trim(),
     contentHash: hash(source),
   };
 }
 
-if (!fs.existsSync(sourceRoot)) {
-  throw new Error(`Template source directory not found: ${sourceRoot}`);
+export function buildCatalog(sourceRoot: string): GeneratedTemplateCatalog {
+  if (!fs.existsSync(sourceRoot)) {
+    throw new Error(`Template source directory not found: ${sourceRoot}`);
+  }
+
+  const entries = fs
+    .readdirSync(sourceRoot)
+    .filter((filename) => filename.endsWith(".md"))
+    .sort()
+    .map((filename) => parseTemplate(path.join(sourceRoot, filename)));
+
+  if (!entries.length) {
+    throw new Error(`No templates found in ${sourceRoot}`);
+  }
+
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    if (ids.has(entry.id))
+      throw new Error(`Duplicate template id: ${entry.id}`);
+    ids.add(entry.id);
+  }
+
+  const canonical = JSON.stringify(entries);
+  return {
+    schemaVersion: 1,
+    catalogRevision: hash(canonical),
+    templates: entries,
+  };
 }
 
-const entries = fs
-  .readdirSync(sourceRoot)
-  .filter((filename) => filename.endsWith(".md"))
-  .sort()
-  .map((filename) => parseTemplate(path.join(sourceRoot, filename)));
-
-if (!entries.length) {
-  throw new Error(`No Markdown templates found in ${sourceRoot}`);
+export function writeCatalog(sourceRoot: string, outputPath: string): void {
+  const artifact = buildCatalog(sourceRoot);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`);
 }
 
-const ids = new Set<string>();
-for (const entry of entries) {
-  if (ids.has(entry.id)) throw new Error(`Duplicate template id: ${entry.id}`);
-  ids.add(entry.id);
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  const sourceRootValue = process.env.EVALUCHAT_TEMPLATE_SOURCE_ROOT?.trim();
+  if (!sourceRootValue) {
+    throw new Error(
+      "EVALUCHAT_TEMPLATE_SOURCE_ROOT is required; generate from evaluchat/knowledge@dev",
+    );
+  }
+  const outputPath = path.resolve(
+    process.env.EVALUCHAT_TEMPLATE_CATALOG_OUTPUT ||
+      path.join(repoRoot, "apps/web/data/template-catalog.json"),
+  );
+  writeCatalog(path.resolve(sourceRootValue), outputPath);
+  console.log(
+    `Generated ${path.relative(repoRoot, outputPath)} from ${path.resolve(sourceRootValue)}`,
+  );
 }
-
-const canonical = JSON.stringify(entries);
-const artifact = {
-  schemaVersion: 1,
-  catalogRevision: hash(canonical),
-  templates: entries,
-};
-
-fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-fs.writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`);
-console.log(
-  `Generated ${path.relative(repoRoot, outputPath)} from ${sourceRoot}`,
-);

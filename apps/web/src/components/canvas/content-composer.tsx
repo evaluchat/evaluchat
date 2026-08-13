@@ -8,6 +8,7 @@ import {
 import {
   ProgrammingLanguageOptions,
   ContextDocument,
+  GraphInput,
 } from "@opencanvas/shared/types";
 import {
   AppendMessage,
@@ -52,6 +53,7 @@ export interface ContentComposerChatInterfaceProps {
   minimalCanvas?: boolean;
   hideQuickStartButtons?: boolean;
   quickStartPrompts?: string[];
+  getStreamInput?: () => Pick<GraphInput, "artifact" | "formContext">;
 }
 
 export function ContentComposerChatInterfaceComponent(
@@ -135,6 +137,7 @@ export function ContentComposerChatInterfaceComponent(
       setMessages((prevMessages) => [...prevMessages, humanMessage]);
 
       await streamMessage({
+        ...(props.getStreamInput?.() ?? {}),
         messages: [convertToOpenAIFormat(humanMessage)],
       });
     } finally {

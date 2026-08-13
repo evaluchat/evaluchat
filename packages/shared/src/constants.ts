@@ -24,6 +24,7 @@ export const DEFAULT_INPUTS = {
   webSearchResults: undefined,
   textEditIntent: undefined,
   textEditSummary: undefined,
+  formContext: undefined,
 };
 
 export const PROGRAMMING_LANGUAGES: Array<{

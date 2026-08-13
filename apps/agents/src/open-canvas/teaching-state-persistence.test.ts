@@ -1,6 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { OpenCanvasGraphAnnotation } from "./state.js";
 import { AIMessage } from "@langchain/core/messages";
+import { cleanState } from "./index.js";
+
+vi.mock("pdf-parse", () => ({ default: vi.fn() }));
 
 /**
  * These tests verify that teaching-specific state fields (phase_state, thesis)
@@ -48,6 +51,23 @@ describe("Teaching state persistence", () => {
 
     expect(DEFAULT_INPUTS).not.toHaveProperty("phase_state");
     expect(DEFAULT_INPUTS).not.toHaveProperty("thesis");
+  });
+
+  it("cleanState should preserve Form context values", () => {
+    const formContext = {
+      templateId: "assignment-brief",
+      title: "Assignment brief",
+      description: "A brief",
+      layoutMarkdown: "# {{title}}",
+      fields: {
+        title: { label: "Title", type: "text", required: true },
+      },
+      values: { title: "Existing title", word_target: 500 },
+    };
+
+    const cleaned = cleanState({ formContext } as any);
+
+    expect(cleaned.formContext).toEqual(formContext);
   });
 
   it("assessThesis output should include phase_state when thesis passes", () => {

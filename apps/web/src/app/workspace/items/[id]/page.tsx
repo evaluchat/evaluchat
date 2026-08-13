@@ -30,7 +30,17 @@ function WorkspaceItemRoute() {
     if (!loading && !item) router.replace("/workspace");
   }, [loading, item, router]);
 
-  return <AuthGate>{item ? <WorkspaceCanvas /> : null}</AuthGate>;
+  const content = !item ? null : (
+    <ThreadProvider workspaceItemId={item.id}>
+      <AssistantProvider workspaceMode>
+        <GraphProvider>
+          <WorkspaceCanvas />
+        </GraphProvider>
+      </AssistantProvider>
+    </ThreadProvider>
+  );
+
+  return <AuthGate>{content}</AuthGate>;
 }
 
 export default function WorkspaceItemPage() {
@@ -43,13 +53,7 @@ export default function WorkspaceItemPage() {
     >
       <UserProvider>
         <WorkspaceItemProvider itemId={id}>
-          <ThreadProvider workspaceItemId={id}>
-            <AssistantProvider workspaceMode>
-              <GraphProvider>
-                <WorkspaceItemRoute />
-              </GraphProvider>
-            </AssistantProvider>
-          </ThreadProvider>
+          <WorkspaceItemRoute />
         </WorkspaceItemProvider>
       </UserProvider>
     </Suspense>

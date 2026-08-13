@@ -312,7 +312,8 @@ deploy() {
       EVALUCHAT_TEMPLATE_SOURCE_ROOT="$template_source_root" \
       EVALUCHAT_TEMPLATE_CATALOG_OUTPUT="$catalog_file" \
       yarn generate:templates)
-    catalog_revision="$(node -e 'const fs=require("node:fs"); const v=JSON.parse(fs.readFileSync(process.argv[1], "utf8")).catalogRevision; if (!/^sha256:[a-f0-9]{64}$/.test(v)) process.exit(1); process.stdout.write(v)' "$catalog_file")"
+    node -e 'const fs=require("node:fs"); const v=JSON.parse(fs.readFileSync(process.argv[1], "utf8")).catalogRevision; if (!/^sha256:[a-f0-9]{64}$/.test(v)) process.exit(1)' "$catalog_file"
+    catalog_revision="sha256:$(sha256_file "$catalog_file")"
   else
     catalog_revision=""
   fi

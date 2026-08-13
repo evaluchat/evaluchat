@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    if (body?.templateId !== "evaluchat-getting-started") {
+    if (typeof body?.templateId !== "string" || !body.templateId) {
       return NextResponse.json(
         { error: "Unsupported template" },
         { status: 400 }

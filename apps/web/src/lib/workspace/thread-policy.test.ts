@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { enforceWorkspaceThreadPolicy } from "./thread-policy";
-import type { WorkspaceItem } from "./types";
+import {
+  enforceWorkspaceThreadPolicy,
+  supportsWorkspaceThreads,
+} from "./thread-policy";
+import type { FormWorkspaceItem, MarkdownWorkspaceItem } from "./types";
 
-const item: WorkspaceItem = {
+const item: MarkdownWorkspaceItem = {
   id: "wi_owned",
   ownerId: "user_owned",
   kind: "markdown_template",
@@ -16,6 +19,7 @@ const item: WorkspaceItem = {
     sourcePath: "templates/evaluchat-getting-started.en.md",
   },
   templateSnapshot: {
+    kind: "markdown",
     title: "Getting Started",
     description: "Description",
     initialMarkdown: "# Start\n",
@@ -43,5 +47,41 @@ describe("enforceWorkspaceThreadPolicy", () => {
       user_id: "user_owned",
     });
     expect(result.config.configurable.systemPrompt).toBe("trusted guidance");
+  });
+
+  it("allows assistant threads for Form workspace items", () => {
+    const formItem: FormWorkspaceItem = {
+      ...item,
+      kind: "form_template",
+      templateSnapshot: {
+        kind: "form",
+        templateId: "assignment-brief",
+        templateVersion: "1.0.0",
+        catalogRevision: "sha256:catalog",
+        contentHash: "sha256:content",
+        title: "Assignment brief",
+        description: "Description",
+        assistantGuidance: "trusted guidance",
+        layoutMarkdown: "# {{title}}",
+        fields: {
+          title: {
+            id: "title",
+            label: "Title",
+            type: "text",
+            required: true,
+          },
+        },
+      },
+    };
+
+    expect(supportsWorkspaceThreads(formItem)).toBe(true);
+    expect(
+      enforceWorkspaceThreadPolicy(
+        { metadata: {}, config: { configurable: {} } },
+        formItem,
+        "user_owned",
+        "platform-assistant"
+      ).config.configurable.systemPrompt
+    ).toBe("trusted guidance");
   });
 });

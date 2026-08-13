@@ -3,25 +3,154 @@ import { join } from "node:path";
 import { z } from "zod";
 import generatedCatalog from "../../../data/template-catalog.json";
 
-const CatalogEntrySchema = z.object({
+const FormFieldSchema = z
+  .object({
+    id: z.string().regex(/^[a-z][a-z0-9_-]*$/),
+    label: z.string().min(1),
+    type: z.enum(["text", "textarea", "number", "date", "select", "roster"]),
+    required: z.boolean(),
+    maxLength: z.number().int().positive().optional(),
+    displayChars: z.number().int().positive().optional(),
+    displayLines: z.number().int().positive().optional(),
+    options: z.array(z.string().min(1)).min(1).optional(),
+    min: z.number().finite().optional(),
+    max: z.number().finite().optional(),
+    minDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    maxDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+  })
+  .superRefine((field, context) => {
+    if (field.type === "select" && !field.options) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "select needs options",
+      });
+    }
+    if (field.type !== "select" && field.options) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "options only apply to select",
+      });
+    }
+    if (field.options && new Set(field.options).size !== field.options.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "select options must be unique",
+      });
+    }
+    if (
+      field.type !== "number" &&
+      (field.min !== undefined || field.max !== undefined)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "min/max only apply to number",
+      });
+    }
+    if (
+      field.type !== "date" &&
+      (field.minDate !== undefined || field.maxDate !== undefined)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "date bounds only apply to date",
+      });
+    }
+    if (
+      field.min !== undefined &&
+      field.max !== undefined &&
+      field.min > field.max
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "min must not exceed max",
+      });
+    }
+    if (
+      field.minDate !== undefined &&
+      field.maxDate !== undefined &&
+      field.minDate > field.maxDate
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "minDate must not exceed maxDate",
+      });
+    }
+  });
+
+const CommonEntrySchema = z.object({
   id: z.string(),
   version: z.string(),
   locale: z.string(),
   title: z.string(),
   description: z.string(),
-  templateKind: z.literal("markdown"),
   sourcePath: z.string(),
-  initialMarkdown: z.string(),
   assistantGuidance: z.string(),
   contentHash: z.string(),
 });
 
+const MarkdownEntrySchema = CommonEntrySchema.extend({
+  templateKind: z.literal("markdown"),
+  initialMarkdown: z.string(),
+});
+
+const FormEntrySchema = CommonEntrySchema.extend({
+  templateKind: z.literal("form"),
+  layoutMarkdown: z.string(),
+  fields: z.record(z.string(), FormFieldSchema),
+}).superRefine((entry, context) => {
+  const used = new Set<string>();
+  const tokenPattern = /\{\{[\s\S]*?\}\}/g;
+  for (const token of entry.layoutMarkdown.match(tokenPattern) || []) {
+    const match = token.match(/^\{\{([a-z][a-z0-9_-]*)\}\}$/);
+    if (!match || !entry.fields[match[1]]) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `invalid form placeholder ${token}`,
+      });
+      continue;
+    }
+    used.add(match[1]);
+  }
+  const remainder = entry.layoutMarkdown.replace(tokenPattern, "");
+  if (remainder.includes("{{") || remainder.includes("}}")) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "malformed form placeholder syntax",
+    });
+  }
+  for (const [id, field] of Object.entries(entry.fields)) {
+    if (field.id !== id) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `field id does not match ${id}`,
+      });
+    }
+    if (!used.has(id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `unused form field ${id}`,
+      });
+    }
+  }
+});
+
+const CatalogEntrySchema = z.union([MarkdownEntrySchema, FormEntrySchema]);
+
 const CatalogSchema = z.object({
   schemaVersion: z.literal(1),
   catalogRevision: z.string().min(1),
-  templates: z.array(CatalogEntrySchema),
+  templates: z.array(CatalogEntrySchema).min(1),
 });
 
+export type FormFieldDefinition = z.infer<typeof FormFieldSchema>;
+export type MarkdownTemplateCatalogEntry = z.infer<typeof MarkdownEntrySchema>;
+export type FormTemplateCatalogEntry = z.infer<typeof FormEntrySchema>;
 export type TemplateCatalogEntry = z.infer<typeof CatalogEntrySchema>;
 export type TemplateCatalog = z.infer<typeof CatalogSchema>;
 
@@ -53,7 +182,7 @@ function fallbackCatalog(): TemplateCatalog {
   return parsed.data;
 }
 
-/** Load the current snapshot, retaining the last good one across bad reloads. */
+/** Load the current immutable snapshot, retaining the last good one across bad reloads. */
 export function getTemplateCatalog(): TemplateCatalog {
   const path = externalCatalogPath();
   if (!path) {

@@ -149,6 +149,19 @@ export function WorkspaceHome() {
                     <p className="truncate text-base font-medium text-slate-900">
                       {item.templateSnapshot.title}
                     </p>
+                    {item.kind === "form_template" && (
+                      <span
+                        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          item.submission?.status === "submitted"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {item.submission?.status === "submitted"
+                          ? "Submitted"
+                          : "Draft"}
+                      </span>
+                    )}
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>

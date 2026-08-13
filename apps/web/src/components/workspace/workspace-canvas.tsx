@@ -10,13 +10,14 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useWorkspaceItem } from "@/contexts/WorkspaceItemContext";
 import { convertToOpenAIFormat } from "@/lib/convert_messages";
 import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
+import type { MarkdownWorkspaceItem } from "@/lib/workspace/types";
 import { WorkspaceItemBanner } from "./workspace-item-banner";
 import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
+import { FormWorkspaceCanvas } from "./form-workspace-canvas";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
-export function WorkspaceCanvas() {
-  const { item, loading } = useWorkspaceItem();
+function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
   const { user } = useUserContext();
   const { threadId, setThreadId } = useThreadContext();
   const { graphData } = useGraphContext();
@@ -28,7 +29,6 @@ export function WorkspaceCanvas() {
   const [isAbandoning, setIsAbandoning] = useState(false);
 
   async function abandonItem() {
-    if (!item) return;
     setIsAbandoning(true);
     try {
       const response = await fetch(
@@ -51,7 +51,7 @@ export function WorkspaceCanvas() {
   }
 
   useEffect(() => {
-    if (!item || loading || bootstrappedItem.current === item.id) return;
+    if (bootstrappedItem.current === item.id) return;
     bootstrappedItem.current = item.id;
 
     if (item.threadId) {
@@ -75,14 +75,12 @@ export function WorkspaceCanvas() {
     });
     graphData.setUpdateRenderedArtifactRequired(true);
     graphData.setChatStarted(true);
-    // Bootstrap is intentionally keyed by the immutable item id; graphData
-    // methods are recreated by the context on every render.
+    // Bootstrap is intentionally keyed by the immutable item id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item?.id, loading]);
+  }, [item.id]);
 
   useEffect(() => {
     if (
-      !item ||
       !user ||
       !graphData.chatStarted ||
       !graphData.artifact ||
@@ -110,11 +108,10 @@ export function WorkspaceCanvas() {
         kickedOffItem.current = null;
         console.error("Workspace kickoff failed", error);
       });
-    // Kickoff is intentionally keyed by state transitions, not the mutable
-    // context object that owns those transitions.
+    // Kickoff is intentionally keyed by state transitions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    item?.id,
+    item.id,
     user?.id,
     graphData.chatStarted,
     graphData.artifact,
@@ -122,14 +119,6 @@ export function WorkspaceCanvas() {
     graphData.isStreaming,
     threadId,
   ]);
-
-  if (loading || !item) {
-    return (
-      <div className="p-8 text-sm text-muted-foreground">
-        Loading workspace item…
-      </div>
-    );
-  }
 
   return (
     <>
@@ -151,4 +140,30 @@ export function WorkspaceCanvas() {
       />
     </>
   );
+}
+
+export function WorkspaceCanvas() {
+  const { item, loading } = useWorkspaceItem();
+
+  if (loading || !item) {
+    return (
+      <div className="p-8 text-sm text-muted-foreground">
+        Loading workspace item…
+      </div>
+    );
+  }
+
+  if (item.kind === "form_template") {
+    return <FormWorkspaceCanvas item={item} />;
+  }
+
+  if (item.kind === "method") {
+    return (
+      <div className="p-8 text-sm text-muted-foreground">
+        This workspace item is not available yet.
+      </div>
+    );
+  }
+
+  return <MarkdownWorkspaceCanvas item={item} />;
 }
