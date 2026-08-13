@@ -1,20 +1,17 @@
-# CodeRabbit configuration — evaluchat/evaluchat
-# Triage policy: security/data-integrity findings are actioned before merge;
-# everything else is tracked as debt on the project board, not fixed inline.
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Triage policy: authentication, authorization, and attacker-controlled input
+# hold the merge. Everything else is tracked as board debt, not fixed inline.
 language: en-US
 early_access: false
-review:
-  # "chill" profile: fewer, higher-signal comments
+reviews:
   profile: chill
   request_changes_workflow: false
   auto_review:
     enabled: true
     drafts: false
-  auto_incremental_review: true
-checks:
-  # Disable pre-merge checks (docstring coverage threshold, etc.) — noise for
-  # an import-heavy repo; findings go through inline review instead.
-  enable: false
-code_review:
-  auto_resolve_outdated_comments: true
-  resolve_review_comments: false
+    auto_incremental_review: true
+  pre_merge_checks:
+    docstrings:
+      mode: off
+    issue_assessment:
+      mode: off

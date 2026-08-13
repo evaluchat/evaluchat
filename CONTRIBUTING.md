@@ -10,6 +10,8 @@ project — a continuation of LangChain Open Canvas. Contributions are welcome.
 - Small bug fixes and docs improvements are fine as direct PRs.
 - This is a TypeScript monorepo with strict linting and formatting — the CI runs
   `format:check` and `lint` on every PR, so make sure they pass locally.
+- Do not open a public issue for an undisclosed vulnerability — see
+  [SECURITY.md](SECURITY.md).
 
 ## Issues and the project board
 

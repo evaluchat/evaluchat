@@ -98,7 +98,7 @@ yarn build          # turbo build (all workspaces)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) — setup, conventions, and the PR checklist.
 External contributions are welcome; this is a small project, so please open an issue
-before large changes.
+before large changes. To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Related surfaces
 

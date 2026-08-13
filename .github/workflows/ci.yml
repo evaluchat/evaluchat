@@ -127,15 +127,20 @@ jobs:
 
   template-catalog:
     name: Verify public template catalog snapshot
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Check out public Knowledge templates
         uses: actions/checkout@v6
         with:
           repository: evaluchat/knowledge
           ref: dev
           path: knowledge-source
+          persist-credentials: false
       - name: Enable Corepack
         run: corepack enable
       - name: Use Node.js 22.x

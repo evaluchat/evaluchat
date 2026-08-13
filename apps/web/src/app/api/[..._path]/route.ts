@@ -210,10 +210,18 @@ async function handleRequest(req: NextRequest, method: string) {
             `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
             { headers: { "x-api-key": process.env.LANGCHAIN_API_KEY || "" } }
           );
-          if (threadRes.ok) {
-            const thread = await threadRes.json();
-            workspaceItemId = thread?.metadata?.workspace_item_id;
+          if (!threadRes.ok) {
+            console.error(
+              "Failed to re-read thread metadata for workspace policy",
+              threadRes.status
+            );
+            return NextResponse.json(
+              { error: "Could not resolve workspace item" },
+              { status: 409 }
+            );
           }
+          const thread = await threadRes.json();
+          workspaceItemId = thread?.metadata?.workspace_item_id;
         }
 
         if (workspaceItemId !== undefined) {
