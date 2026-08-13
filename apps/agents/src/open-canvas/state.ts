@@ -8,6 +8,13 @@ import {
   ArtifactV3,
   TextHighlight,
   SearchResult,
+  TeachingPhase,
+  ThesisAssessment,
+  EditorCursorPosition,
+  TextEditIntent,
+  TextEditSummary,
+  ApparatusConfiguration,
+  FormAgentContext,
 } from "@opencanvas/shared/types";
 import {
   Annotation,
@@ -85,6 +92,8 @@ export const OpenCanvasGraphAnnotation = Annotation.Root({
    * The artifacts that have been generated in the conversation.
    */
   artifact: Annotation<ArtifactV3>,
+  /** Current structured Form Template context, when this is a Form workspace. */
+  formContext: Annotation<FormAgentContext | undefined>,
   /**
    * The next node to route to. Only used for the first routing node/conditional edge.
    */
@@ -133,6 +142,20 @@ export const OpenCanvasGraphAnnotation = Annotation.Root({
    * The search results to include in context.
    */
   webSearchResults: Annotation<SearchResult[] | undefined>,
+  /** The current teaching phase for assignment mode. */
+  phase_state: Annotation<TeachingPhase | undefined>,
+  /** The thesis assessment result from the Socratic gate. */
+  thesis: Annotation<ThesisAssessment | undefined>,
+  /** Immutable assignment treatment snapshot supplied by the server. */
+  apparatusConfiguration: Annotation<ApparatusConfiguration | undefined>,
+  /** The cursor position in the editor when the user sent their message. */
+  cursorPosition: Annotation<EditorCursorPosition | undefined>,
+  /** The text the user has selected in the editor (plain text, not markdown blocks). */
+  editorSelectedText: Annotation<string | undefined>,
+  /** Parsed mechanical text-edit intent from generatePath. */
+  textEditIntent: Annotation<TextEditIntent | undefined>,
+  /** Summary of a completed mechanical text edit for followup messaging. */
+  textEditSummary: Annotation<TextEditSummary | undefined>,
 });
 
 export type OpenCanvasGraphReturnType = Partial<

@@ -1,4 +1,5 @@
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
+import { AIMessage } from "@langchain/core/messages";
 import { getModelFromConfig } from "../../utils.js";
 import {
   getArtifactContent,
@@ -19,6 +20,41 @@ export const generateFollowup = async (
   state: typeof OpenCanvasGraphAnnotation.State,
   config: LangGraphRunnableConfig
 ): Promise<OpenCanvasGraphReturnType> => {
+  if (state.textEditSummary?.op === "replace_all") {
+    const { find, replace, matchCount } = state.textEditSummary;
+    const content =
+      matchCount === 0
+        ? `I couldn't find "${find}" in the document.`
+        : `Replaced ${matchCount} occurrence(s) of "${find}" with "${replace}".`;
+    const message = new AIMessage(content);
+    return {
+      messages: [message],
+      _messages: [message],
+    };
+  }
+
+  if (
+    state.textEditSummary?.op === "replace_in_selection" &&
+    "error" in state.textEditSummary
+  ) {
+    const message = new AIMessage(state.textEditSummary.error);
+    return {
+      messages: [message],
+      _messages: [message],
+    };
+  }
+
+  if (state.textEditSummary?.op === "replace_in_selection") {
+    const { find, replace, matchCount } = state.textEditSummary;
+    const message = new AIMessage(
+      `Replaced ${matchCount} occurrence(s) of "${find}" with "${replace}" in the selection.`
+    );
+    return {
+      messages: [message],
+      _messages: [message],
+    };
+  }
+
   const smallModel = await getModelFromConfig(config, {
     maxTokens: 250,
     // We say tool calling is true here because that'll cause it to use a small model
@@ -30,7 +66,11 @@ export const generateFollowup = async (
   if (!assistantId) {
     throw new Error("`assistant_id` not found in configurable");
   }
-  const memoryNamespace = ["memories", assistantId];
+  const memoryNamespace = [
+    "memories",
+    config.configurable?.supabase_user_id ?? "anonymous",
+    assistantId,
+  ];
   const memoryKey = "reflection";
   const memories = await store.get(memoryNamespace, memoryKey);
   const memoriesAsString = memories?.value
@@ -49,10 +89,25 @@ export const generateFollowup = async (
       : currentArtifactContent.code
     : undefined;
 
-  const formattedPrompt = FOLLOWUP_ARTIFACT_PROMPT.replace(
-    "{artifactContent}",
-    artifactContent || "No artifacts generated yet."
-  )
+  // Add phase-specific instructions for teaching mode
+  let phaseInstructions = "";
+  if (state.phase_state === "drafting") {
+    phaseInstructions = `
+
+## Teaching Mode: Drafting Phase
+You just generated content on the canvas for a student. Your followup should:
+- Reference what you drafted (e.g., "I've drafted your introduction" or "Look at the canvas—I've taken your thoughts and written the first section")
+- Mention that they should review it and let you know if it captures their argument
+- Ask if they want to continue with the next section or make adjustments
+- Keep it conversational and encouraging (2-3 sentences max)
+- Match the tone from the Leo transcript: supportive but direct`;
+  }
+
+  const formattedPrompt = (FOLLOWUP_ARTIFACT_PROMPT + phaseInstructions)
+    .replace(
+      "{artifactContent}",
+      artifactContent || "No artifacts generated yet."
+    )
     .replace("{reflections}", memoriesAsString)
     .replace(
       "{conversation}",

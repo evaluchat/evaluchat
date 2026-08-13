@@ -1,6 +1,6 @@
-# Contributing to Evaluchat Canvas
+# Contributing to Evaluchat
 
-Thanks for your interest! Evaluchat Canvas is a small, independent open-source
+Thanks for your interest! Evaluchat is a small, independent open-source
 project — a continuation of LangChain Open Canvas. Contributions are welcome.
 
 ## Ground rules
@@ -10,6 +10,8 @@ project — a continuation of LangChain Open Canvas. Contributions are welcome.
 - Small bug fixes and docs improvements are fine as direct PRs.
 - This is a TypeScript monorepo with strict linting and formatting — the CI runs
   `format:check` and `lint` on every PR, so make sure they pass locally.
+- Do not open a public issue for an undisclosed vulnerability — see
+  [SECURITY.md](SECURITY.md).
 
 ## Issues and the project board
 

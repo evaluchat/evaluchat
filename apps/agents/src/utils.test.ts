@@ -1,0 +1,177 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createMockConfig } from "./open-canvas/__test-helpers__/mock-config.js";
+
+const {
+  initChatModelMock,
+  wrapModelWithFallbackMock,
+  getProviderChainMock,
+  getPrimaryProviderNameMock,
+  getProviderConfigMock,
+  chatOpenAIInvocations,
+  MockChatOpenAI,
+} = vi.hoisted(() => {
+  const initChatModelMock = vi.fn();
+  const wrapModelWithFallbackMock = vi.fn((model) => model);
+  const getProviderChainMock = vi.fn(() => ["opencode-zen", "opencode-go"]);
+  const getPrimaryProviderNameMock = vi.fn(() => "opencode-zen");
+  const getProviderConfigMock = vi.fn(() => ({
+    modelProvider: "openai",
+    apiKey: "zen-key",
+    baseURL: "https://opencode.ai/zen/v1",
+    model: "mimo-v2.5-free",
+  }));
+  const chatOpenAIInvocations: Record<string, unknown>[] = [];
+
+  class MockChatOpenAI {
+    invoke = vi.fn();
+    stream = vi.fn();
+    batch = vi.fn();
+    bindTools = vi.fn(() => this);
+
+    constructor(public readonly options: Record<string, unknown>) {
+      chatOpenAIInvocations.push(options);
+    }
+  }
+
+  return {
+    initChatModelMock,
+    wrapModelWithFallbackMock,
+    getProviderChainMock,
+    getPrimaryProviderNameMock,
+    getProviderConfigMock,
+    chatOpenAIInvocations,
+    MockChatOpenAI,
+  };
+});
+
+vi.mock("langchain/chat_models/universal", () => ({
+  initChatModel: initChatModelMock,
+}));
+
+vi.mock("@langchain/openai", () => ({
+  ChatOpenAI: MockChatOpenAI,
+}));
+
+vi.mock("./provider-registry.js", () => ({
+  getProviderChain: getProviderChainMock,
+  getPrimaryProviderName: getPrimaryProviderNameMock,
+  getProviderConfig: getProviderConfigMock,
+  wrapModelWithFallback: wrapModelWithFallbackMock,
+}));
+
+vi.mock("pdf-parse", () => ({ default: vi.fn() }));
+
+import { getModelConfig, getModelFromConfig } from "./utils.js";
+
+const ORIGINAL_ENV = { ...process.env };
+
+describe("provider resolution", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    chatOpenAIInvocations.length = 0;
+    process.env = {
+      ...ORIGINAL_ENV,
+      OPENAI_API_KEY: "default-openai-key",
+      OPENAI_API_BASE_URL: "https://openrouter.ai/api/v1",
+      PREMIUM_OPENROUTER_API_KEY: "premium-openrouter-key",
+      OPENCODE_ZEN_API_KEY: "zen-key",
+      OPENCODE_ZEN_BASE_URL: "https://opencode.ai/zen/v1",
+      OPENROUTER_ENABLED: "true",
+    };
+    initChatModelMock.mockResolvedValue({
+      invoke: vi.fn(),
+      stream: vi.fn(),
+      batch: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it("routes free assignments through the OpenCode Zen rail", async () => {
+    const config = createMockConfig({
+      customModelName: "mimo-v2.5-free",
+    });
+
+    const modelConfig = getModelConfig(config);
+    await getModelFromConfig(config);
+
+    expect(modelConfig).toMatchObject({
+      modelName: "mimo-v2.5-free",
+      modelProvider: "openai",
+      apiKey: "zen-key",
+      baseUrl: "https://opencode.ai/zen/v1",
+    });
+    expect(chatOpenAIInvocations).toHaveLength(1);
+    expect(wrapModelWithFallbackMock).toHaveBeenCalledTimes(1);
+    expect(getProviderChainMock).toHaveBeenCalledTimes(1);
+    expect(getPrimaryProviderNameMock).toHaveBeenCalledTimes(2);
+    expect(getProviderConfigMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("remaps legacy free DeepSeek ids onto the configured Zen budget model", async () => {
+    const config = createMockConfig({
+      customModelName: "deepseek-v4-flash-free",
+    });
+
+    const modelConfig = getModelConfig(config);
+
+    expect(modelConfig).toMatchObject({
+      modelName: "mimo-v2.5-free",
+      apiKey: "zen-key",
+      baseUrl: "https://opencode.ai/zen/v1",
+    });
+  });
+
+  it("routes premium assignments through OpenRouter with the premium key", async () => {
+    const config = createMockConfig({
+      customModelName: "openai/gpt-5.6-luna",
+    });
+
+    const modelConfig = getModelConfig(config);
+    await getModelFromConfig(config);
+
+    expect(modelConfig).toMatchObject({
+      modelName: "openai/gpt-5.6-luna",
+      modelProvider: "openai",
+      apiKey: "premium-openrouter-key",
+      baseUrl: "https://openrouter.ai/api/v1",
+    });
+    expect(chatOpenAIInvocations).toHaveLength(1);
+    expect(wrapModelWithFallbackMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps premium on OpenRouter when OPENAI_API_BASE_URL points at OpenCode Zen", async () => {
+    process.env.OPENAI_API_BASE_URL = "https://opencode.ai/zen/v1";
+
+    const config = createMockConfig({
+      customModelName: "openai/gpt-5.6-luna",
+    });
+
+    const modelConfig = getModelConfig(config);
+    await getModelFromConfig(config);
+
+    expect(modelConfig.baseUrl).toBe("https://openrouter.ai/api/v1");
+    expect(modelConfig.apiKey).toBe("premium-openrouter-key");
+    expect(chatOpenAIInvocations[0]).toMatchObject({
+      model: "openai/gpt-5.6-luna",
+      apiKey: "premium-openrouter-key",
+      configuration: {
+        baseURL: "https://openrouter.ai/api/v1",
+      },
+    });
+  });
+
+  it("fails loudly when the premium OpenRouter key is missing", () => {
+    delete process.env.PREMIUM_OPENROUTER_API_KEY;
+
+    const config = createMockConfig({
+      customModelName: "openai/gpt-5.6-luna",
+    });
+
+    expect(() => getModelConfig(config)).toThrow(
+      "PREMIUM_OPENROUTER_API_KEY is required for premium assignments."
+    );
+  });
+});

@@ -7,18 +7,20 @@ import {
 } from "@opencanvas/shared/utils/artifacts";
 import { reverseCleanContent } from "@/lib/normalize_string";
 import {
-  ArtifactMarkdownV3,
   ArtifactType,
   ArtifactV3,
+  ArtifactMarkdownV3,
   CustomModelConfig,
+  EditorCursorPosition,
+  FormAgentContext,
   GraphInput,
   ProgrammingLanguageOptions,
   RewriteArtifactMetaToolResponse,
   SearchResult,
   TextHighlight,
 } from "@opencanvas/shared/types";
+import { type DiffRange } from "@/lib/diffing";
 import { AIMessage, BaseMessage } from "@langchain/core/messages";
-import { useRuns } from "@/hooks/useRuns";
 import { createClient } from "@/hooks/utils";
 import { WEB_SEARCH_RESULTS_QUERY_PARAM } from "@/constants";
 import {
@@ -29,16 +31,25 @@ import {
   ALL_MODEL_NAMES,
   NON_STREAMING_TEXT_MODELS,
   NON_STREAMING_TOOL_CALLING_MODELS,
-  DEFAULT_MODEL_CONFIG,
-  DEFAULT_MODEL_NAME,
 } from "@opencanvas/shared/models";
+import {
+  getActiveDefaultModelConfig,
+  getActiveDefaultModelName,
+} from "@/lib/active-model";
 import { Thread } from "@langchain/langgraph-sdk";
 import { useToast } from "@/hooks/use-toast";
+import {
+  isEmptyKickoffThread,
+  isSubmittedThread,
+  threadContentScore,
+  type ThreadLike,
+} from "@/lib/teaching/select-active-thread";
 import {
   createContext,
   Dispatch,
   ReactNode,
   SetStateAction,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -61,9 +72,31 @@ import {
 import { debounce } from "lodash";
 import { useThreadContext } from "./ThreadProvider";
 import { useAssistantContext } from "./AssistantContext";
-import { StreamWorkerService } from "@/workers/graph-stream/streamWorker";
+import { useTeachingAssignmentOptional } from "./TeachingAssignmentContext";
+import { useWorkspaceItemOptional } from "./WorkspaceItemContext";
 import { useQueryState } from "nuqs";
-import type { DiffRange } from "@/lib/diffing";
+import {
+  findBlockInMarkdown,
+  reconcileTextHighlight,
+} from "@opencanvas/shared/utils/markdown-canvas";
+
+function resolveHighlightBlockBounds(highlight: TextHighlight): {
+  start: number;
+  end: number;
+} | null {
+  const block = findBlockInMarkdown(
+    highlight.fullMarkdown,
+    highlight.markdownBlock
+  );
+  if (!block) {
+    return null;
+  }
+  const start = highlight.fullMarkdown.indexOf(block);
+  if (start === -1) {
+    return null;
+  }
+  return { start, end: start + block.length };
+}
 
 export interface PendingEditState {
   isActive: boolean;
@@ -79,7 +112,9 @@ interface GraphData {
   selectedBlocks: TextHighlight | undefined;
   messages: BaseMessage[];
   artifact: ArtifactV3 | undefined;
+  formContext: FormAgentContext | undefined;
   updateRenderedArtifactRequired: boolean;
+  artifactSyncGeneration: number;
   isArtifactSaved: boolean;
   firstTokenReceived: boolean;
   feedbackSubmitted: boolean;
@@ -91,6 +126,7 @@ interface GraphData {
   setIsStreaming: Dispatch<SetStateAction<boolean>>;
   setFeedbackSubmitted: Dispatch<SetStateAction<boolean>>;
   setArtifact: Dispatch<SetStateAction<ArtifactV3 | undefined>>;
+  setFormContext: Dispatch<SetStateAction<FormAgentContext | undefined>>;
   setSelectedBlocks: Dispatch<SetStateAction<TextHighlight | undefined>>;
   setSelectedArtifact: (index: number) => void;
   setMessages: Dispatch<SetStateAction<BaseMessage[]>>;
@@ -99,6 +135,11 @@ interface GraphData {
   clearState: () => void;
   switchSelectedThread: (thread: Thread) => void;
   setUpdateRenderedArtifactRequired: Dispatch<SetStateAction<boolean>>;
+  phaseState: string | undefined;
+  setPhaseState: Dispatch<SetStateAction<string | undefined>>;
+  submitAssignment: () => Promise<{ wordCount: number; messageCount: number }>;
+  setCursorPosition: (pos: EditorCursorPosition | undefined) => void;
+  setEditorHasFocus: (focused: boolean) => void;
   pendingEdit: PendingEditState | null;
   setPendingEdit: Dispatch<SetStateAction<PendingEditState | null>>;
   setEditorTextContent: (text: string) => void;
@@ -109,6 +150,8 @@ type GraphContentType = {
 };
 
 const GraphContext = createContext<GraphContentType | undefined>(undefined);
+
+const WORKSPACE_DRAFT_AUTOSAVE_MS = 5_000;
 
 // Shim for recent LangGraph bugfix
 function extractStreamDataChunk(chunk: any) {
@@ -128,25 +171,43 @@ function extractStreamDataOutput(output: any) {
 export function GraphProvider({ children }: { children: ReactNode }) {
   const userData = useUserContext();
   const assistantsData = useAssistantContext();
+  const teachingAssignmentContext = useTeachingAssignmentOptional();
+  const workspaceItem = useWorkspaceItemOptional();
+  const teachingAssignment = teachingAssignmentContext?.assignment;
+  const assignmentIdParam = teachingAssignmentContext?.assignmentId ?? null;
+  const workspaceItemThreadId =
+    workspaceItem?.item?.kind === "markdown_template" ||
+    workspaceItem?.item?.kind === "form_template"
+      ? workspaceItem.item.threadId
+      : undefined;
+  const assignmentSystemPrompt =
+    teachingAssignmentContext?.systemPrompt ??
+    (workspaceItem?.item?.kind === "markdown_template" ||
+    workspaceItem?.item?.kind === "form_template"
+      ? workspaceItem.item.templateSnapshot.assistantGuidance
+      : undefined);
+  const apparatusConfiguration =
+    teachingAssignmentContext?.apparatusConfiguration;
   const threadData = useThreadContext();
   const { toast } = useToast();
-  const { shareRun } = useRuns();
   const [chatStarted, setChatStarted] = useState(false);
   const [messages, setMessages] = useState<BaseMessage[]>([]);
   const [artifact, setArtifact] = useState<ArtifactV3>();
+  const [formContext, setFormContext] = useState<FormAgentContext>();
+  const artifactRef = useRef<ArtifactV3 | undefined>(undefined);
+  const formContextRef = useRef<FormAgentContext | undefined>(undefined);
   const [selectedBlocks, setSelectedBlocks] = useState<TextHighlight>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [updateRenderedArtifactRequired, setUpdateRenderedArtifactRequired] =
     useState(false);
+  const [artifactSyncGeneration, setArtifactSyncGeneration] = useState(0);
   const lastSavedArtifact = useRef<ArtifactV3 | undefined>(undefined);
-  const artifactRef = useRef<ArtifactV3 | undefined>(undefined);
-  const editorTextContentRef = useRef<string>("");
-  const [pendingEdit, setPendingEdit] = useState<PendingEditState | null>(null);
+  const lastSavedFormContext = useRef<FormAgentContext | undefined>(undefined);
   const debouncedAPIUpdate = useRef(
     debounce(
       (artifact: ArtifactV3, threadId: string) =>
         updateArtifact(artifact, threadId),
-      5000
+      WORKSPACE_DRAFT_AUTOSAVE_MS
     )
   ).current;
   const [isArtifactSaved, setIsArtifactSaved] = useState(true);
@@ -157,6 +218,73 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState(false);
   const [artifactUpdateFailed, setArtifactUpdateFailed] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
+  const [phaseState, setPhaseState] = useState<string | undefined>(undefined);
+  const phaseStateRef = useRef<string | undefined>(undefined);
+  const editorTextContentRef = useRef<string>("");
+  const [pendingEdit, setPendingEdit] = useState<PendingEditState | null>(null);
+
+  // Expose setPendingEdit for E2E testing
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).__setPendingEdit = setPendingEdit;
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        delete (window as any).__setPendingEdit;
+      }
+    };
+  }, [setPendingEdit]);
+  // Keep ref in sync with state so the debounced closure always reads current value
+  useEffect(() => {
+    phaseStateRef.current = phaseState;
+  }, [phaseState]);
+
+  // A gate-off profile starts in drafting. The canonical Essays profile keeps
+  // the Socratic phase and its four-message escape hatch.
+  useEffect(() => {
+    if (!teachingAssignment || threadData.threadId) return;
+    const nextPhase =
+      apparatusConfiguration?.drafting_gate === "none"
+        ? "drafting"
+        : "socratic";
+    setPhaseState(nextPhase);
+    phaseStateRef.current = nextPhase;
+  }, [
+    teachingAssignment,
+    apparatusConfiguration?.drafting_gate,
+    threadData.threadId,
+  ]);
+
+  // Keep artifactRef in sync so async closures (streamMessageV2) can
+  // read the latest artifact value instead of the stale render snapshot.
+  useEffect(() => {
+    artifactRef.current = artifact;
+  }, [artifact]);
+
+  useEffect(() => {
+    formContextRef.current = formContext;
+  }, [formContext]);
+
+  // Cursor position — updated by TextRenderer, read by streamMessageV2.
+  // Only updates when the Workspace has focus, so the position persists
+  // when the user clicks into the chat input to type.
+  const cursorPositionRef = useRef<EditorCursorPosition | undefined>(undefined);
+  const editorHasFocusRef = useRef(false);
+  const setCursorPosition = useCallback(
+    (pos: EditorCursorPosition | undefined) => {
+      if (editorHasFocusRef.current) {
+        cursorPositionRef.current = pos;
+      }
+    },
+    []
+  );
+  const setEditorHasFocus = useCallback((focused: boolean) => {
+    editorHasFocusRef.current = focused;
+  }, []);
+
+  const setEditorTextContent = useCallback((text: string) => {
+    editorTextContentRef.current = text;
+  }, []);
 
   const [_, setWebSearchResultsId] = useQueryState(
     WEB_SEARCH_RESULTS_QUERY_PARAM
@@ -175,12 +303,6 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     }
   }, [userData.user]);
 
-  // Keep artifactRef in sync so async closures (streamMessageV2) can
-  // read the latest artifact after a stream finishes.
-  useEffect(() => {
-    artifactRef.current = artifact;
-  }, [artifact]);
-
   // Very hacky way of ensuring updateState is not called when a thread is switched
   useEffect(() => {
     if (threadSwitched) {
@@ -194,14 +316,31 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
-      debouncedAPIUpdate.cancel();
+      debouncedAPIUpdate.flush();
+    };
+  }, [debouncedAPIUpdate]);
+
+  // Flush artifact save when the page is closed/navigated away
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      debouncedAPIUpdate.flush();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [debouncedAPIUpdate]);
 
   useEffect(() => {
     if (!threadData.threadId) return;
     if (!artifact) return;
-    if (updateRenderedArtifactRequired || threadSwitched || isStreaming) return;
+    const isFormWorkspace = workspaceItem?.item?.kind === "form_template";
+    if (
+      (updateRenderedArtifactRequired && !isFormWorkspace) ||
+      threadSwitched ||
+      isStreaming
+    )
+      return;
     const currentIndex = artifact.currentIndex;
     const currentContent = artifact.contents.find(
       (c) => c.index === currentIndex
@@ -217,46 +356,234 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (
+    const artifactChanged =
       !lastSavedArtifact.current ||
-      lastSavedArtifact.current.contents !== artifact.contents
-    ) {
+      lastSavedArtifact.current.contents !== artifact.contents;
+    const formContextChanged = formContext !== lastSavedFormContext.current;
+    if (artifactChanged || formContextChanged) {
       setIsArtifactSaved(false);
       // This means the artifact in state does not match the last saved artifact
       // We need to update
       debouncedAPIUpdate(artifact, threadData.threadId);
     }
-  }, [artifact, threadData.threadId]);
+  }, [
+    artifact,
+    formContext,
+    threadData.threadId,
+    threadSwitched,
+    isStreaming,
+    updateRenderedArtifactRequired,
+    workspaceItem?.item?.kind,
+  ]);
 
-  const searchOrCreateEffectRan = useRef(false);
+  const lastLoadedThreadIdFromQuery = useRef<string | null>(null);
+  const threadLoadRetries = useRef<number>(0);
+  const MAX_THREAD_RETRIES = 3;
 
   // Attempt to load the thread if an ID is present in query params.
   useEffect(() => {
     if (
       typeof window === "undefined" ||
-      !userData.user ||
       threadData.createThreadLoading ||
       !threadData.threadId
     ) {
       return;
     }
 
-    // Only run effect once in development
-    if (searchOrCreateEffectRan.current) {
+    // Active streams own the thread (assignment kickoff / chat). Loading or
+    // resetting here clears React messages while assistant-ui still holds
+    // message indices → "Entry not available in the store".
+    if (isStreaming) {
       return;
     }
-    searchOrCreateEffectRan.current = true;
 
-    threadData.getThread(threadData.threadId).then((thread) => {
-      if (thread) {
-        switchSelectedThread(thread);
-        return;
+    if (lastLoadedThreadIdFromQuery.current === threadData.threadId) {
+      return;
+    }
+
+    // Reset retry counter when threadId changes
+    if (
+      threadLoadRetries.current > 0 &&
+      lastLoadedThreadIdFromQuery.current !== threadData.threadId
+    ) {
+      threadLoadRetries.current = 0;
+    }
+
+    // Don't set the ref yet — set it inside .then() after confirming content.
+    // This allows the effect to retry if the thread loads with empty values
+    // (e.g., cold LangGraph server on first request after rebuild).
+
+    const currentThreadId = threadData.threadId as string;
+    const tryLoadThread = async () => {
+      for (let attempt = 0; attempt <= MAX_THREAD_RETRIES; attempt++) {
+        const thread = await threadData.getThread(currentThreadId);
+        if (thread) {
+          // Thread found — process it
+          let threadValues = thread.values as
+            | Record<string, unknown>
+            | undefined;
+          // Registry rehydrate can leave values null while checkpointer has state.
+          if (
+            !threadValues ||
+            (!(threadValues.messages as unknown[] | undefined)?.length &&
+              !threadValues.artifact)
+          ) {
+            try {
+              const client = createClient();
+              const state = await client.threads.getState(currentThreadId);
+              if (state?.values) {
+                threadValues = state.values as Record<string, unknown>;
+                (thread as Thread).values = state.values;
+              }
+            } catch (_) {
+              /* keep empty values */
+            }
+          }
+
+          const scored = {
+            thread_id: thread.thread_id,
+            metadata: thread.metadata as Record<string, unknown>,
+            values: threadValues,
+          };
+          const emptyKickoff = isEmptyKickoffThread(scored);
+          const workspaceItemId = workspaceItem?.item?.id;
+          const isWorkspaceThread = Boolean(
+            workspaceItemId &&
+              (thread.metadata as Record<string, unknown> | undefined)
+                ?.workspace_item_id === workspaceItemId
+          );
+          // A workspace item intentionally starts with a short starter
+          // document, so its hidden kickoff must not be mistaken for an
+          // empty teaching thread. The workspace ownership marker is added
+          // server-side and keeps this exception scoped to the current item.
+          const treatAsEmptyKickoff = emptyKickoff && !isWorkspaceThread;
+
+          const hasContent =
+            threadValues &&
+            ((threadValues.messages &&
+              (threadValues.messages as unknown[]).length > 0) ||
+              threadValues.artifact);
+
+          if (hasContent && !treatAsEmptyKickoff) {
+            lastLoadedThreadIdFromQuery.current = threadData.threadId;
+            threadLoadRetries.current = 0;
+          } else if (treatAsEmptyKickoff && assignmentIdParam && !isStreaming) {
+            // URL/cache pointed at an empty kickoff — resume richer *incomplete*
+            // sibling if any. Never jump to a submitted thread (read-only, no Send).
+            try {
+              const richer =
+                await threadData.getActiveThread(assignmentIdParam);
+              if (
+                richer &&
+                richer.thread_id !== currentThreadId &&
+                !isSubmittedThread(richer as ThreadLike) &&
+                threadContentScore(richer as ThreadLike) >
+                  threadContentScore(scored)
+              ) {
+                lastLoadedThreadIdFromQuery.current = null;
+                threadData.setThreadId(richer.thread_id);
+                return;
+              }
+            } catch (_) {
+              /* continue with empty handling */
+            }
+            if (hasContent) {
+              lastLoadedThreadIdFromQuery.current = threadData.threadId;
+              threadLoadRetries.current = 0;
+            } else if (attempt < MAX_THREAD_RETRIES) {
+              lastLoadedThreadIdFromQuery.current = null;
+              threadLoadRetries.current = attempt + 1;
+              await new Promise((r) => setTimeout(r, 3000));
+              continue;
+            } else {
+              lastLoadedThreadIdFromQuery.current = threadData.threadId;
+              threadLoadRetries.current = 0;
+              threadData.setThreadId(null);
+              return;
+            }
+          } else if (attempt < MAX_THREAD_RETRIES) {
+            // Thread exists but empty — allow retry on next attempt
+            lastLoadedThreadIdFromQuery.current = null;
+            threadLoadRetries.current = attempt + 1;
+            if (attempt < MAX_THREAD_RETRIES) {
+              await new Promise((r) => setTimeout(r, 3000));
+              continue;
+            }
+          } else {
+            // Thread exists but empty after all retries — prefer a richer
+            // sibling for this assignment before treating as fresh kickoff.
+            lastLoadedThreadIdFromQuery.current = threadData.threadId;
+            threadLoadRetries.current = 0;
+            if (!isStreaming) {
+              if (assignmentIdParam) {
+                try {
+                  const richer =
+                    await threadData.getActiveThread(assignmentIdParam);
+                  if (
+                    richer &&
+                    richer.thread_id !== currentThreadId &&
+                    !isSubmittedThread(richer as ThreadLike)
+                  ) {
+                    lastLoadedThreadIdFromQuery.current = null;
+                    threadData.setThreadId(richer.thread_id);
+                    return;
+                  }
+                } catch (_) {
+                  // fall through to clear threadId
+                }
+              }
+              threadData.setThreadId(null);
+            }
+            return;
+          }
+
+          if (!isStreaming) {
+            switchSelectedThread(thread);
+          }
+          return;
+        }
+
+        // Thread not found. Prefer a richer *incomplete* sibling before clearing URL.
+        if (assignmentIdParam && !isStreaming) {
+          try {
+            const richer = await threadData.getActiveThread(assignmentIdParam);
+            if (
+              richer &&
+              richer.thread_id !== currentThreadId &&
+              !isSubmittedThread(richer as ThreadLike)
+            ) {
+              lastLoadedThreadIdFromQuery.current = null;
+              threadData.setThreadId(richer.thread_id);
+              return;
+            }
+          } catch (_) {
+            /* retry / clear below */
+          }
+        }
+
+        // Thread not found. This can happen if the proxy auth check hasn't
+        // settled yet. Wait and retry.
+        threadLoadRetries.current = attempt + 1;
+        if (attempt < MAX_THREAD_RETRIES) {
+          lastLoadedThreadIdFromQuery.current = null;
+          await new Promise((r) => setTimeout(r, 3000));
+        }
       }
 
-      // Failed to fetch thread. Remove from query params
+      // All retries exhausted — thread not found
+      lastLoadedThreadIdFromQuery.current = null;
       threadData.setThreadId(null);
-    });
-  }, [threadData.threadId, userData.user]);
+    };
+
+    tryLoadThread();
+  }, [
+    threadData.threadId,
+    userData.user,
+    isStreaming,
+    workspaceItem?.item?.id,
+    workspaceItemThreadId,
+    workspaceItem?.loading,
+  ]);
 
   const updateArtifact = async (
     artifactToUpdate: ArtifactV3,
@@ -267,13 +594,27 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
     try {
       const client = createClient();
-      await client.threads.updateState(threadId, {
-        values: {
-          artifact: artifactToUpdate,
-        },
-      });
+      const values: Record<string, unknown> = {
+        artifact: artifactToUpdate,
+      };
+      if (formContextRef.current) {
+        values.formContext = formContextRef.current;
+      }
+      // Always carry phase_state so a debounced save never clobbers it
+      if (phaseStateRef.current) {
+        values.phase_state = phaseStateRef.current;
+      }
+      await client.threads.updateState(threadId, { values });
       setIsArtifactSaved(true);
       lastSavedArtifact.current = artifactToUpdate;
+      lastSavedFormContext.current = formContextRef.current;
+      // Backup to localStorage as safety net against container restarts
+      try {
+        localStorage.setItem(
+          `canvas_backup_${threadId}`,
+          JSON.stringify({ artifact: artifactToUpdate, timestamp: Date.now() })
+        );
+      } catch (_) {}
     } catch (_) {
       setArtifactUpdateFailed(true);
     }
@@ -282,11 +623,71 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const clearState = () => {
     setMessages([]);
     setArtifact(undefined);
+    setFormContext(undefined);
+    lastSavedFormContext.current = undefined;
     setFirstTokenReceived(true);
   };
 
-  const setEditorTextContent = (text: string) => {
-    editorTextContentRef.current = text;
+  /**
+   * Calculate teaching completion percent and persist to thread metadata.
+   * Called after each graph run completes.
+   */
+  const updateTeachingProgress = async (
+    threadId: string,
+    currentPhaseState: string | undefined,
+    currentArtifact: ArtifactV3 | undefined,
+    currentMessages: BaseMessage[]
+  ) => {
+    try {
+      let completionPercent = 0;
+      const ESCAPE_HATCH_THRESHOLD = 4;
+
+      if (currentPhaseState === "submitted") {
+        completionPercent = 100;
+      } else if (currentPhaseState === "socratic") {
+        // Count human messages (user inputs) to estimate socratic progress
+        const humanMsgCount = currentMessages.filter(
+          (m: any) => m.type === "human"
+        ).length;
+        completionPercent = Math.min(
+          30,
+          Math.round(10 + (humanMsgCount / ESCAPE_HATCH_THRESHOLD) * 20)
+        );
+      } else if (currentPhaseState === "drafting") {
+        // Estimate word count from artifact content
+        let wordCount = 0;
+        if (currentArtifact) {
+          const content = currentArtifact.contents.find(
+            (c) => c.index === currentArtifact.currentIndex
+          );
+          if (content?.type === "text" && content.fullMarkdown) {
+            wordCount = content.fullMarkdown
+              .split(/\s+/)
+              .filter(Boolean).length;
+          }
+        }
+        const wordTarget = 500; // default word target
+        completionPercent = Math.min(
+          80,
+          Math.round(30 + (wordCount / wordTarget) * 50)
+        );
+      }
+
+      const client = createClient();
+      // Get current thread to merge metadata
+      const thread = await client.threads.get(threadId);
+      const existingMetadata =
+        (thread?.metadata as Record<string, unknown>) || {};
+
+      await client.threads.update(threadId, {
+        metadata: {
+          ...existingMetadata,
+          completionPercent,
+        },
+      });
+    } catch (e) {
+      console.error("Failed to update teaching progress", e);
+    }
   };
 
   const streamMessageV2 = async (params: GraphInput) => {
@@ -302,10 +703,58 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    if (teachingAssignment && apparatusConfiguration?.ai_assistance === false) {
+      toast({
+        title: "AI assistance is disabled",
+        description:
+          "This assignment provides a local authoring surface and submission without agent calls.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const canvasActionRequested = Boolean(
+      params.highlightedCode ||
+        params.highlightedText ||
+        params.language ||
+        params.artifactLength ||
+        params.regenerateWithEmojis ||
+        params.readingLevel ||
+        params.addComments ||
+        params.addLogs ||
+        params.portLanguage ||
+        params.fixBugs ||
+        params.customQuickActionId
+    );
+    if (
+      teachingAssignment &&
+      apparatusConfiguration?.ai_canvas_actions === false &&
+      canvasActionRequested
+    ) {
+      toast({
+        title: "AI editing actions are disabled",
+        description:
+          "Edit the document directly or continue the assignment conversation.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Mark streaming BEFORE createThread. createThread writes threadId into the
+    // URL, which triggers the resume/load effect — that effect must see
+    // isStreaming so it does not clear messages mid-kickoff (assistant-ui
+    // "Entry not available in the store").
+    setIsStreaming(true);
+    setRunId(undefined);
+    setFeedbackSubmitted(false);
+
     let currentThreadId = threadData.threadId;
     if (!currentThreadId) {
-      const newThread = await threadData.createThread();
+      const newThread = await threadData.createThread(
+        assignmentIdParam ?? undefined
+      );
       if (!newThread) {
+        setIsStreaming(false);
         toast({
           title: "Error",
           description: "Failed to create thread",
@@ -327,13 +776,43 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
     // TODO: update to properly pass the highlight data back
     // one field for highlighted text, and one for code
+    let highlightedTextForInput = selectedBlocks;
+    const latestArtifact = artifactRef.current ?? artifact;
+    if (highlightedTextForInput && latestArtifact) {
+      const currentContent = latestArtifact.contents.find(
+        (c) => c.index === latestArtifact.currentIndex && c.type === "text"
+      );
+      if (currentContent?.type === "text" && currentContent.fullMarkdown) {
+        const reconciled = reconcileTextHighlight(
+          highlightedTextForInput,
+          currentContent.fullMarkdown
+        );
+        if (reconciled.ok) {
+          highlightedTextForInput = reconciled.highlight;
+        } else {
+          toast({
+            title: "Selection out of sync",
+            description:
+              "Could not match your selection to the current document. Try selecting again.",
+            variant: "destructive",
+            duration: 5000,
+          });
+          highlightedTextForInput = undefined;
+        }
+      }
+    }
+
     const input = {
       ...DEFAULT_INPUTS,
       artifact,
+      ...(cursorPositionRef.current && {
+        cursorPosition: cursorPositionRef.current,
+      }),
       ...params,
       ...messagesInput,
-      ...(selectedBlocks && {
-        highlightedText: selectedBlocks,
+      ...(apparatusConfiguration ? { apparatusConfiguration } : {}),
+      ...(highlightedTextForInput && {
+        highlightedText: highlightedTextForInput,
       }),
       webSearchEnabled: searchEnabled,
     };
@@ -353,6 +832,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     ];
 
     if (fieldsToCheck.filter((field) => field !== undefined).length >= 2) {
+      setIsStreaming(false);
       toast({
         title: "Error",
         description:
@@ -375,24 +855,46 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         : "";
     const preEditText = editorTextContentRef.current;
 
-    setIsStreaming(true);
-    setRunId(undefined);
-    setFeedbackSubmitted(false);
+    // isStreaming already set before createThread above
     // The root level run ID of this stream
     let runId = "";
     let followupMessageId = "";
     // The ID of the message containing the thinking content.
     let thinkingMessageId = "";
+    // When streaming handlers apply an artifact version, skip duplicate on_chain_end.
+    let artifactAppliedFromStreamIndex: number | undefined;
+
+    const applyAgentArtifactUpdate = (nextArtifact: ArtifactV3) => {
+      setFirstTokenReceived(true);
+      setArtifact(nextArtifact);
+      setUpdateRenderedArtifactRequired(true);
+      setArtifactSyncGeneration((g) => g + 1);
+      artifactAppliedFromStreamIndex = nextArtifact.currentIndex;
+    };
 
     try {
-      const workerService = new StreamWorkerService();
-      const stream = workerService.streamData({
-        threadId: currentThreadId,
-        assistantId: assistantsData.selectedAssistant.assistant_id,
-        input,
-        modelName: threadData.modelName,
-        modelConfigs: threadData.modelConfigs,
-      });
+      const client = createClient();
+      const stream = client.runs.stream(
+        currentThreadId,
+        assistantsData.selectedAssistant.assistant_id,
+        {
+          input: input as Record<string, unknown>,
+          streamMode: "events",
+          config: {
+            configurable: {
+              customModelName: threadData.modelName,
+              modelConfig:
+                threadData.modelConfigs[
+                  threadData.modelName as keyof typeof threadData.modelConfigs
+                ],
+              ...(assignmentSystemPrompt
+                ? { systemPrompt: assignmentSystemPrompt }
+                : {}),
+              ...(apparatusConfiguration ? { apparatusConfiguration } : {}),
+            },
+          },
+        }
+      );
 
       // Variables to keep track of content specific to this stream
       const prevCurrentContent = artifact
@@ -524,7 +1026,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
               // Process accumulated content with rate limiting
               const result = handleGenerateArtifactToolCallChunk(
-                generateArtifactToolCallStr
+                generateArtifactToolCallStr,
+                artifact
               );
 
               if (result) {
@@ -580,10 +1083,13 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               }
 
               const partialUpdatedContent = message.content || "";
-              const startIndexOfHighlightedText =
-                highlightedText.fullMarkdown.indexOf(
-                  highlightedText.markdownBlock
+              const blockBounds = resolveHighlightBlockBounds(highlightedText);
+              if (!blockBounds) {
+                console.error(
+                  "[updateHighlightedText] markdown block not found in fullMarkdown"
                 );
+                continue;
+              }
 
               if (
                 updatedArtifactStartContent === undefined &&
@@ -591,13 +1097,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               ) {
                 // Initialize the start and rest content on first chunk
                 updatedArtifactStartContent =
-                  highlightedText.fullMarkdown.slice(
-                    0,
-                    startIndexOfHighlightedText
-                  );
+                  highlightedText.fullMarkdown.slice(0, blockBounds.start);
                 updatedArtifactRestContent = highlightedText.fullMarkdown.slice(
-                  startIndexOfHighlightedText +
-                    highlightedText.markdownBlock.length
+                  blockBounds.end
                 );
               }
 
@@ -622,6 +1124,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                   firstUpdateCopy
                 );
               });
+              artifactAppliedFromStreamIndex = newArtifactIndex;
 
               if (isFirstUpdate) {
                 isFirstUpdate = false;
@@ -730,11 +1233,14 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                 if (!thinkingMessageId) {
                   thinkingMessageId = `thinking-${uuidv4()}`;
                 }
-                newArtifactContent = handleRewriteArtifactThinkingModel({
-                  newArtifactContent: fullNewArtifactContent,
-                  setMessages,
-                  thinkingMessageId,
-                });
+                newArtifactContent =
+                  handleRewriteArtifactThinkingModel<BaseMessage>({
+                    newArtifactContent: fullNewArtifactContent,
+                    setMessages,
+                    thinkingMessageId,
+                    createMessage: (id, content) =>
+                      new AIMessage({ id, content }),
+                  });
               } else {
                 newArtifactContent = fullNewArtifactContent;
               }
@@ -823,11 +1329,14 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                 if (!thinkingMessageId) {
                   thinkingMessageId = `thinking-${uuidv4()}`;
                 }
-                newArtifactContent = handleRewriteArtifactThinkingModel({
-                  newArtifactContent: fullNewArtifactContent,
-                  setMessages,
-                  thinkingMessageId,
-                });
+                newArtifactContent =
+                  handleRewriteArtifactThinkingModel<BaseMessage>({
+                    newArtifactContent: fullNewArtifactContent,
+                    setMessages,
+                    thinkingMessageId,
+                    createMessage: (id, content) =>
+                      new AIMessage({ id, content }),
+                  });
               } else {
                 newArtifactContent = fullNewArtifactContent;
               }
@@ -996,10 +1505,13 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               }
 
               const partialUpdatedContent = message.content || "";
-              const startIndexOfHighlightedText =
-                highlightedText.fullMarkdown.indexOf(
-                  highlightedText.markdownBlock
+              const blockBounds = resolveHighlightBlockBounds(highlightedText);
+              if (!blockBounds) {
+                console.error(
+                  "[updateHighlightedText] markdown block not found in fullMarkdown"
                 );
+                continue;
+              }
 
               if (
                 updatedArtifactStartContent === undefined &&
@@ -1007,13 +1519,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               ) {
                 // Initialize the start and rest content on first chunk
                 updatedArtifactStartContent =
-                  highlightedText.fullMarkdown.slice(
-                    0,
-                    startIndexOfHighlightedText
-                  );
+                  highlightedText.fullMarkdown.slice(0, blockBounds.start);
                 updatedArtifactRestContent = highlightedText.fullMarkdown.slice(
-                  startIndexOfHighlightedText +
-                    highlightedText.markdownBlock.length
+                  blockBounds.end
                 );
               }
 
@@ -1038,6 +1546,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
                   firstUpdateCopy
                 );
               });
+              artifactAppliedFromStreamIndex = newArtifactIndex;
 
               if (isFirstUpdate) {
                 isFirstUpdate = false;
@@ -1207,6 +1716,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               NON_STREAMING_TEXT_MODELS.some((m) => m === threadData.modelName)
             ) {
               const message = extractStreamDataOutput(nodeOutput);
+              if (typeof message?.content !== "string") {
+                continue;
+              }
               followupMessageId = message.id;
               setMessages((prevMessages) =>
                 replaceOrInsertMessageChunk(prevMessages, message)
@@ -1254,13 +1766,77 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               generateArtifactToolCallStr +=
                 message?.tool_call_chunks?.[0]?.args || message?.content || "";
               const result = handleGenerateArtifactToolCallChunk(
-                generateArtifactToolCallStr
+                generateArtifactToolCallStr,
+                artifact
               );
               if (result && result === "continue") {
                 continue;
               } else if (result && typeof result === "object") {
                 setFirstTokenReceived(true);
                 setArtifact(result);
+              }
+            }
+
+            if (langgraphNode === "assessThesis" && nodeOutput) {
+              const output = nodeOutput as Record<string, any>;
+              if (output.phase_state) {
+                setPhaseState(output.phase_state);
+              }
+            }
+
+            if (langgraphNode === "applyTextEdits" && nodeOutput) {
+              const output = extractStreamDataOutput(nodeOutput) as {
+                artifact?: ArtifactV3;
+              };
+              if (output?.artifact) {
+                applyAgentArtifactUpdate(output.artifact);
+              }
+            }
+
+            if (
+              (langgraphNode === "updateHighlightedText" ||
+                langgraphNode === "updateArtifact" ||
+                langgraphNode === "rewriteArtifact" ||
+                langgraphNode === "integrateCanvasDirection") &&
+              nodeOutput
+            ) {
+              const output = extractStreamDataOutput(nodeOutput) as {
+                artifact?: ArtifactV3;
+              };
+              if (output?.artifact) {
+                const shouldApply =
+                  langgraphNode === "updateHighlightedText" ||
+                  output.artifact.currentIndex !==
+                    artifactAppliedFromStreamIndex;
+                if (shouldApply) {
+                  applyAgentArtifactUpdate(output.artifact);
+                }
+              }
+            }
+
+            if (langgraphNode === "generateFollowup" && nodeOutput) {
+              const output = extractStreamDataOutput(nodeOutput) as {
+                messages?: Array<Record<string, unknown>>;
+              };
+              const raw = output?.messages?.[0];
+              if (raw && !followupMessageId) {
+                const content =
+                  typeof raw.content === "string"
+                    ? raw.content
+                    : typeof (raw as { kwargs?: { content?: string } }).kwargs
+                          ?.content === "string"
+                      ? (raw as { kwargs: { content: string } }).kwargs.content
+                      : null;
+
+                if (content) {
+                  const aiMsg = new AIMessage({
+                    id: (raw.id as string) || uuidv4(),
+                    content,
+                  });
+                  followupMessageId = aiMsg.id!;
+                  setFirstTokenReceived(true);
+                  setMessages((prev) => [...prev, aiMsg]);
+                }
               }
             }
           }
@@ -1291,6 +1867,19 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       lastSavedArtifact.current = artifact;
     } catch (e) {
       console.error("Failed to stream message", e);
+      let errorMessage = "Unknown error. Please try again.";
+      if (e instanceof Error) {
+        errorMessage = e.message;
+      } else if (typeof e === "object" && e && "message" in e) {
+        errorMessage = String((e as { message: unknown }).message);
+      }
+      toast({
+        title: "Error generating content",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 5000,
+      });
+      setError(true);
     } finally {
       setSelectedBlocks(undefined);
       setIsStreaming(false);
@@ -1315,6 +1904,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
           preEditMarkdown !== postEditMarkdown
         ) {
           setUpdateRenderedArtifactRequired(true);
+          setArtifactSyncGeneration((g) => g + 1);
 
           if (preEditText) {
             setPendingEdit({
@@ -1330,41 +1920,19 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (runId) {
-      // Chain `.then` to not block the stream
-      shareRun(runId).then(async (sharedRunURL) => {
-        setMessages((prevMessages) => {
-          const newMsgs = prevMessages.map((msg) => {
-            if (
-              msg.id === followupMessageId &&
-              !(msg as AIMessage).tool_calls?.find(
-                (tc) => tc.name === "langsmith_tool_ui"
-              )
-            ) {
-              const toolCall = {
-                name: "langsmith_tool_ui",
-                args: { sharedRunURL },
-                id: sharedRunURL
-                  ?.split("https://smith.langchain.com/public/")[1]
-                  .split("/")[0],
-              };
-              const castMsg = msg as AIMessage;
-              const newMessageWithToolCall = new AIMessage({
-                ...castMsg,
-                content: castMsg.content,
-                id: castMsg.id,
-                tool_calls: castMsg.tool_calls
-                  ? [...castMsg.tool_calls, toolCall]
-                  : [toolCall],
-              });
-              return newMessageWithToolCall;
-            }
-
-            return msg;
-          });
-          return newMsgs;
-        });
-      });
+    // Persist teaching progress to thread metadata
+    if (
+      threadData.threadId &&
+      teachingAssignment &&
+      assignmentSystemPrompt &&
+      apparatusConfiguration?.tracking !== false
+    ) {
+      void updateTeachingProgress(
+        threadData.threadId,
+        phaseState,
+        artifact,
+        messages
+      );
     }
   };
 
@@ -1419,6 +1987,69 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const submitAssignment = async (): Promise<{
+    wordCount: number;
+    messageCount: number;
+  }> => {
+    // Cancel any pending debounced artifact save so it doesn't race us
+    debouncedAPIUpdate.cancel();
+
+    // Calculate word count from artifact
+    let wordCount = 0;
+    if (artifact) {
+      const content = artifact.contents.find(
+        (c) => c.index === artifact.currentIndex
+      );
+      if (content?.type === "text" && content.fullMarkdown) {
+        wordCount = content.fullMarkdown.split(/\s+/).filter(Boolean).length;
+      }
+    }
+
+    const messageCount = messages.filter((m: any) => m.type === "human").length;
+
+    // Persist to thread
+    if (threadData.threadId) {
+      const client = createClient();
+
+      // 1. Save artifact to thread values (ensure canvas content is persisted)
+      if (artifact) {
+        try {
+          await client.threads.updateState(threadData.threadId, {
+            values: {
+              artifact,
+              phase_state: "submitted",
+            },
+          });
+          lastSavedArtifact.current = artifact;
+          try {
+            localStorage.setItem(
+              `canvas_backup_${threadData.threadId}`,
+              JSON.stringify({ artifact, timestamp: Date.now() })
+            );
+          } catch (_) {}
+        } catch (e) {
+          console.error("Failed to save artifact on submit", e);
+        }
+      }
+
+      // 2. Update thread metadata with completion info
+      const thread = await client.threads.get(threadData.threadId);
+      const existingMetadata =
+        (thread?.metadata as Record<string, unknown>) || {};
+      await client.threads.update(threadData.threadId, {
+        metadata: {
+          ...existingMetadata,
+          completionPercent: 100,
+          phaseState: "submitted",
+          submittedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    setPhaseState("submitted");
+    return { wordCount, messageCount };
+  };
+
   const switchSelectedThread = (thread: Thread) => {
     setUpdateRenderedArtifactRequired(true);
     setThreadSwitched(true);
@@ -1428,7 +2059,6 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     // isn't created on page load if one already exists.
     threadData.setThreadId(thread.thread_id);
 
-    // Set the model name and config
     if (thread.metadata?.customModelName) {
       threadData.setModelName(
         thread.metadata.customModelName as ALL_MODEL_NAMES
@@ -1438,8 +2068,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         thread.metadata.modelConfig as CustomModelConfig
       );
     } else {
-      threadData.setModelName(DEFAULT_MODEL_NAME);
-      threadData.setModelConfig(DEFAULT_MODEL_NAME, DEFAULT_MODEL_CONFIG);
+      const defaultName = getActiveDefaultModelName();
+      threadData.setModelName(defaultName);
+      threadData.setModelConfig(defaultName, getActiveDefaultModelConfig());
     }
 
     const castValues: {
@@ -1450,6 +2081,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       messages: (thread.values as Record<string, any>)?.messages || undefined,
     };
     const castThreadValues = thread.values as Record<string, any>;
+    if (castThreadValues?.phase_state) {
+      setPhaseState(castThreadValues.phase_state);
+    }
     if (castThreadValues?.artifact) {
       if (isDeprecatedArtifactType(castThreadValues.artifact)) {
         castValues.artifact = convertToArtifactV3(castThreadValues.artifact);
@@ -1459,7 +2093,39 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     } else {
       castValues.artifact = undefined;
     }
+    // If artifact is empty/missing, check localStorage backup for THIS thread.
+    // Use thread.thread_id — threadData.threadId may still be the previous id
+    // until React re-renders after setThreadId.
+    if (!castValues.artifact) {
+      try {
+        const backupRaw = localStorage.getItem(
+          `canvas_backup_${thread.thread_id}`
+        );
+        if (backupRaw) {
+          const { artifact: backupArtifact, timestamp } = JSON.parse(backupRaw);
+          if (
+            backupArtifact &&
+            Date.now() - timestamp < 7 * 24 * 60 * 60 * 1000
+          ) {
+            // Backup is less than 7 days old — use it
+            castValues.artifact = backupArtifact;
+            // Restore to server in the background
+            const client = createClient();
+            void client.threads
+              .updateState(thread.thread_id, {
+                values: { artifact: backupArtifact },
+              })
+              .catch(console.warn);
+          }
+        }
+      } catch (_) {}
+    }
     lastSavedArtifact.current = castValues?.artifact;
+    const loadedFormContext = castThreadValues?.formContext as
+      | FormAgentContext
+      | undefined;
+    setFormContext(loadedFormContext);
+    lastSavedFormContext.current = loadedFormContext;
 
     if (!castValues?.messages?.length) {
       setMessages([]);
@@ -1492,7 +2158,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       selectedBlocks,
       messages,
       artifact,
+      formContext,
       updateRenderedArtifactRequired,
+      artifactSyncGeneration,
       isArtifactSaved,
       firstTokenReceived,
       feedbackSubmitted,
@@ -1504,6 +2172,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       setIsStreaming,
       setFeedbackSubmitted,
       setArtifact,
+      setFormContext,
       setSelectedBlocks,
       setSelectedArtifact,
       setMessages,
@@ -1512,6 +2181,11 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       clearState,
       switchSelectedThread,
       setUpdateRenderedArtifactRequired,
+      phaseState,
+      setPhaseState,
+      submitAssignment,
+      setCursorPosition,
+      setEditorHasFocus,
       pendingEdit,
       setPendingEdit,
       setEditorTextContent,

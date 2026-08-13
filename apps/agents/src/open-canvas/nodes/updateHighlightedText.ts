@@ -13,6 +13,10 @@ import {
   getArtifactContent,
   isArtifactMarkdownContent,
 } from "@opencanvas/shared/utils/artifacts";
+import {
+  findBlockInMarkdown,
+  normalizeCanvasMarkdown,
+} from "@opencanvas/shared/utils/markdown-canvas";
 import { ArtifactMarkdownV3 } from "@opencanvas/shared/types";
 import {
   OpenCanvasGraphAnnotation,
@@ -29,14 +33,25 @@ The blocks will be joined later on, so you do not need to worry about the format
 # Text block
 {textBlocks}
 
-Your task is to rewrite the sourounding content to fulfill the users request. The selected text content you are provided above has had the markdown styling removed, so you can focus on the text itself.
+IMPORTANT: The numbers and tabs at the start of each line in the text block above are LINE NUMBERS for reference only. They are NOT part of the actual content. NEVER include line numbers in your response.
+
+Your task is to rewrite the surrounding content to fulfill the user's request. The selected text content you are provided above has had the markdown styling removed, so you can focus on the text itself.
 However, ensure you ALWAYS respond with the full markdown text block, including any markdown syntax.
 NEVER wrap your response in any additional markdown syntax, as this will be handled by the system. Do NOT include a triple backtick wrapping the text block, unless it was present in the original text block.
-You should NOT change anything EXCEPT the selected text. The ONLY instance where you may update the sourounding text is if it is necessary to make the selected text make sense.
+You should NOT change anything EXCEPT the selected text. The ONLY instance where you may update the surrounding text is if it is necessary to make the selected text make sense.
 You should ALWAYS respond with the full, updated text block, including any formatting, e.g newlines, indents, markdown syntax, etc. NEVER add extra syntax or formatting unless the user has specifically requested it.
 If you observe partial markdown, this is OKAY because you are only updating a partial piece of the text.
 
 Ensure you reply with the FULL text block, including the updated selected text. NEVER include only the updated selected text, or additional prefixes or suffixes.`;
+
+function skipWithMessage(message: string): OpenCanvasGraphReturnType {
+  return {
+    textEditSummary: {
+      op: "replace_in_selection",
+      error: message,
+    },
+  };
+}
 
 /**
  * Update an existing artifact based on the user's query.
@@ -91,11 +106,25 @@ export const updateHighlightedText = async (
     );
   }
 
-  const { markdownBlock, selectedText, fullMarkdown } = state.highlightedText;
+  const { markdownBlock, selectedText } = state.highlightedText;
+  const fullMarkdown = normalizeCanvasMarkdown(
+    currentArtifactContent.fullMarkdown
+  );
+  const blockInDoc = findBlockInMarkdown(fullMarkdown, markdownBlock);
+  if (!blockInDoc) {
+    return skipWithMessage(
+      "I couldn't match your selection to the document — your canvas is unchanged. Try highlighting the section again."
+    );
+  }
+  // Add line numbers to the text blocks so the AI can reference specific lines
+  const numberedBlocks = blockInDoc
+    .split("\n")
+    .map((line, idx) => `${idx + 1}\t${line}`)
+    .join("\n");
   const formattedPrompt = PROMPT.replace(
     "{highlightedText}",
     selectedText
-  ).replace("{textBlocks}", markdownBlock);
+  ).replace("{textBlocks}", numberedBlocks);
 
   const recentUserMessage = state._messages[state._messages.length - 1];
   if (recentUserMessage.getType() !== "human") {
@@ -114,6 +143,16 @@ export const updateHighlightedText = async (
   ]);
   const responseContent = response.content as string;
 
+  // Safety: strip any line-number prefixes the LLM may have echoed back.
+  // Pattern: lines starting with "N\t" where N is a number.
+  const cleanedResponse = responseContent
+    .split("\n")
+    .map((line) => {
+      const match = line.match(/^\d+\t(.*)$/);
+      return match ? match[1] : line;
+    })
+    .join("\n");
+
   const newCurrIndex = state.artifact.contents.length + 1;
   const prevContent = state.artifact.contents.find(
     (c) => c.index === state.artifact.currentIndex && c.type === "text"
@@ -122,10 +161,23 @@ export const updateHighlightedText = async (
     throw new Error("Previous content not found");
   }
 
-  if (!fullMarkdown.includes(markdownBlock)) {
-    throw new Error("Selected text not found in current content");
+  const updated = normalizeCanvasMarkdown(cleanedResponse).trim();
+  if (!updated || updated.length < Math.min(blockInDoc.length * 0.25, 40)) {
+    return skipWithMessage(
+      "The rewrite didn't look like document text — your canvas is unchanged. Try highlighting the section and asking again."
+    );
   }
-  const newFullMarkdown = fullMarkdown.replace(markdownBlock, responseContent);
+
+  // Normalize trailing newlines: if blockInDoc ends with \n, ensure the
+  // response also does, so the replacement preserves paragraph spacing.
+  let responseToUse = updated;
+  if (blockInDoc.endsWith("\n") && !responseToUse.endsWith("\n")) {
+    responseToUse = `${responseToUse}\n`;
+  }
+  const newFullMarkdown = fullMarkdown.replace(blockInDoc, responseToUse);
+  if (newFullMarkdown === fullMarkdown) {
+    return skipWithMessage("No changes were applied to the canvas.");
+  }
 
   const updatedArtifactContent: ArtifactMarkdownV3 = {
     ...prevContent,

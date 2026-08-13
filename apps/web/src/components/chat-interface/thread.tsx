@@ -8,9 +8,9 @@ import { Dispatch, FC, SetStateAction } from "react";
 import { ReflectionsDialog } from "../reflections-dialog/ReflectionsDialog";
 import { useLangSmithLinkToolUI } from "../tool-hooks/LangSmithLinkToolUI";
 import { TooltipIconButton } from "../ui/assistant-ui/tooltip-icon-button";
-import { TighterText } from "../ui/header";
 import { Composer } from "./composer";
 import { AssistantMessage, UserMessage } from "./messages";
+import { TypingIndicator } from "./typing-indicator";
 import ModelSelector from "./model-selector";
 import { ThreadHistory } from "./thread-history";
 import { ThreadWelcome } from "./welcome";
@@ -43,6 +43,10 @@ export interface ThreadProps {
   switchSelectedThreadCallback: (thread: ThreadType) => void;
   searchEnabled: boolean;
   setChatCollapsed: (c: boolean) => void;
+  minimalCanvas?: boolean;
+  disabled?: boolean;
+  hideQuickStartButtons?: boolean;
+  quickStartPrompts?: string[];
 }
 
 export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
@@ -52,6 +56,7 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
     handleQuickStart,
     switchSelectedThreadCallback,
   } = props;
+  const minimalCanvas = props.minimalCanvas ?? true;
   const { toast } = useToast();
   const {
     graphData: { clearState, runId, feedbackSubmitted, setFeedbackSubmitted },
@@ -68,7 +73,7 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
   const { user } = useUserContext();
 
   // Render the LangSmith trace link
-  useLangSmithLinkToolUI();
+  useLangSmithLinkToolUI(false);
 
   const handleNewSession = async () => {
     if (!user) {
@@ -91,14 +96,15 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
   };
 
   return (
-    <ThreadPrimitive.Root className="flex flex-col h-full w-full">
+    <ThreadPrimitive.Root className="flex h-full min-h-0 w-full flex-col">
       <div className="pr-3 pl-6 pt-3 pb-2 flex flex-row gap-4 items-center justify-between">
         <div className="flex items-center justify-start gap-2 text-gray-600">
-          <ThreadHistory
-            switchSelectedThreadCallback={switchSelectedThreadCallback}
-          />
-          <TighterText className="text-xl">Open Canvas</TighterText>
-          {!hasChatStarted && (
+          {!minimalCanvas && (
+            <ThreadHistory
+              switchSelectedThreadCallback={switchSelectedThreadCallback}
+            />
+          )}
+          {!minimalCanvas && !hasChatStarted && (
             <ModelSelector
               modelName={modelName}
               setModelName={setModelName}
@@ -119,24 +125,26 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
             >
               <PanelRightOpen className="text-gray-600" />
             </TooltipIconButton>
-            <TooltipIconButton
-              tooltip="New chat"
-              variant="ghost"
-              className="w-8 h-8"
-              delayDuration={400}
-              onClick={handleNewSession}
-            >
-              <SquarePen className="text-gray-600" />
-            </TooltipIconButton>
+            {!minimalCanvas && (
+              <TooltipIconButton
+                tooltip="New chat"
+                variant="ghost"
+                className="w-8 h-8"
+                delayDuration={400}
+                onClick={handleNewSession}
+              >
+                <SquarePen className="text-gray-600" />
+              </TooltipIconButton>
+            )}
           </div>
-        ) : (
+        ) : !minimalCanvas ? (
           <div className="flex flex-row gap-2 items-center">
             <ReflectionsDialog selectedAssistant={selectedAssistant} />
           </div>
-        )}
+        ) : null}
       </div>
-      <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto scroll-smooth bg-inherit px-4 pt-8">
-        {!hasChatStarted && (
+      <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto scroll-smooth bg-inherit px-4 pt-4">
+        {!hasChatStarted && !minimalCanvas && (
           <ThreadWelcome
             handleQuickStart={handleQuickStart}
             composer={
@@ -144,9 +152,12 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
                 chatStarted={false}
                 userId={props.userId}
                 searchEnabled={props.searchEnabled}
+                disabled={props.disabled}
               />
             }
             searchEnabled={props.searchEnabled}
+            hideQuickStartButtons={props.hideQuickStartButtons}
+            quickStartPrompts={props.quickStartPrompts}
           />
         )}
         <ThreadPrimitive.Messages
@@ -162,25 +173,37 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
             ),
           }}
         />
+        <TypingIndicator />
       </ThreadPrimitive.Viewport>
-      <div className="mt-4 flex w-full flex-col items-center justify-end rounded-t-lg bg-inherit pb-4 px-4">
+      <div className="mt-auto flex w-full shrink-0 flex-col items-center justify-end rounded-t-lg border-t bg-inherit px-4 pb-4 pt-3">
         <ThreadScrollToBottom />
         <div className="w-full max-w-2xl">
-          {hasChatStarted && (
-            <div className="flex flex-col space-y-2">
-              <ModelSelector
-                modelName={modelName}
-                setModelName={setModelName}
-                modelConfig={modelConfig}
-                setModelConfig={setModelConfig}
-                modelConfigs={modelConfigs}
-              />
-              <Composer
-                chatStarted={true}
-                userId={props.userId}
-                searchEnabled={props.searchEnabled}
-              />
-            </div>
+          {minimalCanvas ? (
+            <Composer
+              chatStarted={hasChatStarted}
+              userId={props.userId}
+              searchEnabled={props.searchEnabled}
+              disabled={props.disabled}
+              minimalCanvas
+            />
+          ) : (
+            hasChatStarted && (
+              <div className="flex flex-col space-y-2">
+                <ModelSelector
+                  modelName={modelName}
+                  setModelName={setModelName}
+                  modelConfig={modelConfig}
+                  setModelConfig={setModelConfig}
+                  modelConfigs={modelConfigs}
+                />
+                <Composer
+                  chatStarted
+                  userId={props.userId}
+                  searchEnabled={props.searchEnabled}
+                  disabled={props.disabled}
+                />
+              </div>
+            )
           )}
         </div>
       </div>

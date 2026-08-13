@@ -12,7 +12,6 @@ import {
   useEffect,
   useState,
 } from "react";
-import * as Icons from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,8 +23,10 @@ import { Button } from "../ui/button";
 import { TighterText } from "../ui/header";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { IconSelect } from "./icon-select";
-import React from "react";
+import React, { Suspense, lazy } from "react";
+const IconSelect = lazy(() =>
+  import("./icon-select").then((mod) => ({ default: mod.IconSelect }))
+);
 import { useToast } from "@/hooks/use-toast";
 import { ColorPicker } from "./color-picker";
 import { Textarea } from "../ui/textarea";
@@ -84,7 +85,7 @@ export function CreateEditAssistantDialog(
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [iconName, setIconName] = useState<keyof typeof Icons>("User");
+  const [iconName, setIconName] = useState<string>("User");
   const [hasSelectedIcon, setHasSelectedIcon] = useState(false);
   const [iconColor, setIconColor] = useState("#000000");
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -335,16 +336,22 @@ export function CreateEditAssistantDialog(
               <Label htmlFor="icon">
                 <TighterText>Icon</TighterText>
               </Label>
-              <IconSelect
-                allDisabled={props.allDisabled}
-                iconColor={iconColor}
-                selectedIcon={iconName}
-                setSelectedIcon={(i) => {
-                  setHasSelectedIcon(true);
-                  setIconName(i);
-                }}
-                hasSelectedIcon={hasSelectedIcon}
-              />
+              <Suspense
+                fallback={
+                  <div className="h-10 w-full animate-pulse bg-gray-200 dark:bg-gray-800 rounded" />
+                }
+              >
+                <IconSelect
+                  allDisabled={props.allDisabled}
+                  iconColor={iconColor}
+                  selectedIcon={iconName}
+                  setSelectedIcon={(i) => {
+                    setHasSelectedIcon(true);
+                    setIconName(i);
+                  }}
+                  hasSelectedIcon={hasSelectedIcon}
+                />
+              </Suspense>
             </div>
             <div className="flex flex-col gap-4 items-start justify-start w-full">
               <Label htmlFor="description">

@@ -1,8 +1,8 @@
 {
   "name": "@opencanvas/evals",
   "author": "Brace Sproul",
-  "homepage": "https://opencanvas.langchain.com",
-  "repository": "https://github.com/langchain-ai/open-canvas",
+  "homepage": "https://evaluchat.org",
+  "repository": "https://github.com/evaluchat/evaluchat",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -14,10 +14,10 @@
     "lint:fix": "eslint src --fix"
   },
   "dependencies": {
-    "@langchain/core": "^0.3.80",
-    "@langchain/openai": "^0.4.2",
+    "@langchain/core": "^1.2.5",
+    "@langchain/openai": "^1.5.6",
     "@opencanvas/agents": "*",
-    "langsmith": "^0.5.0",
+    "langsmith": "^0.6.0",
     "zod": "^3.24.1",
     "dotenv": "^16.4.7"
   },

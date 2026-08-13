@@ -1,5 +1,4 @@
 import type { Dispatch, SetStateAction } from "react";
-import { AIMessage, type BaseMessage } from "@langchain/core/messages";
 import { THINKING_MODELS } from "../models.js";
 
 type ThinkingAndResponseTokens = {
@@ -69,11 +68,15 @@ export function extractThinkingAndResponseTokens(
   };
 }
 
-type HandleRewriteArtifactThinkingModelParams = {
-  newArtifactContent: string;
-  setMessages: Dispatch<SetStateAction<BaseMessage[]>>;
-  thinkingMessageId: string;
-};
+type MessageWithId = { id?: string | null };
+
+type HandleRewriteArtifactThinkingModelParams<TMessage extends MessageWithId> =
+  {
+    newArtifactContent: string;
+    setMessages: Dispatch<SetStateAction<TMessage[]>>;
+    thinkingMessageId: string;
+    createMessage: (id: string, content: string) => TMessage;
+  };
 
 /**
  * Handles the rewriting of artifact content by processing thinking tokens and updating messages state.
@@ -82,15 +85,18 @@ type HandleRewriteArtifactThinkingModelParams = {
  *
  * @param {Object} params - The parameters for handling artifact rewriting
  * @param {string} params.newArtifactContent - The new content to process for the artifact
- * @param {Dispatch<SetStateAction<BaseMessage[]>>} params.setMessages - State setter function for updating messages
+ * @param {Dispatch<SetStateAction<TMessage[]>>} params.setMessages - State setter function for updating messages
  * @param {string} params.thinkingMessageId - Unique identifier for the thinking message to update or create
  * @returns {string} The extracted response content from the artifact
  */
-export function handleRewriteArtifactThinkingModel({
+export function handleRewriteArtifactThinkingModel<
+  TMessage extends MessageWithId,
+>({
   newArtifactContent,
   setMessages,
   thinkingMessageId,
-}: HandleRewriteArtifactThinkingModelParams): string {
+  createMessage,
+}: HandleRewriteArtifactThinkingModelParams<TMessage>): string {
   const { thinking, response } =
     extractThinkingAndResponseTokens(newArtifactContent);
 
@@ -105,10 +111,7 @@ export function handleRewriteArtifactThinkingModel({
         (msg) => msg.id === thinkingMessageId
       );
 
-      const thinkingMessage = new AIMessage({
-        id: thinkingMessageId,
-        content: thinking,
-      });
+      const thinkingMessage = createMessage(thinkingMessageId, thinking);
 
       if (prevHasThinkingMsg) {
         // The message exists, so replace it

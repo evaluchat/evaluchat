@@ -6,6 +6,7 @@ import rehypeKatex from "rehype-katex";
 import { Components } from "react-markdown";
 
 import "katex/dist/katex.min.css";
+import { normalizeMermaidSource } from "./mermaid-source";
 
 interface PrintViewProps {
   markdown: string;
@@ -19,7 +20,7 @@ const MermaidCodeRenderer = React.lazy(async () => {
     default: function MermaidCodeBlock({ code }: { code: string }) {
       const svg = useMemo(() => {
         try {
-          return renderMermaidSVG(code, {
+          return renderMermaidSVG(normalizeMermaidSource(code), {
             bg: "white",
             fg: "black",
             accent: "#3b82f6",

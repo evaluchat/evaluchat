@@ -5,27 +5,56 @@ import {
   getModelFromConfig,
   isUsingO1MiniModel,
 } from "../../../utils.js";
-import { getArtifactContent } from "@opencanvas/shared/utils/artifacts";
+import {
+  getArtifactContent,
+  isArtifactCodeContent,
+} from "@opencanvas/shared/utils/artifacts";
 import { GET_TITLE_TYPE_REWRITE_ARTIFACT } from "../../prompts.js";
 import { OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA } from "./schemas.js";
 import { getFormattedReflections } from "../../../utils.js";
 import { z } from "zod";
 
+function defaultMetaFromArtifact(
+  state: typeof OpenCanvasGraphAnnotation.State
+): z.infer<typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA> {
+  const currentArtifactContent = state.artifact
+    ? getArtifactContent(state.artifact)
+    : undefined;
+  if (!currentArtifactContent) {
+    return { type: "text", language: "other" };
+  }
+  if (isArtifactCodeContent(currentArtifactContent)) {
+    return {
+      type: "code",
+      title: currentArtifactContent.title,
+      language: currentArtifactContent.language ?? "other",
+    };
+  }
+  return {
+    type: "text",
+    title: currentArtifactContent.title,
+    language: "other",
+  };
+}
+
 export async function optionallyUpdateArtifactMeta(
   state: typeof OpenCanvasGraphAnnotation.State,
   config: LangGraphRunnableConfig
 ): Promise<z.infer<typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA>> {
-  const toolCallingModel = (
-    await getModelFromConfig(config, {
-      isToolCalling: true,
-    })
-  )
-    .withStructuredOutput(
-      OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA,
+  const baseModel = await getModelFromConfig(config, {
+    isToolCalling: true,
+  });
 
-      {
-        name: "optionallyUpdateArtifactMeta",
-      }
+  const toolCallingModel = baseModel
+    .bindTools(
+      [
+        {
+          name: "optionally_update_artifact_meta",
+          description: "Update the artifact meta information, if necessary.",
+          schema: OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA,
+        },
+      ],
+      { tool_choice: "auto" }
     )
     .withConfig({ runName: "optionally_update_artifact_meta" });
 
@@ -60,7 +89,14 @@ export async function optionallyUpdateArtifactMeta(
     recentHumanMessage,
   ]);
 
-  return optionallyUpdateArtifactResponse as z.infer<
-    typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA
-  >;
+  const toolCall = optionallyUpdateArtifactResponse.tool_calls?.[0];
+  const args = toolCall?.args as
+    | z.infer<typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA>
+    | undefined;
+
+  if (args?.type) {
+    return OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA.parse(args);
+  }
+
+  return defaultMetaFromArtifact(state);
 }

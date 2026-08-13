@@ -31,9 +31,24 @@ async function dynamicDeterminePathFunc({
   newMessages,
   config,
 }: DynamicDeterminePathParams) {
-  const currentArtifactContent = state.artifact
+  // Socratic coaching is advisory only — do NOT force replyToGeneralInput.
+  // The student may choose to write on the canvas independently at any time.
+
+  let currentArtifactContent = state.artifact
     ? getArtifactContent(state.artifact)
     : undefined;
+
+  // Treat blank/starter artifacts as "no artifact" for routing purposes.
+  // This allows generateArtifact to be chosen when the canvas is empty.
+  if (currentArtifactContent) {
+    const content =
+      currentArtifactContent.type === "text"
+        ? currentArtifactContent.fullMarkdown
+        : currentArtifactContent.code;
+    if (!content || !content.trim()) {
+      currentArtifactContent = undefined;
+    }
+  }
 
   // Call model and decide if we need to respond to a users query, or generate a new artifact
   const formattedPrompt = ROUTE_QUERY_PROMPT.replace(
@@ -83,7 +98,7 @@ async function dynamicDeterminePathFunc({
       },
     ],
     {
-      tool_choice: "route_query",
+      tool_choice: "auto",
     }
   );
 

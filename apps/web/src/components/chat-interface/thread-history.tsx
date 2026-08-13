@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "../ui/sheet";
 import { Skeleton } from "../ui/skeleton";
 import { useEffect, useState } from "react";
 import { Thread } from "@langchain/langgraph-sdk";
-import { PiChatsCircleLight } from "react-icons/pi";
+import { MessageCircle } from "lucide-react";
 import { TighterText } from "../ui/header";
 import { useGraphContext } from "@/contexts/GraphContext";
 import { useToast } from "@/hooks/use-toast";
@@ -242,10 +242,7 @@ export function ThreadHistoryComponent(props: ThreadHistoryProps) {
           variant="ghost"
           className="w-fit h-fit p-2"
         >
-          <PiChatsCircleLight
-            className="w-6 h-6 text-gray-600"
-            strokeWidth={8}
-          />
+          <MessageCircle className="w-6 h-6 text-gray-600" strokeWidth={8} />
         </TooltipIconButton>
       </SheetTrigger>
       <SheetContent

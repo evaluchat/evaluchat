@@ -1,4 +1,6 @@
-import { DocumentInterface } from "@langchain/core/documents";
+import type { DocumentInterface } from "@langchain/core/documents";
+
+export * from "./apparatus.js";
 
 export interface ModelConfigurationParams {
   name: string;
@@ -103,6 +105,17 @@ export interface CodeHighlight {
   endCharIndex: number;
 }
 
+export interface EditorCursorPosition {
+  /** 1-based line number where the cursor is */
+  line: number;
+  /** 1-based column number */
+  column: number;
+  /** If the user has text selected, the plain-text content of the selection */
+  selectedText?: string;
+  /** Total number of lines in the document */
+  totalLines: number;
+}
+
 export interface ArtifactMarkdownV3 {
   index: number;
   type: "text";
@@ -188,6 +201,24 @@ export type ContextDocument = {
   metadata?: Record<string, any>;
 };
 
+export type FormAgentValue = string | number | string[];
+
+export interface FormAgentContext {
+  templateId: string;
+  title: string;
+  description: string;
+  layoutMarkdown: string;
+  fields: Record<
+    string,
+    {
+      label: string;
+      type: string;
+      required: boolean;
+    }
+  >;
+  values: Record<string, FormAgentValue>;
+}
+
 /**
  * The metadata included in search results from Exa.
  */
@@ -208,8 +239,12 @@ export interface GraphInput {
 
   highlightedCode?: CodeHighlight;
   highlightedText?: TextHighlight;
+  cursorPosition?: EditorCursorPosition;
 
   artifact?: ArtifactV3;
+
+  /** Current structured Form Template context for the assistant. */
+  formContext?: FormAgentContext;
 
   next?: string;
 
@@ -226,4 +261,58 @@ export interface GraphInput {
 
   webSearchEnabled?: boolean;
   webSearchResults?: SearchResult[];
+
+  // Teaching POC
+  phase_state?: TeachingPhase;
+  thesis?: ThesisAssessment;
+
+  /** Server-resolved immutable apparatus treatment snapshot. */
+  apparatusConfiguration?: import("./apparatus.js").ApparatusConfiguration;
+}
+
+// --- Text edit types (deterministic canvas edits) ---
+
+export type TextEditIntent =
+  | {
+      kind: "replace_all";
+      find: string;
+      replace: string;
+      matchCase?: boolean;
+    }
+  | {
+      kind: "replace_in_selection";
+      find: string;
+      replace: string;
+      replaceAllInBlock?: boolean;
+    };
+
+export type TextEditSummary =
+  | {
+      op: "replace_all";
+      find: string;
+      replace: string;
+      matchCount: number;
+    }
+  | {
+      op: "replace_in_selection";
+      find: string;
+      replace: string;
+      matchCount: number;
+    }
+  | {
+      op: "replace_in_selection";
+      error: string;
+    };
+
+// --- Teaching POC types ---
+
+export type TeachingPhase = "socratic" | "drafting" | "submitted";
+
+export interface ThesisAssessment {
+  /** Whether the thesis passed the quality gate */
+  passed: boolean;
+  /** Brief feedback for the student */
+  feedback: string;
+  /** The extracted thesis statement, if one was identified */
+  thesis?: string;
 }

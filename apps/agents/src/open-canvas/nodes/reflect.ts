@@ -20,6 +20,7 @@ export const reflectNode = async (
         // Ensure we pass in the current graph's assistant ID as this is
         // how we fetch & store the memories.
         open_canvas_assistant_id: config.configurable?.assistant_id,
+        supabase_user_id: config.configurable?.supabase_user_id,
       },
     };
 

@@ -2,7 +2,7 @@ const DEFAULT_CODE_PROMPT_RULES = `- Do NOT include triple backticks when genera
 
 const APP_CONTEXT = `
 <app-context>
-The name of the application is "Open Canvas". Open Canvas is a web application where users have a chat window and a canvas to display an artifact.
+The name of the application is "Evaluchat". Evaluchat is a web application with a chat window and a Workspace for displaying an artifact.
 Artifacts can be any sort of writing content, emails, code, or other creative writing work. Think of artifacts as content, or writing you might find on you might find on a blog, Google doc, or other writing platform.
 Users only have a single artifact per conversation, however they have the ability to go back and fourth between artifact edits/revisions.
 If a user asks you to generate something completely different from the current artifact, you may do this, as the UI displaying the artifacts will be updated to show whatever they've requested.
@@ -90,10 +90,12 @@ You should use this as context when generating your response.`;
 
 export const UPDATE_ENTIRE_ARTIFACT_PROMPT = `You are an AI assistant, and the user has requested you make an update to an artifact you generated in the past.
 
-Here is the current content of the artifact:
+Here is the current content of the artifact with line numbers for reference:
 <artifact>
 {artifactContent}
 </artifact>
+
+{cursorContext}
 
 You also have the following reflections on style guidelines and general memories/facts about the user to use when generating your response.
 <reflections>
@@ -107,9 +109,11 @@ Follow these rules and guidelines:
 - You should respond with the ENTIRE updated artifact, with no additional text before and after.
 - Do not wrap it in any XML tags you see in this prompt.
 - You should use proper markdown syntax when appropriate, as the text you generate will be rendered in markdown. UNLESS YOU ARE WRITING CODE.
-- When you generate code, a markdown renderer is NOT used so if you respond with code in markdown syntax, or wrap the code in tipple backticks it will break the UI for the user.
+- When you generate code, a markdown renderer is NOT used so if you respond with code in markdown syntax, or wrap the code in triple backticks it will break the UI for the user.
 - If generating code, it is imperative you never wrap it in triple backticks, or prefix/suffix it with plain text. Ensure you ONLY respond with the code.
 ${DEFAULT_CODE_PROMPT_RULES}
+- When the user references a specific location (e.g., "after paragraph 2", "at the beginning", "before the conclusion"), use the line numbers to place your edits at the correct position. Do NOT default to appending content at the end.
+- When the user has a cursor position or selected text provided below, pay attention to where they are working and what they have highlighted.
 </rules-guidelines>
 
 {updateMetaPrompt}

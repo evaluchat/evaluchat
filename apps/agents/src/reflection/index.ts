@@ -1,5 +1,9 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import {
+  createOpenRouterChatModel,
+  isOpenRouterEnabled,
+} from "../openrouter.js";
+import {
   type LangGraphRunnableConfig,
   StateGraph,
   START,
@@ -26,7 +30,11 @@ export const reflect = async (
   if (!assistantId) {
     throw new Error("`open_canvas_assistant_id` not found in configurable");
   }
-  const memoryNamespace = ["memories", assistantId];
+  const memoryNamespace = [
+    "memories",
+    config.configurable?.supabase_user_id ?? "anonymous",
+    assistantId,
+  ];
   const memoryKey = "reflection";
   const memories = await store.get(memoryNamespace, memoryKey);
 
@@ -47,11 +55,14 @@ export const reflect = async (
     }),
   };
 
-  const model = new ChatAnthropic({
-    model: "claude-3-5-sonnet-20240620",
-    temperature: 0,
-  }).bindTools([generateReflectionTool], {
-    tool_choice: "generate_reflections",
+  const baseModel = isOpenRouterEnabled()
+    ? createOpenRouterChatModel(undefined, 0)
+    : new ChatAnthropic({
+        model: "claude-3-5-sonnet-20240620",
+        temperature: 0,
+      });
+  const model = baseModel.bindTools([generateReflectionTool], {
+    tool_choice: "auto",
   });
 
   const currentArtifactContent = state.artifact

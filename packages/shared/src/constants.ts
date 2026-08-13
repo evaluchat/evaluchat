@@ -22,6 +22,9 @@ export const DEFAULT_INPUTS = {
   customQuickActionId: undefined,
   webSearchEnabled: undefined,
   webSearchResults: undefined,
+  textEditIntent: undefined,
+  textEditSummary: undefined,
+  formContext: undefined,
 };
 
 export const PROGRAMMING_LANGUAGES: Array<{

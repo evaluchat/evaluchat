@@ -19,6 +19,7 @@ import {
   optionallyGetSystemPromptFromConfig,
 } from "../../../utils.js";
 import { isArtifactMarkdownContent } from "@opencanvas/shared/utils/artifacts";
+import { isPlausibleFullArtifactRewrite } from "@opencanvas/shared/utils/markdown-canvas";
 import { AIMessage } from "@langchain/core/messages";
 import {
   extractThinkingAndResponseTokens,
@@ -52,6 +53,7 @@ export const rewriteArtifact = async (
     memoriesAsString,
     isNewType,
     artifactMetaToolCall,
+    cursorPosition: state.cursorPosition,
   });
 
   const userSystemPrompt = optionallyGetSystemPromptFromConfig(config);
@@ -78,6 +80,21 @@ export const rewriteArtifact = async (
       content: thinking,
     });
     artifactContentText = response;
+  }
+
+  if (
+    isArtifactMarkdownContent(currentArtifactContent) &&
+    !isPlausibleFullArtifactRewrite(artifactContent, artifactContentText)
+  ) {
+    return {
+      textEditSummary: {
+        op: "replace_in_selection",
+        error:
+          "I couldn't safely rewrite the full document — your canvas is unchanged. Try highlighting the section you want updated.",
+      },
+      messages: [...(thinkingMessage ? [thinkingMessage] : [])],
+      _messages: [...(thinkingMessage ? [thinkingMessage] : [])],
+    };
   }
 
   const newArtifactContent = createNewArtifactContent({

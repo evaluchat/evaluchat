@@ -34,8 +34,8 @@ export function IconSelect({
   allDisabled,
 }: {
   allDisabled: boolean;
-  selectedIcon: KeyofIcons;
-  setSelectedIcon: Dispatch<SetStateAction<KeyofIcons>>;
+  selectedIcon: string;
+  setSelectedIcon: Dispatch<SetStateAction<string>>;
   hasSelectedIcon: boolean;
   iconColor: string;
 }) {
@@ -120,7 +120,9 @@ export function IconSelect({
           >
             <div className="flex flex-row items-center gap-2 justify-start">
               <span style={{ color: iconColor }}>
-                {React.createElement(Icons[selectedIcon] as React.ElementType)}
+                {React.createElement(
+                  Icons[selectedIcon as KeyofIcons] as React.ElementType
+                )}
               </span>
               {prettifyIconLabel(selectedIcon)}
             </div>
@@ -160,7 +162,7 @@ export function IconSelect({
               <DropdownMenuItem
                 key={iconItem.value}
                 onClick={() => {
-                  setSelectedIcon(iconItem.value as KeyofIcons);
+                  setSelectedIcon(iconItem.value);
                 }}
                 className="flex flex-row items-center gap-2 justify-start w-full"
                 disabled={allDisabled}

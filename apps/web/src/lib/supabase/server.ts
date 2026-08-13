@@ -1,19 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { getSupabasePublicKey, getSupabaseUrl } from "./env";
 
 export async function createClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not defined");
-  }
-  if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined");
-  }
-
   const cookieStore = await cookies();
 
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  // Create a storage-backed client for middleware/cookie sync
+  const supabase = createServerClient(
+    getSupabaseUrl(),
+    getSupabasePublicKey(),
     {
       cookies: {
         getAll() {
@@ -33,4 +29,14 @@ export async function createClient() {
       },
     }
   );
+
+  return supabase;
+}
+
+/**
+ * Lightweight Supabase client for auth operations in server actions
+ * where the SSR PKCE flow causes issues with password sign-in.
+ */
+export function createActionClient() {
+  return createSupabaseClient(getSupabaseUrl(), getSupabasePublicKey());
 }

@@ -3,31 +3,47 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { getSiteUrl } from "@/lib/teaching/admin-client";
+import { ensureDefaultWorkspaceItem } from "@/lib/workspace/store";
 import { SignupWithEmailInput } from "./Signup";
 
-export async function signup(input: SignupWithEmailInput, baseUrl: string) {
+export async function signup(input: SignupWithEmailInput) {
   const supabase = await createClient();
+
+  const metadata: Record<string, string> = {};
+
+  if (input.name) {
+    metadata.name = input.name;
+    metadata.full_name = input.name;
+    metadata.registrationComplete = "true";
+  }
 
   const data = {
     email: input.email,
     password: input.password,
-    // Not possible to set this when signing up with OAuth, so for now we'll omit.
-    // data: {
-    //   is_open_canvas: true,
-    // },
     options: {
-      emailRedirectTo: `${baseUrl}/auth/confirm`,
+      emailRedirectTo: `${getSiteUrl().replace(/\/$/, "")}/auth/confirm?next=${encodeURIComponent("/workspace")}`,
+      data: metadata,
     },
   };
 
-  const { error } = await supabase.auth.signUp(data);
+  const { data: signUpData, error } = await supabase.auth.signUp(data);
 
   if (error) {
     console.error(error);
     redirect("/auth/signup?error=true");
   }
 
-  // Users still need to confirm their email address.
-  // This page will show a message to check their email.
+  if (signUpData.session) {
+    if (signUpData.user) {
+      try {
+        await ensureDefaultWorkspaceItem(signUpData.user.id);
+      } catch (workspaceError) {
+        console.error("Failed to initialize workspace", workspaceError);
+      }
+    }
+    redirect("/workspace");
+  }
+
   redirect("/auth/signup/success");
 }

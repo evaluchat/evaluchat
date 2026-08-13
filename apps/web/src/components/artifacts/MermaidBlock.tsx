@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { normalizeMermaidSource } from "./mermaid-source";
 
 const MERMAID_THEME = {
   bg: "hsl(var(--background))",
@@ -109,7 +110,10 @@ function MermaidSvg({ code, className }: { code: string; className?: string }) {
 
     try {
       return {
-        svg: renderer.renderMermaidSVG(code, MERMAID_THEME),
+        svg: renderer.renderMermaidSVG(
+          normalizeMermaidSource(code),
+          MERMAID_THEME
+        ),
         error: null,
       };
     } catch (error: unknown) {

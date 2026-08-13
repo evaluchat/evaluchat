@@ -17,9 +17,13 @@ import React, {
 import { createPortal } from "react-dom";
 import { v4 as uuidv4 } from "uuid";
 import { ActionsToolbar, CodeToolBar } from "./actions_toolbar";
-import { CodeRenderer } from "./CodeRenderer";
-import { TextRenderer } from "./TextRenderer";
 
+const CodeRenderer = React.lazy(() =>
+  import("./CodeRenderer").then((m) => ({ default: m.CodeRenderer }))
+);
+const TextRenderer = React.lazy(() =>
+  import("./TextRenderer").then((m) => ({ default: m.TextRenderer }))
+);
 const PrintView = React.lazy(() =>
   import("./PrintView").then((m) => ({ default: m.PrintView }))
 );
@@ -31,12 +35,14 @@ import { useGraphContext } from "@/contexts/GraphContext";
 import { ArtifactHeader } from "./header";
 import { useUserContext } from "@/contexts/UserContext";
 import { useAssistantContext } from "@/contexts/AssistantContext";
+import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 
 export interface ArtifactRendererProps {
   isEditing: boolean;
   setIsEditing: React.Dispatch<React.SetStateAction<boolean>>;
   chatCollapsed: boolean;
   setChatCollapsed: (c: boolean) => void;
+  minimalCanvas?: boolean;
 }
 
 interface SelectionBox {
@@ -48,6 +54,11 @@ interface SelectionBox {
 function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const { graphData } = useGraphContext();
   const { selectedAssistant } = useAssistantContext();
+  const teachingAssignment = useTeachingAssignmentOptional();
+  const aiCanvasActions =
+    teachingAssignment?.apparatusConfiguration?.ai_canvas_actions !== false;
+  const minimalCanvas = props.minimalCanvas ?? true;
+  const showCanvasActions = aiCanvasActions && !minimalCanvas;
   const { user } = useUserContext();
   const {
     artifact,
@@ -55,22 +66,23 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     isStreaming,
     isArtifactSaved,
     artifactUpdateFailed,
-    setSelectedArtifact,
     setMessages,
     streamMessage,
-    setSelectedBlocks,
+    setSelectedBlocks: _unused_setSelectedBlocks,
     setArtifact,
   } = graphData;
+
   const editorRef = useRef<EditorView | null>(null);
+  const blockNoteEditorRef = useRef<any | null>(null);
   const artifactContentRef = useRef<HTMLDivElement>(null);
   const highlightLayerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const selectionBoxRef = useRef<HTMLDivElement>(null);
   // Cached clone of the most recent in-canvas selection range. The highlight overlay
   // renders from this (DOM-anchored) range so it survives the browser selection moving
-  // to the chat input when the user types/scrolls there. Without it, every
-  // rerender re-read window.getSelection(), which had left the canvas, so the green
-  // highlight was wiped on chat interaction.
+  // to the chat input when the student types/scrolls there. Without it, every
+  // scrollTick re-render re-read window.getSelection(), which had left the canvas, so
+  // the green overlay was wiped on chat interaction.
   const selectionRangeRef = useRef<Range | null>(null);
   const [selectionBox, setSelectionBox] = useState<SelectionBox>();
   const [selectionIndexes, setSelectionIndexes] = useState<{
@@ -84,11 +96,11 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const [isValidSelectionOrigin, setIsValidSelectionOrigin] = useState(false);
   // Incremented on scroll to force highlight re-render so highlights scroll with text
   const [scrollTick, setScrollTick] = useState(0);
-
   // Print functionality
   const [showPrintView, setShowPrintView] = useState(false);
 
   const handleMouseUp = useCallback(() => {
+    if (!showCanvasActions) return;
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0 && contentRef.current) {
       const range = selection.getRangeAt(0);
@@ -138,7 +150,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         }
       }
     }
-  }, []);
+  }, [showCanvasActions]);
 
   const handleCleanupState = () => {
     setIsInputVisible(false);
@@ -152,11 +164,16 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
 
   const handleDocumentMouseDown = useCallback(
     (event: MouseEvent) => {
-      if (
-        isSelectionActive &&
-        selectionBoxRef.current &&
-        !selectionBoxRef.current.contains(event.target as Node)
-      ) {
+      if (!isSelectionActive) return;
+
+      // Don't clean up if clicking inside the AskOpenCanvas popup
+      if (selectionBoxRef.current?.contains(event.target as Node)) return;
+
+      // Only clean up if clicking inside the canvas content area
+      // (user making new selection or moving cursor in canvas).
+      // Clicks outside the canvas (chat input, toolbar, sidebar, etc.)
+      // should NOT clear the selection highlight.
+      if (artifactContentRef.current?.contains(event.target as Node)) {
         handleCleanupState();
       }
     },
@@ -166,6 +183,25 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const handleSelectionBoxMouseDown = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
   }, []);
+
+  const handleSubmit = async (content: string) => {
+    const humanMessage = new HumanMessage({
+      content,
+      id: uuidv4(),
+    });
+
+    setMessages((prevMessages) => [...prevMessages, humanMessage]);
+    handleCleanupState();
+    await streamMessage({
+      messages: [convertToOpenAIFormat(humanMessage)],
+      ...(selectionIndexes && {
+        highlightedCode: {
+          startCharIndex: selectionIndexes.start,
+          endCharIndex: selectionIndexes.end,
+        },
+      }),
+    });
+  };
 
   const handlePrint = useCallback(() => {
     if (!artifact) return;
@@ -194,26 +230,8 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     [handlePrint]
   );
 
-  const handleSubmit = async (content: string) => {
-    const humanMessage = new HumanMessage({
-      content,
-      id: uuidv4(),
-    });
-
-    setMessages((prevMessages) => [...prevMessages, humanMessage]);
-    handleCleanupState();
-    await streamMessage({
-      messages: [convertToOpenAIFormat(humanMessage)],
-      ...(selectionIndexes && {
-        highlightedCode: {
-          startCharIndex: selectionIndexes.start,
-          endCharIndex: selectionIndexes.end,
-        },
-      }),
-    });
-  };
-
   useEffect(() => {
+    if (!showCanvasActions) return;
     document.addEventListener("mouseup", handleMouseUp);
     document.addEventListener("mousedown", handleDocumentMouseDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -223,13 +241,18 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
       document.removeEventListener("mousedown", handleDocumentMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleMouseUp, handleDocumentMouseDown, handleKeyDown]);
+  }, [
+    handleMouseUp,
+    handleDocumentMouseDown,
+    handleKeyDown,
+    showCanvasActions,
+  ]);
 
   // Re-render highlights when the scroll container scrolls so they move with the text.
   // The highlight overlay lives outside the TextRenderer's overflow-y-auto container,
   // so without this listener the highlights stay at fixed viewport positions while text scrolls.
   useEffect(() => {
-    if (!isSelectionActive) return;
+    if (!showCanvasActions || !isSelectionActive) return;
 
     let rafId: number | null = null;
     const handleScroll = () => {
@@ -252,7 +275,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
       } as EventListenerOptions);
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [isSelectionActive]);
+  }, [isSelectionActive, showCanvasActions]);
 
   useEffect(() => {
     try {
@@ -263,7 +286,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         // Clear existing highlights
         highlightLayer.innerHTML = "";
 
-        if (isSelectionActive && selectionBox) {
+        if (showCanvasActions && isSelectionActive && selectionBox) {
           const range = selectionRangeRef.current;
 
           if (range && content.contains(range.commonAncestorContainer)) {
@@ -326,16 +349,10 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     } catch (e) {
       console.error("Failed to get artifact selection", e);
     }
-  }, [isSelectionActive, selectionBox, scrollTick]);
+  }, [isSelectionActive, selectionBox, scrollTick, showCanvasActions]);
 
   useEffect(() => {
-    if (!!selectedBlocks && !isSelectionActive) {
-      // Selection is not active but selected blocks are present. Clear them.
-      setSelectedBlocks(undefined);
-    }
-  }, [selectedBlocks, isSelectionActive]);
-
-  useEffect(() => {
+    if (!showCanvasActions) return;
     const handleKeyPress = (e: KeyboardEvent) => {
       // Check if we're in an input/textarea element
       const activeElement = document.activeElement;
@@ -362,7 +379,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
 
     document.addEventListener("keydown", handleKeyPress);
     return () => document.removeEventListener("keydown", handleKeyPress);
-  }, [isInputVisible, selectionBox, isSelectionActive]);
+  }, [isInputVisible, selectionBox, isSelectionActive, showCanvasActions]);
 
   const currentArtifactContent = artifact
     ? getArtifactContent(artifact)
@@ -376,28 +393,20 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     return <div className="w-full h-full"></div>;
   }
 
-  const isBackwardsDisabled =
-    artifact.contents.length === 1 ||
-    currentArtifactContent.index === 1 ||
-    isStreaming;
-  const isForwardDisabled =
-    artifact.contents.length === 1 ||
-    currentArtifactContent.index === artifact.contents.length ||
-    isStreaming;
-
   return (
     <div className="relative w-full h-full max-h-screen overflow-auto">
       <ArtifactHeader
+        minimalCanvas={minimalCanvas}
         isArtifactSaved={isArtifactSaved}
-        isBackwardsDisabled={isBackwardsDisabled}
-        isForwardDisabled={isForwardDisabled}
-        setSelectedArtifact={setSelectedArtifact}
         currentArtifactContent={currentArtifactContent}
-        totalArtifactVersions={artifact.contents.length}
         selectedAssistant={selectedAssistant}
         artifactUpdateFailed={artifactUpdateFailed}
         chatCollapsed={props.chatCollapsed}
         setChatCollapsed={props.setChatCollapsed}
+        blockNoteEditorRef={blockNoteEditorRef}
+        onPrint={
+          currentArtifactContent.type === "text" ? handlePrint : undefined
+        }
         onTitleChange={(newTitle: string) => {
           if (!artifact) return;
           const updatedContents = artifact.contents.map((c) =>
@@ -407,9 +416,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           );
           setArtifact({ ...artifact, contents: updatedContents });
         }}
-        onPrint={
-          currentArtifactContent.type === "text" ? handlePrint : undefined
-        }
       />
       <div
         ref={contentRef}
@@ -427,21 +433,28 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           <div
             className="h-full"
             ref={artifactContentRef}
+            data-testid="artifact-content-wrapper"
             onMouseEnter={() => setIsHoveringOverArtifact(true)}
             onMouseLeave={() => setIsHoveringOverArtifact(false)}
           >
             {currentArtifactContent.type === "text" ? (
-              <TextRenderer
-                isInputVisible={isInputVisible}
-                isEditing={props.isEditing}
-                isHovering={isHoveringOverArtifact}
-              />
+              <Suspense fallback={<div>Loading...</div>}>
+                <TextRenderer
+                  minimalCanvas={minimalCanvas}
+                  isInputVisible={isInputVisible}
+                  isEditing={props.isEditing}
+                  isHovering={isHoveringOverArtifact}
+                  editorRef={blockNoteEditorRef}
+                />
+              </Suspense>
             ) : null}
             {currentArtifactContent.type === "code" ? (
-              <CodeRenderer
-                editorRef={editorRef}
-                isHovering={isHoveringOverArtifact}
-              />
+              <Suspense fallback={<div>Loading...</div>}>
+                <CodeRenderer
+                  editorRef={editorRef}
+                  isHovering={isHoveringOverArtifact}
+                />
+              </Suspense>
             ) : null}
           </div>
           <div
@@ -449,44 +462,50 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
             className="absolute top-0 left-0 w-full h-full pointer-events-none"
           />
         </div>
-        {selectionBox && isSelectionActive && isValidSelectionOrigin && (
-          <AskOpenCanvas
-            ref={selectionBoxRef}
-            inputValue={inputValue}
-            setInputValue={setInputValue}
-            isInputVisible={isInputVisible}
-            selectionBox={selectionBox}
-            setIsInputVisible={setIsInputVisible}
-            handleSubmitMessage={handleSubmit}
-            handleSelectionBoxMouseDown={handleSelectionBoxMouseDown}
-            artifact={artifact}
-            selectionIndexes={selectionIndexes}
-            handleCleanupState={handleCleanupState}
-          />
-        )}
+        {showCanvasActions &&
+          selectionBox &&
+          isSelectionActive &&
+          isValidSelectionOrigin && (
+            <AskOpenCanvas
+              ref={selectionBoxRef}
+              inputValue={inputValue}
+              setInputValue={setInputValue}
+              isInputVisible={isInputVisible}
+              selectionBox={selectionBox}
+              setIsInputVisible={setIsInputVisible}
+              handleSubmitMessage={handleSubmit}
+              handleSelectionBoxMouseDown={handleSelectionBoxMouseDown}
+              artifact={artifact}
+              selectionIndexes={selectionIndexes}
+              handleCleanupState={handleCleanupState}
+            />
+          )}
       </div>
-      <CustomQuickActions
-        streamMessage={streamMessage}
-        assistantId={selectedAssistant?.assistant_id}
-        user={user}
-        isTextSelected={isSelectionActive || selectedBlocks !== undefined}
-      />
-      {currentArtifactContent.type === "text" ? (
-        <ActionsToolbar
-          streamMessage={streamMessage}
-          isTextSelected={isSelectionActive || selectedBlocks !== undefined}
-        />
-      ) : null}
-      {currentArtifactContent.type === "code" ? (
-        <CodeToolBar
-          streamMessage={streamMessage}
-          isTextSelected={isSelectionActive || selectedBlocks !== undefined}
-          language={
-            currentArtifactContent.language as ProgrammingLanguageOptions
-          }
-        />
-      ) : null}
-
+      {showCanvasActions && (
+        <>
+          <CustomQuickActions
+            streamMessage={streamMessage}
+            assistantId={selectedAssistant?.assistant_id}
+            user={user}
+            isTextSelected={isSelectionActive || selectedBlocks !== undefined}
+          />
+          {currentArtifactContent.type === "text" ? (
+            <ActionsToolbar
+              streamMessage={streamMessage}
+              isTextSelected={isSelectionActive || selectedBlocks !== undefined}
+            />
+          ) : null}
+          {currentArtifactContent.type === "code" ? (
+            <CodeToolBar
+              streamMessage={streamMessage}
+              isTextSelected={isSelectionActive || selectedBlocks !== undefined}
+              language={
+                currentArtifactContent.language as ProgrammingLanguageOptions
+              }
+            />
+          ) : null}
+        </>
+      )}
       {/* Print view portal */}
       {showPrintView &&
         currentArtifactContent.type === "text" &&

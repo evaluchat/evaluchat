@@ -11,6 +11,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 export interface SignupWithEmailInput {
   email: string;
   password: string;
+  name?: string;
+  invitationToken?: string;
 }
 
 export function Signup() {
@@ -22,7 +24,6 @@ export function Signup() {
     const error = searchParams.get("error");
     if (error === "true") {
       setIsError(true);
-      // Remove the error parameter from the URL
       const newSearchParams = new URLSearchParams(searchParams);
       newSearchParams.delete("error");
       router.replace(
@@ -36,7 +37,7 @@ export function Signup() {
     input: SignupWithEmailInput
   ): Promise<void> => {
     setIsError(false);
-    await signup(input, window.location.origin);
+    await signup(input);
   };
 
   const onSignupWithOauth = async (
@@ -69,13 +70,13 @@ export function Signup() {
         <div className="absolute inset-0 bg-zinc-900" />
         <div className="relative z-20 flex gap-1 items-center text-lg font-medium">
           <NextImage
-            src="/lc_logo.jpg"
-            width={36}
-            height={36}
-            alt="LangChain Logo"
-            className="rounded-full"
+            src="/evaluchat.png"
+            width={64}
+            height={64}
+            alt="Evaluchat Logo"
+            className=""
           />
-          Open Canvas
+          Evaluchat
         </div>
       </div>
       <div className="lg:p-8">
@@ -100,6 +101,7 @@ export function Signup() {
           <UserAuthForm
             onSignupWithEmail={onSignupWithEmail}
             onSignupWithOauth={onSignupWithOauth}
+            showNameField
           />
           {isError && (
             <p className="text-red-500 text-sm text-center">

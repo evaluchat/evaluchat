@@ -2,6 +2,21 @@ import { LANGGRAPH_API_URL } from "../../../constants";
 import { NextRequest, NextResponse } from "next/server";
 import { Session, User } from "@supabase/supabase-js";
 import { verifyUserAuthenticated } from "../../../lib/supabase/verify_user_server";
+import {
+  classifyProxyPath,
+  isThreadCreate,
+  isThreadListGet,
+  threadOwnerMatches,
+  withOwnedThreadMetadata,
+} from "../../../lib/thread-ownership";
+import { getCustomAssignmentById } from "../../../lib/teaching/assignment-file-store";
+import { getSeedAssignmentById } from "../../../lib/teaching/seed-loader";
+import { resolveApparatusConfiguration } from "../../../lib/apparatuses/runtime";
+import { getWorkspaceItem } from "../../../lib/workspace/store";
+import {
+  enforceWorkspaceThreadPolicy,
+  supportsWorkspaceThreads,
+} from "../../../lib/workspace/thread-policy";
 
 function getCorsHeaders() {
   return {
@@ -9,6 +24,57 @@ function getCorsHeaders() {
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "*",
   };
+}
+
+async function assertThreadOwnership(
+  threadId: string,
+  authenticatedUserId: string
+): Promise<NextResponse | null> {
+  const res = await fetch(`${LANGGRAPH_API_URL}/threads/${threadId}`, {
+    headers: {
+      "x-api-key": process.env.LANGCHAIN_API_KEY || "",
+    },
+  });
+
+  if (res.status === 404) {
+    return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  if (!res.ok) {
+    console.error("Failed to fetch thread for ownership check", res.status);
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const thread = await res.json();
+  if (!threadOwnerMatches(thread?.metadata, authenticatedUserId)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const workspaceItemId = thread?.metadata?.workspace_item_id;
+  if (typeof workspaceItemId === "string") {
+    const item = await getWorkspaceItem(authenticatedUserId, workspaceItemId);
+    if (!item)
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  return null;
+}
+
+async function getAssignmentTreatment(assignmentId: unknown) {
+  if (typeof assignmentId !== "string" || assignmentId.length === 0) {
+    return undefined;
+  }
+  const assignment =
+    (await getCustomAssignmentById(assignmentId)) ||
+    (await getSeedAssignmentById(assignmentId));
+  if (!assignment) return undefined;
+  return (
+    assignment.apparatusConfiguration ??
+    resolveApparatusConfiguration({
+      apparatusId: assignment.apparatusId,
+      profileId: assignment.apparatusProfileId,
+    }).apparatusConfiguration
+  );
 }
 
 async function handleRequest(req: NextRequest, method: string) {
@@ -28,10 +94,32 @@ async function handleRequest(req: NextRequest, method: string) {
 
   try {
     const path = req.nextUrl.pathname.replace(/^\/?api\//, "");
+    const classification = classifyProxyPath(path);
+
+    // Store must go through dedicated /api/store/* routes with namespace scoping.
+    if (classification.kind === "store") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Ownership gate for any threads/{id}/... path.
+    if (classification.kind === "thread_by_id") {
+      const denied = await assertThreadOwnership(
+        classification.threadId,
+        user.id
+      );
+      if (denied) return denied;
+    }
+
     const url = new URL(req.url);
     const searchParams = new URLSearchParams(url.search);
     searchParams.delete("_path");
     searchParams.delete("nxtP_path");
+
+    // GET /threads — scope list to the authenticated user.
+    if (isThreadListGet(method, classification)) {
+      searchParams.set("metadata", JSON.stringify({ user_id: user.id }));
+    }
+
     const queryString = searchParams.toString()
       ? `?${searchParams.toString()}`
       : "";
@@ -58,6 +146,143 @@ async function handleRequest(req: NextRequest, method: string) {
           supabase_session: session,
           supabase_user_id: user.id,
         };
+
+        // Apparatus treatment is server-authoritative. Resolve the immutable
+        // snapshot from the assignment recorded on the owned thread and
+        // overwrite any browser-supplied knob values before forwarding.
+        if (
+          classification.kind === "thread_by_id" ||
+          isThreadCreate(method, classification)
+        ) {
+          try {
+            let assignmentId: unknown = parsedBody.metadata?.assignment_id;
+            if (classification.kind === "thread_by_id") {
+              const threadRes = await fetch(
+                `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
+                {
+                  headers: { "x-api-key": process.env.LANGCHAIN_API_KEY || "" },
+                }
+              );
+              const thread = threadRes.ok ? await threadRes.json() : null;
+              assignmentId = thread?.metadata?.assignment_id;
+            }
+            const treatment = await getAssignmentTreatment(assignmentId);
+            if (treatment) {
+              if (parsedBody.input && typeof parsedBody.input === "object") {
+                parsedBody.input.apparatusConfiguration = treatment;
+              }
+              parsedBody.config.configurable.apparatusConfiguration = treatment;
+            } else {
+              if (parsedBody.input && typeof parsedBody.input === "object") {
+                delete parsedBody.input.apparatusConfiguration;
+              }
+              delete parsedBody.config.configurable.apparatusConfiguration;
+            }
+          } catch (apparatusError) {
+            console.error(
+              "Failed to resolve server apparatus snapshot",
+              apparatusError
+            );
+            return NextResponse.json(
+              { error: "Could not resolve assignment treatment" },
+              { status: 409 }
+            );
+          }
+        }
+
+        // POST /threads — stamp ownership metadata.
+        if (isThreadCreate(method, classification)) {
+          parsedBody.metadata = withOwnedThreadMetadata(
+            parsedBody.metadata,
+            user.id
+          );
+        }
+
+        // Workspace threads are server-bound to an owned item. The browser may
+        // propose the item id, but it cannot choose its contents, guidance, or
+        // assistant. Existing workspace threads are resolved again for every
+        // run so forged config values never reach LangGraph.
+        let workspaceItemId: unknown = isThreadCreate(method, classification)
+          ? parsedBody.metadata?.workspace_item_id
+          : undefined;
+        if (classification.kind === "thread_by_id") {
+          const threadRes = await fetch(
+            `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
+            { headers: { "x-api-key": process.env.LANGCHAIN_API_KEY || "" } }
+          );
+          if (!threadRes.ok) {
+            console.error(
+              "Failed to re-read thread metadata for workspace policy",
+              threadRes.status
+            );
+            return NextResponse.json(
+              { error: "Could not resolve workspace item" },
+              { status: 409 }
+            );
+          }
+          const thread = await threadRes.json();
+          workspaceItemId = thread?.metadata?.workspace_item_id;
+        }
+
+        if (workspaceItemId !== undefined) {
+          if (typeof workspaceItemId !== "string" || !workspaceItemId) {
+            return NextResponse.json(
+              { error: "Invalid workspace item" },
+              { status: 403 }
+            );
+          }
+          const workspaceItem = await getWorkspaceItem(
+            user.id,
+            workspaceItemId
+          );
+          if (!workspaceItem) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+          }
+          if (!supportsWorkspaceThreads(workspaceItem)) {
+            return NextResponse.json(
+              {
+                error: "This workspace item does not support assistant threads",
+              },
+              { status: 403 }
+            );
+          }
+
+          Object.assign(
+            parsedBody,
+            enforceWorkspaceThreadPolicy(
+              parsedBody,
+              workspaceItem,
+              user.id,
+              process.env.EVALUCHAT_WORKSPACE_ASSISTANT_ID || "agent"
+            )
+          );
+          if (isThreadCreate(method, classification)) {
+            // assistant_id is a run field; keep thread creation payloads
+            // limited to thread metadata/configuration.
+            delete parsedBody.assistant_id;
+          }
+        }
+
+        // POST /threads/search — force metadata filter to this user.
+        if (classification.kind === "thread_search") {
+          parsedBody.metadata = withOwnedThreadMetadata(
+            parsedBody.metadata,
+            user.id
+          );
+        }
+
+        // PATCH thread metadata — prevent ownership reassignment.
+        if (
+          method === "PATCH" &&
+          classification.kind === "thread_by_id" &&
+          parsedBody.metadata
+        ) {
+          parsedBody.metadata = withOwnedThreadMetadata(
+            parsedBody.metadata,
+            user.id
+          );
+        }
+
         options.body = JSON.stringify(parsedBody);
       } else {
         options.body = bodyText;

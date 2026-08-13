@@ -4,11 +4,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "target": "ES2021",
-    "lib": [
-      "ES2021",
-      "ES2022.Object",
-      "DOM"
-    ],
+    "lib": ["ES2021", "ES2022.Object", "DOM"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
@@ -20,13 +16,9 @@
     "useDefineForClassFields": true,
     "strictPropertyInitialization": false,
     "allowJs": true,
+    "resolveJsonModule": true,
     "strict": true
   },
-  "include": [
-    "src/"
-  ],
-  "exclude": [
-    "node_modules/",
-    "dist"
-  ]
+  "include": ["src/"],
+  "exclude": ["node_modules/", "dist"]
 }

@@ -5,6 +5,10 @@ import {
 } from "@langchain/langgraph";
 import { Client } from "@langchain/langgraph-sdk";
 import { ChatOpenAI } from "@langchain/openai";
+import {
+  createOpenRouterChatModel,
+  isOpenRouterEnabled,
+} from "../openrouter.js";
 import { z } from "zod";
 import {
   getArtifactContent,
@@ -34,11 +38,14 @@ export const generateTitle = async (
     }),
   };
 
-  const model = new ChatOpenAI({
-    model: "gpt-4o-mini",
-    temperature: 0,
-  }).bindTools([generateTitleTool], {
-    tool_choice: "generate_title",
+  const baseModel = isOpenRouterEnabled()
+    ? createOpenRouterChatModel()
+    : new ChatOpenAI({
+        model: "gpt-4o-mini",
+        temperature: 0,
+      });
+  const model = baseModel.bindTools([generateTitleTool], {
+    tool_choice: "auto",
   });
 
   const currentArtifactContent = state.artifact

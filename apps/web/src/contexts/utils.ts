@@ -356,7 +356,10 @@ export const convertToArtifactV3 = (oldArtifact: Artifact): ArtifactV3 => {
   return v3;
 };
 
-export function handleGenerateArtifactToolCallChunk(toolCallChunkArgs: string) {
+export function handleGenerateArtifactToolCallChunk(
+  toolCallChunkArgs: string,
+  existingArtifact?: ArtifactV3
+) {
   let newArtifactText: ArtifactToolResponse | undefined = undefined;
 
   // Attempt to parse the tool call chunk.
@@ -387,9 +390,75 @@ export function handleGenerateArtifactToolCallChunk(toolCallChunkArgs: string) {
       content.fullMarkdown = cleanContent(content.fullMarkdown);
     }
 
+    let isReplacement = false;
+
+    // In teaching mode: if the new content is a COMPLETE document (not just
+    // a section), replace the current content instead of appending.
+    // Heuristic: if the new content is longer than 80% of existing, treat as replacement.
+    if (existingArtifact?.contents?.length && content.type === "text") {
+      const currentContent = existingArtifact.contents.find(
+        (c) => c.index === existingArtifact.currentIndex
+      );
+      if (
+        currentContent?.type === "text" &&
+        (currentContent as any).fullMarkdown?.trim()
+      ) {
+        const existingLen = (currentContent as any).fullMarkdown.trim().length;
+        const newLen = content.fullMarkdown.trim().length;
+        // If new content is substantial (>40 chars) and looks like a full doc
+        // (starts with similar structure), replace rather than append.
+        // Simple heuristic: if the new content contains the existing content's
+        // first significant word, it's a full replacement.
+        const existingFirstWords = (currentContent as any).fullMarkdown
+          .trim()
+          .split(/\s+/)
+          .slice(0, 5)
+          .join(" ")
+          .toLowerCase();
+        const newLower = content.fullMarkdown.trim().toLowerCase();
+        if (
+          newLen > 40 &&
+          existingFirstWords.length > 5 &&
+          newLower.includes(existingFirstWords)
+        ) {
+          // Full replacement — keep existing content entry
+          content.fullMarkdown = content.fullMarkdown.trim();
+          isReplacement = true;
+        } else if (newLen > 40 && existingLen > 0) {
+          // Incremental addition — concatenate
+          content.fullMarkdown =
+            (currentContent as any).fullMarkdown.trim() +
+            "\n\n" +
+            content.fullMarkdown.trim();
+        }
+      }
+    }
+
+    if (isReplacement && existingArtifact?.contents?.length) {
+      // Update existing content in place instead of appending
+      const currentIndex = existingArtifact.currentIndex;
+      const newFullMarkdown = (content as ArtifactMarkdownV3).fullMarkdown;
+      const updatedContents = existingArtifact.contents.map((c) => {
+        if (c.index === currentIndex && c.type === "text") {
+          return { ...c, fullMarkdown: newFullMarkdown };
+        }
+        return { ...c };
+      });
+      return {
+        currentIndex,
+        contents: updatedContents,
+      };
+    }
+
+    const nextIndex = existingArtifact?.contents?.length
+      ? existingArtifact.contents.length + 1
+      : 1;
+
     return {
-      currentIndex: 1,
-      contents: [content],
+      currentIndex: nextIndex,
+      contents: existingArtifact?.contents?.length
+        ? [...existingArtifact.contents, { ...content, index: nextIndex }]
+        : [content],
     };
   }
 }

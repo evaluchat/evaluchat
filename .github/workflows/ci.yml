@@ -96,7 +96,7 @@ jobs:
         run: yarn build
         working-directory: .
       - name: Build dev server check script
-        run: yarn tsc --module commonjs --outDir ./dist/scripts ./scripts/check-dev-server.ts
+        run: yarn tsc --module commonjs --outDir ./dist/scripts --target es2022 --skipLibCheck ./scripts/check-dev-server.ts
       - name: Rename compiled script to .cjs
         run: mv ./dist/scripts/check-dev-server.js ./dist/scripts/check-dev-server.cjs
       - name: Create .env file for dev server check
@@ -124,3 +124,70 @@ jobs:
         run: yarn install --immutable
       - name: Build all packages
         run: yarn build
+
+  template-catalog:
+    name: Verify public template catalog snapshot
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check out public Knowledge templates
+        uses: actions/checkout@v6
+        with:
+          repository: evaluchat/knowledge
+          ref: dev
+          path: knowledge-source
+          persist-credentials: false
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: "yarn"
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      - name: Generate catalog from evaluchat/knowledge@dev
+        run: yarn generate:templates
+        env:
+          EVALUCHAT_TEMPLATE_SOURCE_ROOT: ${{ github.workspace }}/knowledge-source/templates
+          EVALUCHAT_TEMPLATE_CATALOG_OUTPUT: ${{ runner.temp }}/template-catalog.json
+      - name: Verify committed snapshot
+        run: diff -u apps/web/data/template-catalog.json "${{ runner.temp }}/template-catalog.json"
+
+  desktop:
+    name: Desktop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: "yarn"
+      - name: Install dependencies
+        # Electron postinstall must download the binary — do not skip-build
+        run: yarn install --immutable
+      - name: Typecheck desktop
+        run: yarn workspace @opencanvas/desktop typecheck
+      - name: Test desktop
+        run: yarn workspace @opencanvas/desktop test
+      - name: Build desktop
+        run: yarn workspace @opencanvas/desktop build
+      - name: Package desktop (linux)
+        run: yarn workspace @opencanvas/desktop package:linux
+      - name: Package desktop (windows)
+        run: yarn workspace @opencanvas/desktop package:win
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-packages
+          path: |
+            apps/desktop/release/**
+            !apps/desktop/release/builder-debug.yml
+          if-no-files-found: error

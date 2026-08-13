@@ -1,11 +1,17 @@
 {
   "name": "open_canvas",
   "author": "Evaluchat",
-  "homepage": "https://evaluchat.com",
-  "repository": "https://github.com/evaluchat/canvas",
+  "homepage": "https://evaluchat.org",
+  "repository": "https://github.com/evaluchat/evaluchat",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
+    "generate:apparatus": "tsx scripts/generate-apparatus-mirror.ts",
+    "generate:templates": "tsx scripts/generate-template-catalog.ts",
+    "deploy:oss-dev": "bash scripts/oss-dev-deploy.sh",
     "build": "turbo build",
     "turbo:command": "turbo",
     "format": "turbo format",
@@ -21,7 +27,23 @@
     "tar": ">=7.5.8",
     "hono": ">=4.11.4",
     "linkifyjs": ">=4.3.2",
-    "glob": ">=10.5.0 <11"
+    "glob": ">=10.5.0 <11",
+    "js-yaml": ">=4.3.1 <5",
+    "langsmith": ">=0.6.0 <1",
+    "postcss": ">=8.5.18 <9",
+    "sharp": ">=0.35.0 <1",
+    "ws": ">=8.21.0 <9",
+    "glob/minimatch": ">=9.0.7 <10",
+    "glob/minimatch/brace-expansion": ">=5.0.9 <6",
+    "tailwindcss/micromatch/picomatch": ">=2.3.2 <3",
+    "tailwindcss/chokidar/anymatch/picomatch": ">=2.3.2 <3",
+    "micromatch/picomatch": ">=2.3.2 <3",
+    "anymatch/picomatch": ">=2.3.2 <3",
+    "**/linkify-it": ">=5.0.2 <6",
+    "postcss/nanoid": ">=3.3.17 <4",
+    "next/postcss/nanoid": ">=3.3.17 <4",
+    "@assistant-ui/react/**/nanoid": ">=5.1.16 <6",
+    "assistant-stream/nanoid": ">=5.1.16 <6"
   },
   "devDependencies": {
     "turbo": "latest",
@@ -35,6 +57,7 @@
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-no-instanceof": "^1.0.1",
     "eslint-plugin-prettier": "^4.2.1",
+    "js-yaml": "^4.1.1",
     "prettier": "^3.3.3"
   }
 }
