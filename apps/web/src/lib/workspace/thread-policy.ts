@@ -1,7 +1,46 @@
-import type { WorkspaceItem } from "./types";
+import { buildAssignmentSystemPrompt } from "@/lib/teaching/assignment-prompt";
+import type { StudentAssignment } from "@/lib/teaching/types";
+import type {
+  MethodParticipantWorkspaceItem,
+  WorkspaceItem,
+} from "./types";
 
 export function supportsWorkspaceThreads(item: WorkspaceItem): boolean {
-  return item.kind === "markdown_template" || item.kind === "form_template";
+  return (
+    item.kind === "markdown_template" ||
+    item.kind === "form_template" ||
+    item.kind === "method" ||
+    item.kind === "method_participant"
+  );
+}
+
+export function methodParticipantAsAssignment(
+  item: MethodParticipantWorkspaceItem
+): StudentAssignment {
+  return {
+    id: item.id,
+    courseLabel: item.assignment.course,
+    teacherName: item.assignment.group,
+    dueLabel: item.assignment.dueDate,
+    title: item.assignment.title,
+    prompt: item.assignment.prompt,
+    agentInstructions: item.assignment.agentInstructions,
+    wordTarget: item.assignment.wordTarget,
+    completionPercent: item.submission?.status === "submitted" ? 100 : 0,
+    status:
+      item.submission?.status === "submitted" ? "submitted" : "in_progress",
+    apparatusConfiguration: item.apparatusConfiguration,
+  };
+}
+
+function assistantGuidance(item: WorkspaceItem): string {
+  if (item.kind === "method_participant") {
+    return buildAssignmentSystemPrompt(
+      methodParticipantAsAssignment(item),
+      item.apparatusConfiguration
+    );
+  }
+  return item.templateSnapshot.assistantGuidance;
 }
 
 export function enforceWorkspaceThreadPolicy(
@@ -19,6 +58,9 @@ export function enforceWorkspaceThreadPolicy(
         : {}),
       user_id: userId,
       workspace_item_id: item.id,
+      ...(item.kind === "method_participant"
+        ? { method_run_id: item.runId }
+        : {}),
     },
     config: {
       ...(body.config && typeof body.config === "object" ? body.config : {}),
@@ -28,7 +70,10 @@ export function enforceWorkspaceThreadPolicy(
           ? body.config.configurable
           : {}),
         workspace_item_id: item.id,
-        systemPrompt: item.templateSnapshot.assistantGuidance,
+        systemPrompt: assistantGuidance(item),
+        ...(item.kind === "method_participant"
+          ? { apparatusConfiguration: item.apparatusConfiguration }
+          : {}),
       },
     },
   };

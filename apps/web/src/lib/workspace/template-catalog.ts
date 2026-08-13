@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import generatedCatalog from "../../../data/template-catalog.json";
+import generatedPlatformCatalog from "../../../data/platform-template-catalog.json";
 
 const FormFieldSchema = z
   .object({
@@ -182,7 +183,17 @@ function fallbackCatalog(): TemplateCatalog {
   return parsed.data;
 }
 
-/** Load the current immutable snapshot, retaining the last good one across bad reloads. */
+function platformCatalog(): TemplateCatalog {
+  const parsed = CatalogSchema.safeParse(generatedPlatformCatalog);
+  if (!parsed.success || parsed.data.templates.length === 0) {
+    throw new Error(
+      "Generated platform template catalog is missing or malformed"
+    );
+  }
+  return parsed.data;
+}
+
+/** Knowledge/workspace starters. External catalog deploys may replace this snapshot. */
 export function getTemplateCatalog(): TemplateCatalog {
   const path = externalCatalogPath();
   if (!path) {
@@ -206,14 +217,43 @@ export function getTemplateCatalog(): TemplateCatalog {
   }
 }
 
+export function getPlatformTemplateCatalog(): TemplateCatalog {
+  return platformCatalog();
+}
+
+export function isPlatformTemplateId(id: string): boolean {
+  return getPlatformTemplateCatalog().templates.some(
+    (template) => template.id === id
+  );
+}
+
+export function catalogForTemplateId(id: string): TemplateCatalog {
+  return isPlatformTemplateId(id)
+    ? getPlatformTemplateCatalog()
+    : getTemplateCatalog();
+}
+
 export function getTemplateById(id: string): TemplateCatalogEntry | undefined {
-  return getTemplateCatalog().templates.find((template) => template.id === id);
+  return (
+    getPlatformTemplateCatalog().templates.find(
+      (template) => template.id === id
+    ) ?? getTemplateCatalog().templates.find((template) => template.id === id)
+  );
+}
+
+/** True when Create → Templates may instantiate this catalog id. */
+export function isSelectableTemplate(id: string): boolean {
+  return (
+    !isPlatformTemplateId(id) &&
+    getTemplateCatalog().templates.some((template) => template.id === id)
+  );
 }
 
 export function searchTemplates(query: string): TemplateCatalogEntry[] {
   const needle = query.trim().toLowerCase();
   return getTemplateCatalog()
     .templates.filter((template) => {
+      if (isPlatformTemplateId(template.id)) return false;
       if (!needle) return true;
       return [template.id, template.title, template.description].some((value) =>
         value.toLowerCase().includes(needle)

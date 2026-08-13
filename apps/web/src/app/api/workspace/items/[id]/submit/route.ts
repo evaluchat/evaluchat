@@ -18,7 +18,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   try {
     const body = await request.json();
-    const result = await submitWorkspaceForm(auth.user.id, id, body?.values);
+    const result = await submitWorkspaceForm(auth.user.id, id, body?.values, {
+      profileId:
+        typeof body?.profileId === "string" ? body.profileId : undefined,
+      apparatusConfiguration: body?.apparatusConfiguration,
+      threadId: typeof body?.threadId === "string" ? body.threadId : undefined,
+    });
     return NextResponse.json(
       { item: result.item, idempotent: result.idempotent },
       { status: result.idempotent ? 200 : 201 }

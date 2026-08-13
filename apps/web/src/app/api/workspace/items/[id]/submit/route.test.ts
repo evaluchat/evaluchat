@@ -66,9 +66,18 @@ describe("POST /api/workspace/items/[id]/submit", () => {
     });
     const response = await POST(request({ title: "Brief" }), context("wi_1"));
     expect(response.status).toBe(201);
-    expect(harness.submitWorkspaceForm).toHaveBeenCalledWith("user-1", "wi_1", {
-      title: "Brief",
-    });
+    expect(harness.submitWorkspaceForm).toHaveBeenCalledWith(
+      "user-1",
+      "wi_1",
+      {
+        title: "Brief",
+      },
+      {
+        profileId: undefined,
+        apparatusConfiguration: undefined,
+        threadId: undefined,
+      }
+    );
     expect(await response.json()).toMatchObject({ idempotent: false });
   });
 

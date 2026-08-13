@@ -2,11 +2,20 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BRAND_PANEL_COLOR } from "@/components/auth/login/login-branding";
 import type { WorkspaceItem } from "@/lib/workspace/types";
+import { workspaceItemTitle } from "@/lib/workspace/display";
+import { publicMethodPageUrl } from "@/lib/workspace/method-links";
+
+function methodSpecHref(item: WorkspaceItem): string | undefined {
+  if (item.kind !== "method" && item.kind !== "method_participant") {
+    return undefined;
+  }
+  return publicMethodPageUrl(item.methodSource.id);
+}
 
 export function WorkspaceItemBanner({
   item,
@@ -14,13 +23,21 @@ export function WorkspaceItemBanner({
   onSubmit,
   submitDisabled = false,
   submitted = false,
+  submitLabel,
 }: {
   item: WorkspaceItem;
   onAbandon: () => void;
   onSubmit?: () => void;
   submitDisabled?: boolean;
   submitted?: boolean;
+  submitLabel?: string;
 }) {
+  const methodHref = methodSpecHref(item);
+  const methodLabel =
+    item.kind === "method" || item.kind === "method_participant"
+      ? item.methodSource.title || item.methodSource.id
+      : undefined;
+
   return (
     <div
       className="relative shrink-0 overflow-hidden border-b border-white/[0.08] text-white"
@@ -56,22 +73,45 @@ export function WorkspaceItemBanner({
               </time>
             </p>
             <div className="truncate text-sm font-medium text-white">
-              {item.templateSnapshot.title}
+              {workspaceItemTitle(item)}
             </div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {item.kind === "form_template" && onSubmit && (
-            <Button
-              size="sm"
-              onClick={onSubmit}
-              disabled={submitDisabled}
-              className="bg-white text-[#2c3e56] hover:bg-white/90"
-              data-testid="workspace-form-banner-submit"
+          {methodHref && (
+            <a
+              href={methodHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={methodLabel}
+              aria-label={`Open published method: ${methodLabel}`}
+              data-testid="method-spec-link"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "max-w-[16rem] gap-1 border-white/35 bg-transparent text-white hover:bg-white/12 hover:text-white"
+              )}
             >
-              {submitted ? "Submitted" : "Submit"}
-            </Button>
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{methodLabel}</span>
+            </a>
           )}
+          {item.kind !== "markdown_template" &&
+            item.kind !== "method_participant" &&
+            onSubmit &&
+            !(item.kind === "method" && item.run) && (
+              <Button
+                size="sm"
+                onClick={onSubmit}
+                disabled={submitDisabled}
+                className="bg-white text-[#2c3e56] hover:bg-white/90"
+                data-testid="workspace-form-banner-submit"
+              >
+                {submitted
+                  ? "Submitted"
+                  : submitLabel ||
+                    (item.kind === "method" ? "Start assignment" : "Submit")}
+              </Button>
+            )}
           <Link
             href="/workspace"
             className={cn(

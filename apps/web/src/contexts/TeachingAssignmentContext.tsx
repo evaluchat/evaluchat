@@ -128,3 +128,37 @@ export function useTeachingAssignment() {
 export function useTeachingAssignmentOptional() {
   return useContext(TeachingAssignmentContext);
 }
+
+export function WorkspaceAssignmentProvider({
+  assignment,
+  children,
+}: {
+  assignment: StudentAssignment;
+  children: ReactNode;
+}) {
+  const systemPrompt = useMemo(
+    () =>
+      buildAssignmentSystemPrompt(
+        assignment,
+        assignment.apparatusConfiguration ?? CANONICAL_ESSAYS_CONFIGURATION
+      ),
+    [assignment]
+  );
+  const value = useMemo(
+    () => ({
+      assignment,
+      assignmentId: assignment.id,
+      systemPrompt,
+      apparatusConfiguration: assignment.apparatusConfiguration,
+      isTeachingMode: true,
+      simplifiedUI: true,
+      clearAssignment: () => undefined,
+    }),
+    [assignment, systemPrompt]
+  );
+  return (
+    <TeachingAssignmentContext.Provider value={value}>
+      {children}
+    </TeachingAssignmentContext.Provider>
+  );
+}

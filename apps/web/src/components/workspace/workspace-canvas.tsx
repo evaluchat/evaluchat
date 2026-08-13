@@ -12,9 +12,12 @@ import { useWorkspaceItem } from "@/contexts/WorkspaceItemContext";
 import { convertToOpenAIFormat } from "@/lib/convert_messages";
 import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
 import type { MarkdownWorkspaceItem } from "@/lib/workspace/types";
+import { workspaceItemTitle } from "@/lib/workspace/display";
 import { WorkspaceItemBanner } from "./workspace-item-banner";
 import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
 import { FormWorkspaceCanvas } from "./form-workspace-canvas";
+import { MethodParticipantCanvas } from "./method-participant-canvas";
+import { MethodRunCanvas } from "./method-run-canvas";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
@@ -157,16 +160,16 @@ export function WorkspaceCanvas() {
     );
   }
 
-  if (item.kind === "form_template") {
+  if (item.kind === "form_template" || (item.kind === "method" && !item.run)) {
     return <FormWorkspaceCanvas item={item} />;
   }
 
   if (item.kind === "method") {
-    return (
-      <div className="p-8 text-sm text-muted-foreground">
-        This workspace item is not available yet.
-      </div>
-    );
+    return <MethodRunCanvas item={item} />;
+  }
+
+  if (item.kind === "method_participant") {
+    return <MethodParticipantCanvas item={item} />;
   }
 
   return <MarkdownWorkspaceCanvas item={item} />;

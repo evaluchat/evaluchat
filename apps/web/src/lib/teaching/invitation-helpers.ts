@@ -93,6 +93,36 @@ export async function inviteUserByEmail(
   }
 }
 
+export async function inviteWorkspaceParticipant(
+  email: string
+): Promise<{ emailed: boolean }> {
+  const admin = createAdminClient();
+  const redirectTo = `${getSiteUrl()}/auth/confirm?next=/workspace`;
+  const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(
+    email,
+    { redirectTo }
+  );
+  if (!inviteError) {
+    return { emailed: true };
+  }
+
+  const { error: linkError } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+    options: { redirectTo },
+  });
+  if (!linkError) {
+    return { emailed: true };
+  }
+
+  console.error(
+    `[workspace] could not email ${email}:`,
+    inviteError.message,
+    linkError.message
+  );
+  return { emailed: false };
+}
+
 /**
  * Ensure an Auth user exists for an invite. Prefer invite email; on rate-limit
  * (or other send failures), fall back to generateLink so acceptance still works.

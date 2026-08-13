@@ -150,6 +150,7 @@ export function TextRendererComponent(props: TextRendererProps) {
     pendingEdit,
     setPendingEdit,
     setEditorTextContent,
+    phaseState,
   } = graphData;
 
   // Track cursor position changes — push to GraphContext so all message paths get it
@@ -543,6 +544,7 @@ export function TextRendererComponent(props: TextRendererProps) {
           className="whitespace-pre-wrap font-mono text-sm px-[54px] border-0 shadow-none h-full outline-none ring-0 rounded-none  focus-visible:ring-0 focus-visible:ring-offset-0"
           value={rawMarkdown}
           onChange={onChangeRawMarkdown}
+          readOnly={phaseState === "submitted"}
           data-tracking-id="canvas-editor"
           data-testid="canvas-editor-raw"
         />
@@ -556,6 +558,7 @@ export function TextRendererComponent(props: TextRendererProps) {
             onCompositionEndCapture={() => (isComposition.current = false)}
             onChange={onChange}
             editable={
+              phaseState !== "submitted" &&
               (!isStreaming || props.isEditing || !manuallyUpdatingArtifact) &&
               !pendingEdit?.isActive
             }

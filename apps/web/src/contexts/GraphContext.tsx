@@ -177,13 +177,16 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const assignmentIdParam = teachingAssignmentContext?.assignmentId ?? null;
   const workspaceItemThreadId =
     workspaceItem?.item?.kind === "markdown_template" ||
-    workspaceItem?.item?.kind === "form_template"
+    workspaceItem?.item?.kind === "form_template" ||
+    workspaceItem?.item?.kind === "method" ||
+    workspaceItem?.item?.kind === "method_participant"
       ? workspaceItem.item.threadId
       : undefined;
   const assignmentSystemPrompt =
     teachingAssignmentContext?.systemPrompt ??
     (workspaceItem?.item?.kind === "markdown_template" ||
-    workspaceItem?.item?.kind === "form_template"
+    workspaceItem?.item?.kind === "form_template" ||
+    workspaceItem?.item?.kind === "method"
       ? workspaceItem.item.templateSnapshot.assistantGuidance
       : undefined);
   const apparatusConfiguration =
@@ -751,7 +754,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     let currentThreadId = threadData.threadId;
     if (!currentThreadId) {
       const newThread = await threadData.createThread(
-        assignmentIdParam ?? undefined
+        assignmentIdParam ?? undefined,
+        workspaceItem?.item?.id
       );
       if (!newThread) {
         setIsStreaming(false);
@@ -2040,12 +2044,31 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         metadata: {
           ...existingMetadata,
           completionPercent: 100,
+          phase_state: "submitted",
           phaseState: "submitted",
           submittedAt: new Date().toISOString(),
         },
       });
     }
 
+    if (workspaceItem?.item?.kind === "method_participant") {
+      const response = await fetch(
+        `/api/workspace/items/${encodeURIComponent(workspaceItem.item.id)}/submit`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            values: {},
+            threadId: threadData.threadId,
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to submit assignment");
+      }
+      await workspaceItem.refresh();
+    }
     setPhaseState("submitted");
     return { wordCount, messageCount };
   };
@@ -2083,6 +2106,12 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     const castThreadValues = thread.values as Record<string, any>;
     if (castThreadValues?.phase_state) {
       setPhaseState(castThreadValues.phase_state);
+    } else if (
+      Number(thread.metadata?.completionPercent) === 100 ||
+      thread.metadata?.phase_state === "submitted" ||
+      thread.metadata?.phaseState === "submitted"
+    ) {
+      setPhaseState("submitted");
     }
     if (castThreadValues?.artifact) {
       if (isDeprecatedArtifactType(castThreadValues.artifact)) {

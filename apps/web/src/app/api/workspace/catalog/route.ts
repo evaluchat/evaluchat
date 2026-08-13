@@ -25,8 +25,7 @@ export async function GET(request: NextRequest) {
         id: method.id,
         title: method.name,
         description: method.description,
-        disabled: true,
-        status: "Under construction",
+        disabled: false,
       }));
     return NextResponse.json({ kind, results: methods });
   }

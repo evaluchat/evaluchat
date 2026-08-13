@@ -44,10 +44,10 @@ describe("catalog integrity", () => {
     expect(entry?.min_platform).toBe("0.5.9");
     if (entry?.catalog_urls) {
       expect(entry.catalog_urls.spec).toContain(
-        "apparatus/ai-assisted-essay/ai-assisted-essay.en.md"
+        "methods/ai-assisted-essay/ai-assisted-essay.en.md"
       );
       expect(entry.catalog_urls.evidence).toContain(
-        "apparatus/ai-assisted-essay/evidence"
+        "methods/ai-assisted-essay/evidence"
       );
       expect(entry.catalog_urls.questions.length).toBeGreaterThan(0);
     }

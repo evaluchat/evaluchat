@@ -58,14 +58,18 @@ export function CreateWorkspaceItemDialog({
     };
   }, [open, kind, query]);
 
-  async function create(templateId: string) {
+  async function create(result: CatalogResult) {
     setCreating(true);
     try {
       const response = await fetch("/api/workspace/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ templateId }),
+        body: JSON.stringify(
+          kind === "method"
+            ? { methodId: result.id }
+            : { templateId: result.id }
+        ),
       });
       if (!response.ok) throw new Error("Could not create workspace item");
       const body = (await response.json()) as { item: WorkspaceItem };
@@ -92,8 +96,8 @@ export function CreateWorkspaceItemDialog({
           <DialogTitle>Create workspace item</DialogTitle>
           <DialogDescription>
             Search reviewed templates and methods. Markdown templates are
-            editable; Form templates use a protected layout and validated
-            controls.
+            editable. Method run briefs are not listed here; choose Methods to
+            start an assignment.
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3">
@@ -135,7 +139,7 @@ export function CreateWorkspaceItemDialog({
                 key={result.id}
                 type="button"
                 disabled={result.disabled || creating}
-                onClick={() => void create(result.id)}
+                onClick={() => void create(result)}
                 className="w-full rounded-lg border p-4 text-left transition hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <div className="flex items-center justify-between gap-3">

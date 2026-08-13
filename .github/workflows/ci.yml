@@ -157,6 +157,12 @@ jobs:
           EVALUCHAT_TEMPLATE_CATALOG_OUTPUT: ${{ runner.temp }}/template-catalog.json
       - name: Verify committed snapshot
         run: diff -u apps/web/data/template-catalog.json "${{ runner.temp }}/template-catalog.json"
+      - name: Generate platform template snapshot
+        run: yarn generate:platform-templates
+        env:
+          EVALUCHAT_PLATFORM_TEMPLATE_CATALOG_OUTPUT: ${{ runner.temp }}/platform-template-catalog.json
+      - name: Verify committed platform snapshot
+        run: diff -u apps/web/data/platform-template-catalog.json "${{ runner.temp }}/platform-template-catalog.json"
 
   desktop:
     name: Desktop

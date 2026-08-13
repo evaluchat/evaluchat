@@ -4,6 +4,7 @@ import {
   isEmptyKickoffThread,
   isSubmittedThread,
   selectActiveThread,
+  shouldMintNewAssignmentThread,
   shouldRejectCachedThread,
   threadContentScore,
   type ThreadLike,
@@ -129,6 +130,28 @@ describe("selectActiveThread", () => {
     // selectActiveThread still returns submitted when it is the only non-abandoned
     // incomplete-less candidate — empty incomplete wins first.
     expect(selectActiveThread([submitted, empty])?.thread_id).toBe("empty");
+  });
+
+  it("treats camelCase metadata.phaseState as submitted", () => {
+    expect(
+      isSubmittedThread({
+        thread_id: "sub",
+        metadata: { phaseState: "submitted" },
+      })
+    ).toBe(true);
+  });
+});
+
+describe("shouldMintNewAssignmentThread", () => {
+  it("resumes a submitted workspace-bound thread instead of minting", () => {
+    const submitted = thread("sub", { completionPercent: 100, messages: 8 });
+    expect(
+      shouldMintNewAssignmentThread(submitted, { workspaceBound: true })
+    ).toBe(false);
+    expect(shouldMintNewAssignmentThread(submitted)).toBe(true);
+    expect(shouldMintNewAssignmentThread(undefined, { workspaceBound: true })).toBe(
+      true
+    );
   });
 });
 

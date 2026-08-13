@@ -17,6 +17,7 @@ import {
   emptyKickoffsToAbandon,
   isSubmittedThread,
   selectActiveThread,
+  shouldMintNewAssignmentThread,
   shouldRejectCachedThread,
   type ThreadLike,
 } from "@/lib/teaching/select-active-thread";
@@ -199,7 +200,12 @@ export function ThreadProvider({
       // (or nothing) exists so students can start a fresh attempt.
       if (assignmentId) {
         const existing = await getActiveThread(assignmentId);
-        if (existing && !isSubmittedThread(existing as ThreadLike)) {
+        if (
+          existing &&
+          !shouldMintNewAssignmentThread(existing as ThreadLike, {
+            workspaceBound: Boolean(ownedWorkspaceItemId),
+          })
+        ) {
           setThreadId(existing.thread_id);
           try {
             const cache = JSON.parse(
@@ -384,7 +390,9 @@ export function ThreadProvider({
       const results = await client.threads.search({
         metadata: {
           supabase_user_id: currentUser.id,
-          assignment_id: assignmentId,
+          ...(workspaceItemId
+            ? { workspace_item_id: workspaceItemId }
+            : { assignment_id: assignmentId }),
         },
         limit: 100,
       });

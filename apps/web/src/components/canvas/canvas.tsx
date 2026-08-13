@@ -45,6 +45,8 @@ import { useAssignmentKickoff } from "@/hooks/use-assignment-kickoff";
 import { CanvasLoading } from "@/components/canvas/canavas-loading";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
+import { useWorkspaceItemOptional } from "@/contexts/WorkspaceItemContext";
+import { publicMethodPageUrl } from "@/lib/workspace/method-links";
 
 export interface CanvasProps {
   /** Optional editor-level banner rendered inside the canvas height budget. */
@@ -64,11 +66,18 @@ export function CanvasComponent({
     chatStarted,
     setChatStarted,
     phaseState,
+    setPhaseState,
     submitAssignment,
     artifact,
     messages,
   } = graphData;
   const teachingAssignment = useTeachingAssignmentOptional();
+  const workspaceItem = useWorkspaceItemOptional()?.item;
+  const workspaceMethod =
+    workspaceItem?.kind === "method_participant" ||
+    workspaceItem?.kind === "method"
+      ? workspaceItem.methodSource
+      : undefined;
   const aiAssistanceEnabled =
     teachingAssignment?.apparatusConfiguration?.ai_assistance !== false;
   const { toast } = useToast();
@@ -92,7 +101,11 @@ export function CanvasComponent({
 
   useEffect(() => {
     if (activeAssignment) {
-      setIsEditing(true);
+      const submitted =
+        activeAssignment.status === "submitted" ||
+        phaseState === "submitted" ||
+        searchParams.get("readonly") === "1";
+      setIsEditing(!submitted);
       setChatCollapsed(false);
       const queryParams = new URLSearchParams(searchParams.toString());
       if (queryParams.has(CHAT_COLLAPSED_QUERY_PARAM)) {
@@ -140,10 +153,17 @@ export function CanvasComponent({
 
   // Prevent editing when assignment is submitted
   useEffect(() => {
-    if (phaseState === "submitted") {
+    if (
+      phaseState === "submitted" ||
+      activeAssignment?.status === "submitted" ||
+      searchParams.get("readonly") === "1"
+    ) {
       setIsEditing(false);
+      if (phaseState !== "submitted") {
+        setPhaseState("submitted");
+      }
     }
-  }, [phaseState]);
+  }, [phaseState, activeAssignment?.status, searchParams, setPhaseState]);
 
   const handleSubmitClick = () => {
     setSubmitDialogOpen(true);
@@ -195,7 +215,7 @@ export function CanvasComponent({
       }
 
       setAbandonDialogOpen(false);
-      router.push("/student");
+      router.push(workspaceItem ? "/workspace" : "/student");
     } catch (error) {
       toast({
         title: "Failed to abandon assignment",
@@ -261,6 +281,14 @@ export function CanvasComponent({
             phaseState={phaseState}
             onSubmit={handleSubmitClick}
             onAbandon={() => setAbandonDialogOpen(true)}
+            homeHref={workspaceItem ? "/workspace" : "/student"}
+            homeLabel={workspaceItem ? "Workspace" : "Assignments"}
+            methodHref={
+              workspaceMethod
+                ? publicMethodPageUrl(workspaceMethod.id)
+                : undefined
+            }
+            methodLabel={workspaceMethod?.title || workspaceMethod?.id}
           />
           <div className="h-px w-full bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
         </>
