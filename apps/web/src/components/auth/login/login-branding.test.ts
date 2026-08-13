@@ -14,7 +14,9 @@ import {
 
 describe("login-branding", () => {
   it("points docs to the public docs site", () => {
-    expect(DOCS_URL).toBe("https://docs.evaluchat.org");
+    expect(DOCS_URL).toBe(
+      "https://knowledge.evaluchat.org/platform-capabilities.html"
+    );
   });
 
   it("uses the product copyright notice (pre-incorporation)", () => {

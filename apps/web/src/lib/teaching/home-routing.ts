@@ -55,7 +55,7 @@ export function deniedTeachingRoleRedirect(opts: {
   return null;
 }
 
-/** Shared cookie so docs.evaluchat.org can detect an app session. */
+/** Shared cookie so knowledge.evaluchat.org can detect an app session. */
 export const SESSION_MARKER_COOKIE = "ec_authed";
 
 /**

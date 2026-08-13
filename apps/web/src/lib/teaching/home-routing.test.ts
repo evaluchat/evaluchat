@@ -127,7 +127,9 @@ describe("deniedTeachingRoleRedirect", () => {
 describe("sharedAuthCookieDomain", () => {
   it("scopes evaluchat hosts to .evaluchat.org", () => {
     expect(sharedAuthCookieDomain("evaluchat.org")).toBe(".evaluchat.org");
-    expect(sharedAuthCookieDomain("docs.evaluchat.org")).toBe(".evaluchat.org");
+    expect(sharedAuthCookieDomain("knowledge.evaluchat.org")).toBe(
+      ".evaluchat.org"
+    );
     expect(sharedAuthCookieDomain("dev.evaluchat.org")).toBe(".evaluchat.org");
   });
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DOCS_URL } from "@/components/auth/login/login-branding";
 import {
   DEFAULT_TEACHER_SECTION,
   TEACHER_WORKSPACE_NAV,
@@ -36,6 +37,6 @@ describe("teacher-workspace-nav", () => {
   it("marks docs as external link", () => {
     const docs = TEACHER_WORKSPACE_NAV.find((i) => i.id === "docs");
     expect(docs?.kind).toBe("external");
-    expect(docs?.href).toBe("https://docs.evaluchat.org");
+    expect(docs?.href).toBe(DOCS_URL);
   });
 });
