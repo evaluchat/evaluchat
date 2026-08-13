@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { HumanMessage } from "@langchain/core/messages";
 import { v4 as uuidv4 } from "uuid";
 import { Canvas } from "@/components/canvas";
+import { useAssistantContext } from "@/contexts/AssistantContext";
 import { useGraphContext } from "@/contexts/GraphContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
 import { useUserContext } from "@/contexts/UserContext";
@@ -21,6 +22,7 @@ function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
   const { user } = useUserContext();
   const { threadId, setThreadId } = useThreadContext();
   const { graphData } = useGraphContext();
+  const { selectedAssistant } = useAssistantContext();
   const router = useRouter();
   const { toast } = useToast();
   const bootstrappedItem = useRef<string | null>(null);
@@ -82,6 +84,7 @@ function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
   useEffect(() => {
     if (
       !user ||
+      !selectedAssistant ||
       !graphData.chatStarted ||
       !graphData.artifact ||
       graphData.messages.length > 0 ||
@@ -113,6 +116,7 @@ function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
   }, [
     item.id,
     user?.id,
+    selectedAssistant,
     graphData.chatStarted,
     graphData.artifact,
     graphData.messages.length,
