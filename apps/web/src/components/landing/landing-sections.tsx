@@ -117,33 +117,36 @@ export function MeasuresSection() {
   return (
     <section className="measures section" id="measures">
       <div className="container">
-        <h2>Three questions. Not one.</h2>
+        <h2>Three questions, not one.</h2>
         <p className="lede">
-          When we ask whether someone can &quot;do it&quot;, we might mean very
-          different things.
+          When we ask whether someone can “do it,” we may be asking about
+          different capabilities.
         </p>
         <div className="meas-grid">
           <div className="meas">
             <span className="m-n">01</span>
-            <b>Produce</b>
-            <p>Can they produce the conventional answer without AI?</p>
+            <b>Produce independently</b>
+            <p>Can they produce the work without AI?</p>
           </div>
           <div className="meas">
             <span className="m-n">02</span>
             <b>Understand</b>
-            <p>Do they have the underlying knowledge and understanding?</p>
+            <p>
+              Can they explain the underlying knowledge, choices, and reasoning?
+            </p>
           </div>
           <div className="meas">
             <span className="m-n">03</span>
             <b>Work with AI</b>
             <p>
-              Can they question it, evaluate it, correct it and use it
-              effectively?
+              Can they question it, evaluate it, correct it, and decide when not
+              to rely on it?
             </p>
           </div>
         </div>
         <p className="lede" style={{ marginTop: 28 }}>
-          These abilities overlap. They aren&apos;t interchangeable.
+          These capabilities overlap, but success in one does not establish the
+          others.
         </p>
       </div>
     </section>
@@ -325,7 +328,7 @@ export function ResearchSection() {
         <div className="dark-ctas">
           <a
             className="btn btn-outline"
-            href="https://research.evaluchat.org/apparatus/index.html"
+            href="https://research.evaluchat.org/methods/index.html"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -407,7 +410,7 @@ export function FinalCtaSection() {
           </OpenCanvasButton>
           <a
             className="btn btn-outline"
-            href="https://research.evaluchat.org/apparatus/index.html"
+            href="https://research.evaluchat.org/methods/index.html"
             target="_blank"
             rel="noopener noreferrer"
           >
