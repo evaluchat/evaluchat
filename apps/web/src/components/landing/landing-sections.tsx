@@ -82,32 +82,30 @@ export function HypothesisSection() {
     <section className="hypothesis section" id="about">
       <div className="container hypo-grid">
         <div>
-          <h2>AI changed the conditions. Not the need for evidence.</h2>
+          <h2>
+            When AI is part of the work, the answer alone is not evidence.
+          </h2>
           <p className="hypo-stand">
-            An AI can write the paper, solve the problem and find the sources.
-            That does not tell us what the person using it understands.
+            AI can write an essay, solve a problem, and find sources.
           </p>
           <p className="hypo-stand">
-            Removing AI does not answer every question either. It can hide the
-            judgement, reasoning and decisions people make when AI is part of
-            the work.
+            A completed task no longer tells us, by itself, what a person
+            understood, decided, or can do.
           </p>
           <p className="hypo-stand">
-            <strong>
-              We don&apos;t know what learning and assessment should measure
-              now.
-            </strong>
+            Banning AI does not settle the question. It can hide the judgement
+            and reasoning involved in working with it.
           </p>
         </div>
         <div className="guide-card">
           <p className="g-label">The shared question</p>
           <p className="g-q">
-            What should people still know, decide, explain and demonstrate when
+            What should people still know, decide, explain, and demonstrate when
             AI is available?
           </p>
           <p className="g-sub">
-            Evaluchat does not offer a settled answer. It makes the alternatives
-            easier to try, inspect and improve together.
+            Evaluchat does not prescribe the answer. It makes competing methods
+            visible, testable, and easier to improve.
           </p>
         </div>
       </div>
