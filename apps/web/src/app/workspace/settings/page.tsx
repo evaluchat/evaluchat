@@ -13,6 +13,7 @@ import {
 } from "@/components/teaching/workspace-site-header";
 import { DOCS_URL } from "@/components/auth/login/login-branding";
 import { SettingsBreadcrumb } from "@/components/workspace/settings-breadcrumb";
+import { ByokSettingsCard } from "@/components/workspace/byok-settings-card";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -99,37 +100,40 @@ function SettingsForm() {
         <div className="mb-4">
           <SettingsBreadcrumb />
         </div>
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle>Your name</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">First name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  autoComplete="given-name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="surname">Last name</Label>
-                <Input
-                  id="surname"
-                  value={surname}
-                  onChange={(e) => setSurname(e.target.value)}
-                  autoComplete="family-name"
-                />
-              </div>
-              <Button type="submit" disabled={submitting || !name.trim()}>
-                {submitting ? "Saving…" : "Save"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card className="bg-white">
+            <CardHeader>
+              <CardTitle>Your name</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">First name</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    autoComplete="given-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="surname">Last name</Label>
+                  <Input
+                    id="surname"
+                    value={surname}
+                    onChange={(e) => setSurname(e.target.value)}
+                    autoComplete="family-name"
+                  />
+                </div>
+                <Button type="submit" disabled={submitting || !name.trim()}>
+                  {submitting ? "Saving…" : "Save"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+          <ByokSettingsCard />
+        </div>
       </section>
     </main>
   );

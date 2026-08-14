@@ -40,6 +40,7 @@ import {
   getProviderChain,
   wrapModelWithFallback,
 } from "./provider-registry.js";
+import { getByokModelSettings } from "./byok.js";
 
 const FREE_ASSIGNMENT_MODEL = "mimo-v2.5-free";
 /** Legacy free id — still route via Zen rail if an old client sends it. */
@@ -425,6 +426,33 @@ export function isUsingO1MiniModel(config: LangGraphRunnableConfig) {
   return modelName.includes("o1-mini");
 }
 
+function buildGenerationConfig(
+  modelName: string,
+  modelConfig: CustomModelConfig | undefined,
+  extra?: {
+    temperature?: number;
+    maxTokens?: number;
+  }
+) {
+  const { temperature = 0.5, maxTokens } = {
+    temperature: modelConfig?.temperatureRange.current,
+    maxTokens: modelConfig?.maxTokens.current,
+    ...extra,
+  };
+
+  const includeStandardParams = !TEMPERATURE_EXCLUDED_MODELS.some(
+    (m) => m === modelName
+  );
+
+  return includeStandardParams
+    ? { maxTokens, temperature }
+    : {
+        max_completion_tokens: maxTokens,
+        // streaming: false,
+        // disableStreaming: true,
+      };
+}
+
 export async function getModelFromConfig(
   config: LangGraphRunnableConfig,
   extra?: {
@@ -433,6 +461,27 @@ export async function getModelFromConfig(
     isToolCalling?: boolean;
   }
 ): Promise<ReturnType<typeof initChatModel>> {
+  const byokSettings = await getByokModelSettings(config);
+  if (byokSettings) {
+    const modelConfig = config.configurable?.modelConfig as
+      | CustomModelConfig
+      | undefined;
+    const generationConfig = buildGenerationConfig(
+      byokSettings.model,
+      modelConfig,
+      extra
+    );
+    return new ChatOpenAI({
+      model: byokSettings.model,
+      ...generationConfig,
+      apiKey: byokSettings.apiKey,
+      maxRetries: 0,
+      configuration: {
+        baseURL: byokSettings.baseUrl,
+      },
+    }) as any;
+  }
+
   const {
     modelName,
     modelProvider,
@@ -445,11 +494,6 @@ export async function getModelFromConfig(
   } = getModelConfig(config, {
     isToolCalling: extra?.isToolCalling,
   });
-  const { temperature = 0.5, maxTokens } = {
-    temperature: modelConfig?.temperatureRange.current,
-    maxTokens: modelConfig?.maxTokens.current,
-    ...extra,
-  };
 
   const isLangChainUserModel = LANGCHAIN_USER_ONLY_MODELS.some(
     (m) => m === modelName
@@ -468,17 +512,7 @@ export async function getModelFromConfig(
     }
   }
 
-  const includeStandardParams = !TEMPERATURE_EXCLUDED_MODELS.some(
-    (m) => m === modelName
-  );
-
-  const generationConfig = includeStandardParams
-    ? { maxTokens, temperature }
-    : {
-        max_completion_tokens: maxTokens,
-        // streaming: false,
-        // disableStreaming: true,
-      };
+  const generationConfig = buildGenerationConfig(modelName, modelConfig, extra);
 
   if (modelProvider === "openai" && baseUrl) {
     const primaryModel = new ChatOpenAI({
