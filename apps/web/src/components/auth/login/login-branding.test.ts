@@ -20,7 +20,7 @@ describe("login-branding", () => {
   });
 
   it("uses the product copyright notice (pre-incorporation)", () => {
-    expect(COPYRIGHT_NOTICE).toBe("© 2026 Evaluchat. All rights reserved.");
+    expect(COPYRIGHT_NOTICE).toBe("© 2026 evaluchat. All rights reserved.");
   });
 
   it("matches docs/login brand panel blue", () => {

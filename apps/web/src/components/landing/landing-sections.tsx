@@ -68,7 +68,7 @@ export function HeroSection() {
               loop
               playsInline
               preload="metadata"
-              aria-label="Short demo of Evaluchat coaching a writing assignment"
+              aria-label="Short demo of evaluchat coaching a writing assignment"
             />
           </div>
         </div>

@@ -47,10 +47,10 @@ export function AssignmentWorkspaceBanner({
         <div className="flex shrink-0 items-center gap-2">
           <img
             src="/evaluchat.png"
-            alt="Evaluchat"
+            alt="evaluchat"
             className="w-7 h-7 object-contain"
           />
-          <TighterText className="text-xl">Evaluchat</TighterText>
+          <TighterText className="text-xl">evaluchat</TighterText>
           {phaseState && (
             <Badge
               variant={phaseState === "drafting" ? "outline" : "secondary"}
