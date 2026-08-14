@@ -96,7 +96,10 @@ vi.mock("@/lib/teaching/invitation-helpers", () => ({
   findUserByEmail: harness.findUserByEmail,
   inviteWorkspaceParticipant: harness.inviteWorkspaceParticipant,
   INVITE_EMAIL_GAP_MS: 0,
-  sleep: async () => undefined,
+  // Yield so lock-retry loops do not starve deferred work / timers.
+  sleep: async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  },
 }));
 
 import {
@@ -117,10 +120,29 @@ import {
   reconcileWorkspaceItemThread,
   workspaceLockAcquireTimeoutMs,
   workspaceLockRetryDelayMs,
+  workspaceLockTtlMs,
 } from "./store";
 
 const defaultLockRetryDelayMs = workspaceLockRetryDelayMs.value;
 const defaultLockAcquireTimeoutMs = workspaceLockAcquireTimeoutMs.value;
+const defaultLockTtlMs = workspaceLockTtlMs.value;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 2_000
+): Promise<void> {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("waitFor timed out");
+    }
+    await delay(5);
+  }
+}
 
 describe("workspace item lifecycle", () => {
   beforeEach(() => {
@@ -133,6 +155,7 @@ describe("workspace item lifecycle", () => {
     harness.inviteWorkspaceParticipant.mockResolvedValue(undefined);
     workspaceLockRetryDelayMs.value = defaultLockRetryDelayMs;
     workspaceLockAcquireTimeoutMs.value = defaultLockAcquireTimeoutMs;
+    workspaceLockTtlMs.value = defaultLockTtlMs;
     vi.clearAllMocks();
   });
 
@@ -310,6 +333,7 @@ describe("method run launch", () => {
     harness.inviteWorkspaceParticipant.mockResolvedValue(undefined);
     workspaceLockRetryDelayMs.value = defaultLockRetryDelayMs;
     workspaceLockAcquireTimeoutMs.value = defaultLockAcquireTimeoutMs;
+    workspaceLockTtlMs.value = defaultLockTtlMs;
   });
 
   it("rejects a method submit without a roster", async () => {
@@ -808,7 +832,9 @@ describe("method run launch", () => {
       ...assignmentBrief,
       participants: "a@example.com",
     });
-    if (launched.item.kind !== "method" || !launched.item.run) return;
+    if (launched.item.kind !== "method" || !launched.item.run) {
+      throw new Error("expected method run item from submitWorkspaceForm");
+    }
     const participantId = launched.item.run.participants[0].itemId!;
     harness.state.threads.set("thread-supabase-owner", {
       metadata: {
@@ -838,7 +864,9 @@ describe("method run launch", () => {
       ...assignmentBrief,
       participants: "a@example.com",
     });
-    if (launched.item.kind !== "method" || !launched.item.run) return;
+    if (launched.item.kind !== "method" || !launched.item.run) {
+      throw new Error("expected method run item from submitWorkspaceForm");
+    }
     const participantId = launched.item.run.participants[0].itemId!;
     harness.state.threads.set("thread-user-owner", {
       metadata: {
@@ -866,6 +894,123 @@ describe("method run launch", () => {
     expect(first?.id).toBeDefined();
     expect(second?.id).toBe(first?.id);
     expect(Object.keys(harness.state.manifest.items)).toHaveLength(1);
+  });
+
+  it("holds competing acquisition until the first lock holder releases", async () => {
+    let releaseFirstManifestWrite!: () => void;
+    const firstManifestWriteGate = new Promise<void>((resolve) => {
+      releaseFirstManifestWrite = resolve;
+    });
+    let firstManifestWriteStarted = false;
+
+    const putItem = harness.client.store.putItem;
+    const previousPut = putItem.getMockImplementation()!;
+    putItem.mockImplementation(
+      async (
+        namespace: string[],
+        key: string,
+        value: any,
+        options?: { ttl?: number | null }
+      ) => {
+        if (
+          namespace.join("/") === "workspace_items/user-1" &&
+          key === "manifest" &&
+          !firstManifestWriteStarted
+        ) {
+          firstManifestWriteStarted = true;
+          await firstManifestWriteGate;
+        }
+        return previousPut(namespace, key, value, options);
+      }
+    );
+
+    try {
+      const firstPromise = ensureDefaultWorkspaceItem("user-1");
+      await waitFor(() => firstManifestWriteStarted);
+
+      const secondPromise = ensureDefaultWorkspaceItem("user-1");
+      let secondSettled = false;
+      void secondPromise.then(() => {
+        secondSettled = true;
+      });
+
+      await delay(50);
+      expect(secondSettled).toBe(false);
+      expect(harness.state.items.has("workspace_items/user-1:lock")).toBe(true);
+
+      releaseFirstManifestWrite();
+      const [first, second] = await Promise.all([firstPromise, secondPromise]);
+      expect(first?.id).toBeDefined();
+      expect(second?.id).toBe(first?.id);
+      expect(Object.keys(harness.state.manifest.items)).toHaveLength(1);
+      expect(harness.state.items.has("workspace_items/user-1:lock")).toBe(
+        false
+      );
+    } finally {
+      putItem.mockImplementation(previousPut);
+    }
+  });
+
+  it("renews the store lock lease while a long op holds it", async () => {
+    workspaceLockTtlMs.value = 200;
+    workspaceLockRetryDelayMs.value = 1;
+    // renewal period = max(1000, floor(200/3)) = 1000
+    const renewalMs = Math.max(1000, Math.floor(workspaceLockTtlMs.value / 3));
+
+    let releaseManifestWrite!: () => void;
+    const manifestWriteGate = new Promise<void>((resolve) => {
+      releaseManifestWrite = resolve;
+    });
+    let manifestWriteStarted = false;
+
+    const putItem = harness.client.store.putItem;
+    const previousPut = putItem.getMockImplementation()!;
+    putItem.mockImplementation(
+      async (
+        namespace: string[],
+        key: string,
+        value: any,
+        options?: { ttl?: number | null }
+      ) => {
+        if (
+          namespace.join("/") === "workspace_items/user-1" &&
+          key === "manifest" &&
+          !manifestWriteStarted
+        ) {
+          manifestWriteStarted = true;
+          await manifestWriteGate;
+        }
+        return previousPut(namespace, key, value, options);
+      }
+    );
+
+    try {
+      const op = ensureDefaultWorkspaceItem("user-1");
+      await waitFor(() => manifestWriteStarted);
+
+      const lockKey = "workspace_items/user-1:lock";
+      const initial = harness.state.items.get(lockKey) as {
+        token: string;
+        expiresAt: number;
+      };
+      expect(initial?.token).toBeDefined();
+      const initialExpiresAt = initial.expiresAt;
+
+      await delay(renewalMs + 200);
+
+      const mid = harness.state.items.get(lockKey) as {
+        token: string;
+        expiresAt: number;
+      };
+      expect(mid.token).toBe(initial.token);
+      expect(mid.expiresAt).toBeGreaterThan(initialExpiresAt);
+
+      releaseManifestWrite();
+      await op;
+      expect(harness.state.items.has(lockKey)).toBe(false);
+    } finally {
+      putItem.mockImplementation(previousPut);
+    }
   });
 
   it("releases the store lock after a manifest op", async () => {

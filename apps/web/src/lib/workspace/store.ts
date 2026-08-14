@@ -43,11 +43,11 @@ import {
 
 const MANIFEST_KEY = "manifest";
 const LOCK_KEY = "lock";
-/** Crash-safety backstop; expiresAt is the primary staleness rule. */
-const WORKSPACE_LOCK_TTL_MS = 60_000;
 /** Store SDK TTL is in minutes (see @langchain/langgraph-sdk StoreClient.putItem). */
 const WORKSPACE_LOCK_TTL_MINUTES = 1;
 
+/** Test seam: mutate `.value` for lease TTL / renewal-interval math. */
+export const workspaceLockTtlMs = { value: 60_000 };
 /** Test seam: mutate `.value` to keep lock-timeout tests fast. */
 export const workspaceLockRetryDelayMs = { value: 100 };
 /** Test seam: mutate `.value` to bound acquisition wait; default ~10s. */
@@ -197,7 +197,7 @@ async function acquireUserLock(userId: string): Promise<string> {
     }
 
     // Free, missing, or expired: claim (last-writer-wins among contenders).
-    const expiresAt = Date.now() + WORKSPACE_LOCK_TTL_MS;
+    const expiresAt = Date.now() + workspaceLockTtlMs.value;
     await client().store.putItem(
       ns,
       LOCK_KEY,
@@ -208,7 +208,14 @@ async function acquireUserLock(userId: string): Promise<string> {
       (await client().store.getItem(ns, LOCK_KEY))?.value
     );
     if (stored?.token === token) {
-      return token;
+      // Settle-verify: catch a late contender putItem that landed after read-back.
+      await sleep(workspaceLockRetryDelayMs.value);
+      const settled = lockValue(
+        (await client().store.getItem(ns, LOCK_KEY))?.value
+      );
+      if (settled?.token === token) {
+        return token;
+      }
     }
     await sleep(workspaceLockRetryDelayMs.value);
   }
@@ -221,6 +228,22 @@ async function releaseUserLock(userId: string, token: string): Promise<void> {
   const stored = lockValue((await client().store.getItem(ns, LOCK_KEY))?.value);
   if (stored?.token !== token) return;
   await client().store.deleteItem(ns, LOCK_KEY);
+  // An in-flight heartbeat renewal may have re-created our lock after the
+  // delete; at most one can be in flight (interval cleared before release).
+  const after = lockValue((await client().store.getItem(ns, LOCK_KEY))?.value);
+  if (after?.token === token) {
+    await client().store.deleteItem(ns, LOCK_KEY);
+  }
+}
+
+async function renewUserLock(userId: string, token: string): Promise<void> {
+  const ns = namespace(userId);
+  await client().store.putItem(
+    ns,
+    LOCK_KEY,
+    { token, expiresAt: Date.now() + workspaceLockTtlMs.value },
+    { ttl: WORKSPACE_LOCK_TTL_MINUTES }
+  );
 }
 
 async function withUserLock<T>(
@@ -228,9 +251,17 @@ async function withUserLock<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   const token = await acquireUserLock(userId);
+  let released = false;
+  const renewalMs = Math.max(1000, Math.floor(workspaceLockTtlMs.value / 3));
+  const heartbeat = setInterval(() => {
+    if (released) return;
+    void renewUserLock(userId, token);
+  }, renewalMs);
   try {
     return await operation();
   } finally {
+    released = true;
+    clearInterval(heartbeat);
     await releaseUserLock(userId, token);
   }
 }
