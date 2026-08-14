@@ -22,6 +22,24 @@ export function isPublicPath(pathname: string): boolean {
 }
 
 /**
+ * Signed-in users on most /auth* pages bounce to /workspace. Confirm, password
+ * reset, and sign-out must remain reachable (stale links, recovery tokens).
+ */
+export function shouldBounceSignedInFromAuth(pathname: string): boolean {
+  const path = pathname.split("?")[0].replace(/\/+$/, "") || "/";
+  if (!path.startsWith("/auth")) return false;
+  if (path.startsWith("/auth/signout")) return false;
+  if (
+    path === "/auth/confirm" ||
+    path === "/auth/forgot-password" ||
+    path === "/auth/reset-password"
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Unauthenticated PAGE shells redirect to login. API routes are left alone so
  * handlers can return 401 JSON (do not HTML-redirect `/api/*`).
  */
@@ -197,13 +215,9 @@ export async function updateSession(request: NextRequest) {
     return redirectWithCookies(url, supabaseResponse, request, true);
   }
 
-  // /auth/confirm handles hash errors + PKCE itself (including for signed-in users
-  // who hit a stale confirmation link). Do not bounce them away first.
-  if (
-    pathname.startsWith("/auth") &&
-    !pathname.startsWith("/auth/signout") &&
-    pathname !== "/auth/confirm"
-  ) {
+  // /auth/confirm and password-reset routes handle tokens themselves (including
+  // for signed-in users on stale links). Do not bounce them away first.
+  if (shouldBounceSignedInFromAuth(pathname)) {
     const targetPath = "/workspace";
     const url = new URL(targetPath, request.url);
     return redirectWithCookies(url, supabaseResponse, request, true);

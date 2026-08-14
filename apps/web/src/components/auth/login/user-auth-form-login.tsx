@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useFormStatus } from "react-dom";
 
 import { cn } from "@/lib/utils";
 import { Input } from "../../ui/input";
-import { Button } from "../../ui/button";
+import { Button, buttonVariants } from "../../ui/button";
 import { Icons } from "../../ui/icons";
 import { Label } from "../../ui/label";
 import { useState } from "react";
@@ -68,6 +69,17 @@ export function UserAuthForm({
               required
               disabled={isOauthLoading}
             />
+            <div className="flex justify-end pt-1">
+              <Link
+                href="/auth/forgot-password"
+                className={cn(
+                  buttonVariants({ variant: "link" }),
+                  "h-auto p-0 text-sm text-muted-foreground"
+                )}
+              >
+                Forgot password?
+              </Link>
+            </div>
           </div>
         </div>
         <LoginSubmitButton />
