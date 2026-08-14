@@ -102,7 +102,7 @@ function redirectWithCookies(
 ): NextResponse {
   const redirect = NextResponse.redirect(url);
   supabaseResponse.cookies.getAll().forEach((cookie) => {
-    redirect.cookies.set(cookie.name, cookie.value);
+    redirect.cookies.set(cookie); // ResponseCookie carries name, value, and all attributes
   });
   return applySessionMarker(redirect, request, authed);
 }
