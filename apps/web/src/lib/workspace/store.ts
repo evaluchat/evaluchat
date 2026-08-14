@@ -252,16 +252,26 @@ async function withUserLock<T>(
 ): Promise<T> {
   const token = await acquireUserLock(userId);
   let released = false;
+  let renewalPromise: Promise<void> | null = null;
   const renewalMs = Math.max(1, Math.floor(workspaceLockTtlMs.value / 3));
   const heartbeat = setInterval(() => {
     if (released) return;
-    void renewUserLock(userId, token);
+    renewalPromise = renewUserLock(userId, token);
   }, renewalMs);
   try {
     return await operation();
   } finally {
     released = true;
     clearInterval(heartbeat);
+    // Await any renewal already in flight so it cannot re-create the lock
+    // after release deletes it. Renewals are best-effort; swallow errors.
+    if (renewalPromise) {
+      try {
+        await renewalPromise;
+      } catch {
+        // best-effort renewal failure — the lock will expire via TTL
+      }
+    }
     await releaseUserLock(userId, token);
   }
 }

@@ -19,6 +19,7 @@ const harness = vi.hoisted(() => {
   };
   const hooks = {
     onParticipantManifestWrite: undefined as (() => void) | undefined,
+    onLockPut: undefined as (() => void | Promise<void>) | undefined,
   };
 
   const client = {
@@ -36,6 +37,9 @@ const harness = vi.hoisted(() => {
           value: any,
           _options?: { ttl?: number | null }
         ) => {
+          if (key === "lock") {
+            await hooks.onLockPut?.();
+          }
           items.set(storeKey(namespace, key), structuredClone(value));
           if (
             namespace.join("/") === "workspace_items/user-2" &&
@@ -149,6 +153,7 @@ describe("workspace item lifecycle", () => {
     harness.state.items.clear();
     harness.state.threads.clear();
     harness.hooks.onParticipantManifestWrite = undefined;
+    harness.hooks.onLockPut = undefined;
     harness.findUserByEmail.mockReset();
     harness.inviteWorkspaceParticipant.mockReset();
     harness.findUserByEmail.mockResolvedValue(null);
@@ -327,6 +332,7 @@ describe("method run launch", () => {
     harness.state.items.clear();
     harness.state.threads.clear();
     harness.hooks.onParticipantManifestWrite = undefined;
+    harness.hooks.onLockPut = undefined;
     harness.findUserByEmail.mockReset();
     harness.inviteWorkspaceParticipant.mockReset();
     harness.findUserByEmail.mockResolvedValue(null);
@@ -947,6 +953,81 @@ describe("method run launch", () => {
         false
       );
     } finally {
+      putItem.mockImplementation(previousPut);
+    }
+  });
+
+  it("release waits for an in-flight renewal so it cannot re-create the lock", async () => {
+    workspaceLockTtlMs.value = 200;
+    workspaceLockRetryDelayMs.value = 1;
+    workspaceLockAcquireTimeoutMs.value = 1000;
+
+    let resolveManifestWrite!: () => void;
+    let manifestWriteStarted = false;
+    let resolveLockPut!: () => void;
+    let lockPutStarted = false;
+    let lockPutsSeen = 0;
+
+    harness.hooks.onLockPut = async () => {
+      lockPutsSeen += 1;
+      // First put is acquire; gate subsequent renewals.
+      if (lockPutsSeen === 1) return;
+      lockPutStarted = true;
+      await new Promise<void>((resolve) => {
+        resolveLockPut = resolve;
+      });
+    };
+
+    const putItem = harness.client.store.putItem;
+    const previousPut = putItem.getMockImplementation()!;
+    putItem.mockImplementation(
+      async (
+        namespace: string[],
+        key: string,
+        value: any,
+        options?: { ttl?: number | null }
+      ) => {
+        if (
+          namespace.join("/") === "workspace_items/user-1" &&
+          key === "manifest" &&
+          !manifestWriteStarted
+        ) {
+          manifestWriteStarted = true;
+          await new Promise<void>((resolve) => {
+            resolveManifestWrite = resolve;
+          });
+        }
+        return previousPut(namespace, key, value, options);
+      }
+    );
+
+    try {
+      const lockKey = "workspace_items/user-1:lock";
+      const op = ensureDefaultWorkspaceItem("user-1");
+      await waitFor(() => manifestWriteStarted);
+      await waitFor(() => lockPutStarted);
+
+      let opSettled = false;
+      void op.then(
+        () => {
+          opSettled = true;
+        },
+        () => {
+          opSettled = true;
+        }
+      );
+
+      resolveManifestWrite();
+      await delay(50);
+      expect(opSettled).toBe(false);
+      expect(harness.state.items.has(lockKey)).toBe(true);
+
+      resolveLockPut();
+      await op;
+      expect(opSettled).toBe(true);
+      expect(harness.state.items.has(lockKey)).toBe(false);
+    } finally {
+      harness.hooks.onLockPut = undefined;
       putItem.mockImplementation(previousPut);
     }
   });
