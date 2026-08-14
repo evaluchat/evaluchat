@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { decryptApiKey } from "@opencanvas/shared/byok/crypto";
+import {
+  assertPublicHost,
+  assertPublicHttpsUrl,
+  createSafeFetch,
+} from "@opencanvas/shared/byok/url";
 import type { UserByokSettingsRow } from "@opencanvas/shared/byok/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -55,12 +60,29 @@ export async function POST() {
     );
   }
 
-  const baseUrl = row.base_url.replace(/\/+$/, "");
+  let baseUrl: string;
+  try {
+    baseUrl = assertPublicHttpsUrl(row.base_url);
+    await assertPublicHost(new URL(baseUrl).hostname);
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Saved base_url is not a valid public HTTPS URL",
+      },
+      { status: 400 }
+    );
+  }
+
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
+  const safeFetch = createSafeFetch();
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await safeFetch(`${normalizedBase}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockConfig } from "./open-canvas/__test-helpers__/mock-config.js";
 import { encryptApiKey } from "@opencanvas/shared/byok/crypto";
+import dns from "node:dns/promises";
 
 const BYOK_TEST_KEY =
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -128,10 +129,14 @@ describe("provider resolution", () => {
       stream: vi.fn(),
       batch: vi.fn(),
     });
+    vi.spyOn(dns, "lookup").mockResolvedValue([
+      { address: "8.8.8.8", family: 4 },
+    ] as any);
   });
 
   afterEach(() => {
     process.env = { ...ORIGINAL_ENV };
+    vi.restoreAllMocks();
   });
 
   it("routes free assignments through the OpenCode Zen rail", async () => {
@@ -250,9 +255,37 @@ describe("provider resolution", () => {
         baseURL: "https://openrouter.ai/api/v1",
       },
     });
+    expect(typeof (chatOpenAIInvocations[0]?.configuration as any)?.fetch).toBe(
+      "function"
+    );
     expect(wrapModelWithFallbackMock).not.toHaveBeenCalled();
     expect(supabaseFromMock).toHaveBeenCalledWith("user_byok_settings");
     expect(supabaseAuthGetUserMock).toHaveBeenCalledWith("user-token");
+  });
+
+  it("throws when BYOK is enabled but the stored API key cannot be decrypted", async () => {
+    process.env.BYOK_ENCRYPTION_KEY = BYOK_TEST_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE = "service-role-key";
+
+    mockByokRow({
+      user_id: "byok-user",
+      base_url: "https://openrouter.ai/api/v1",
+      model: "openai/gpt-4o-mini",
+      api_key_enc: "not-valid-encrypted-payload",
+      enabled: true,
+    });
+
+    const config = createMockConfig({
+      customModelName: "mimo-v2.5-free",
+      supabase_session: { access_token: "user-token" },
+    });
+
+    await expect(getModelFromConfig(config)).rejects.toThrow(
+      "BYOK is enabled, but the stored API key cannot be decrypted"
+    );
+    expect(wrapModelWithFallbackMock).not.toHaveBeenCalled();
+    expect(chatOpenAIInvocations).toHaveLength(0);
   });
 
   it("falls back to platform providers when BYOK is absent", async () => {

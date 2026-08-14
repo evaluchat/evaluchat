@@ -1,6 +1,10 @@
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { createClient, Session } from "@supabase/supabase-js";
 import { decryptApiKey } from "@opencanvas/shared/byok/crypto";
+import {
+  assertPublicHost,
+  assertPublicHttpsUrl,
+} from "@opencanvas/shared/byok/url";
 import type {
   ByokDecryptedSettings,
   UserByokSettingsRow,
@@ -25,6 +29,9 @@ function isSupabaseServiceRoleConfigured(): boolean {
  * Load the signed-in user's BYOK settings when configured and enabled.
  * Returns null when BYOK is unavailable, disabled, or not set — callers
  * should keep using the existing platform provider path.
+ *
+ * Throws when BYOK is enabled but the stored key cannot be decrypted or
+ * the saved base URL is not a public HTTPS destination (fail closed).
  */
 export async function getByokModelSettings(
   config: LangGraphRunnableConfig
@@ -78,17 +85,21 @@ export async function getByokModelSettings(
     return null;
   }
 
+  let apiKey: string;
   try {
-    return {
-      baseUrl: row.base_url,
-      model: row.model,
-      apiKey: decryptApiKey(row.api_key_enc, encryptionKey),
-    };
-  } catch (err) {
-    console.warn(
-      "[byok] failed to decrypt user API key; falling back to platform providers",
-      err
+    apiKey = decryptApiKey(row.api_key_enc, encryptionKey);
+  } catch {
+    throw new Error(
+      "BYOK is enabled, but the stored API key cannot be decrypted"
     );
-    return null;
   }
+
+  const baseUrl = assertPublicHttpsUrl(row.base_url);
+  await assertPublicHost(new URL(baseUrl).hostname);
+
+  return {
+    baseUrl,
+    model: row.model,
+    apiKey,
+  };
 }

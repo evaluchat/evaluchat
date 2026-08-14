@@ -4,6 +4,10 @@ import {
   maskApiKey,
   decryptApiKey,
 } from "@opencanvas/shared/byok/crypto";
+import {
+  assertPublicHost,
+  assertPublicHttpsUrl,
+} from "@opencanvas/shared/byok/url";
 import type { UserByokSettingsRow } from "@opencanvas/shared/byok/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,19 +32,6 @@ function maskedSettingsResponse(row: UserByokSettingsRow) {
     model: row.model,
     api_key_masked: masked,
   };
-}
-
-function validateBaseUrl(raw: string): string | null {
-  const trimmed = raw.trim();
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return null;
-    }
-    return trimmed;
-  } catch {
-    return null;
-  }
 }
 
 export async function GET() {
@@ -115,10 +106,19 @@ export async function PUT(req: NextRequest) {
     typeof body.base_url === "string"
       ? body.base_url
       : (existingRow?.base_url ?? "");
-  const baseUrl = validateBaseUrl(baseUrlRaw);
-  if (!baseUrl) {
+
+  let baseUrl: string;
+  try {
+    baseUrl = assertPublicHttpsUrl(baseUrlRaw);
+    await assertPublicHost(new URL(baseUrl).hostname);
+  } catch (err) {
     return NextResponse.json(
-      { error: "base_url must be a valid http(s) URL" },
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "base_url must be a valid public HTTPS URL",
+      },
       { status: 400 }
     );
   }
@@ -145,11 +145,9 @@ export async function PUT(req: NextRequest) {
     try {
       apiKeyEnc = encryptApiKey(incomingKey, encryptionKey);
     } catch (err) {
+      console.error("Failed to encrypt BYOK API key", err);
       return NextResponse.json(
-        {
-          error:
-            err instanceof Error ? err.message : "Failed to encrypt API key",
-        },
+        { error: "Failed to encrypt API key" },
         { status: 500 }
       );
     }

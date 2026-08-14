@@ -40,6 +40,7 @@ import {
   getProviderChain,
   wrapModelWithFallback,
 } from "./provider-registry.js";
+import { createSafeFetch } from "@opencanvas/shared/byok/url";
 import { getByokModelSettings } from "./byok.js";
 
 const FREE_ASSIGNMENT_MODEL = "mimo-v2.5-free";
@@ -478,7 +479,8 @@ export async function getModelFromConfig(
       maxRetries: 0,
       configuration: {
         baseURL: byokSettings.baseUrl,
-      },
+        fetch: createSafeFetch(),
+      } as any,
     }) as any;
   }
 
