@@ -1,4 +1,7 @@
+import type { ApparatusConfiguration } from "@opencanvas/shared";
+
 export const DEFAULT_WORKSPACE_TEMPLATE_ID = "evaluchat-getting-started";
+export const DEFAULT_METHOD_PROFILE_ID = "canonical-constrained-dialogue";
 
 export type FormFieldType =
   | "text"
@@ -81,18 +84,102 @@ export type FormWorkspaceItem = WorkspaceItemBase & {
   submission?: SubmittedForm;
 };
 
+export type MethodSource = {
+  id: string;
+  version: string;
+  title?: string;
+  description?: string;
+  url?: string;
+};
+
+export type MethodProfileOption = {
+  id: string;
+  label: string;
+};
+
+export type MethodRunAssignment = {
+  title: string;
+  course: string;
+  dueDate: string;
+  wordTarget: number;
+  prompt: string;
+  agentInstructions: string;
+  group: string;
+};
+
+export type MethodRunParticipant = {
+  email: string;
+  userId?: string;
+  itemId?: string;
+  invitationStatus: "sent" | "accepted";
+  submissionStatus: "not_started" | "in_progress" | "submitted";
+  submittedAt?: string;
+  threadId?: string;
+};
+
+export type MethodRun = {
+  id: string;
+  status: "in_progress";
+  launchedAt: string;
+  methodId: string;
+  methodVersion: string;
+  profileId: string;
+  apparatusConfiguration: ApparatusConfiguration;
+  assignment: MethodRunAssignment;
+  participants: MethodRunParticipant[];
+};
+
 export type MethodWorkspaceItem = WorkspaceItemBase & {
   kind: "method";
-  templateSnapshot: MarkdownTemplateSnapshot;
+  threadId?: string;
+  templateSnapshot: FormTemplateSnapshot;
+  methodSource: MethodSource;
+  profileId: string;
+  profiles: MethodProfileOption[];
+  submission?: SubmittedForm;
+  run?: MethodRun;
 };
+
+export type MethodParticipantWorkspaceItem = WorkspaceItemBase & {
+  kind: "method_participant";
+  threadId?: string;
+  runId: string;
+  operatorItemId: string;
+  operatorId: string;
+  methodSource: MethodSource;
+  profileId: string;
+  apparatusConfiguration: ApparatusConfiguration;
+  assignment: MethodRunAssignment;
+  submission?: {
+    status: "submitted";
+    submittedAt: string;
+  };
+};
+
+export type FormBackedWorkspaceItem = FormWorkspaceItem | MethodWorkspaceItem;
 
 export type WorkspaceItem =
   | MarkdownWorkspaceItem
   | FormWorkspaceItem
-  | MethodWorkspaceItem;
+  | MethodWorkspaceItem
+  | MethodParticipantWorkspaceItem;
 
 export type WorkspaceManifest = {
   initialized: boolean;
   defaultItemId?: string;
   items: Record<string, WorkspaceItem>;
+};
+
+export type PendingMethodInvite = {
+  email: string;
+  runId: string;
+  operatorId: string;
+  operatorItemId: string;
+  methodId: string;
+  methodVersion: string;
+  methodSource?: MethodSource;
+  profileId: string;
+  apparatusConfiguration: ApparatusConfiguration;
+  assignment: MethodRunAssignment;
+  createdAt: string;
 };

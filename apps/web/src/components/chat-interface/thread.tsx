@@ -3,8 +3,19 @@ import { useToast } from "@/hooks/use-toast";
 import { ProgrammingLanguageOptions } from "@opencanvas/shared/types";
 import { ThreadPrimitive } from "@assistant-ui/react";
 import { Thread as ThreadType } from "@langchain/langgraph-sdk";
-import { ArrowDownIcon, PanelRightOpen, SquarePen } from "lucide-react";
+import {
+  ArrowDownIcon,
+  BookOpen,
+  PanelRightOpen,
+  SquarePen,
+} from "lucide-react";
 import { Dispatch, FC, SetStateAction } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ReflectionsDialog } from "../reflections-dialog/ReflectionsDialog";
 import { useLangSmithLinkToolUI } from "../tool-hooks/LangSmithLinkToolUI";
 import { TooltipIconButton } from "../ui/assistant-ui/tooltip-icon-button";
@@ -17,6 +28,7 @@ import { ThreadWelcome } from "./welcome";
 import { useUserContext } from "@/contexts/UserContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
 import { useAssistantContext } from "@/contexts/AssistantContext";
+import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 
 const ThreadScrollToBottom: FC = () => {
   return (
@@ -71,6 +83,8 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
     setThreadId,
   } = useThreadContext();
   const { user } = useUserContext();
+  const teaching = useTeachingAssignmentOptional();
+  const assignmentPrompt = teaching?.assignment?.prompt;
 
   // Render the LangSmith trace link
   useLangSmithLinkToolUI(false);
@@ -97,6 +111,41 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
 
   return (
     <ThreadPrimitive.Root className="flex h-full min-h-0 w-full flex-col">
+      {assignmentPrompt && (
+        <TooltipProvider>
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <div
+                className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-gray-100 cursor-help"
+                data-testid="assignment-chat-prompt"
+              >
+                <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <p className="flex-1 text-xs text-muted-foreground line-clamp-3 text-left">
+                  {assignmentPrompt}
+                </p>
+                {hasChatStarted && (
+                  <TooltipIconButton
+                    tooltip="Collapse Chat"
+                    variant="ghost"
+                    className="w-8 h-8 shrink-0"
+                    delayDuration={400}
+                    onClick={() => props.setChatCollapsed(true)}
+                  >
+                    <PanelRightOpen className="text-gray-600" />
+                  </TooltipIconButton>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              align="start"
+              className="max-w-md whitespace-normal text-xs"
+            >
+              {assignmentPrompt}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       <div className="pr-3 pl-6 pt-3 pb-2 flex flex-row gap-4 items-center justify-between">
         <div className="flex items-center justify-start gap-2 text-gray-600">
           {!minimalCanvas && (
@@ -116,15 +165,17 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
         </div>
         {hasChatStarted ? (
           <div className="flex flex-row flex-1 gap-2 items-center justify-end">
-            <TooltipIconButton
-              tooltip="Collapse Chat"
-              variant="ghost"
-              className="w-8 h-8"
-              delayDuration={400}
-              onClick={() => props.setChatCollapsed(true)}
-            >
-              <PanelRightOpen className="text-gray-600" />
-            </TooltipIconButton>
+            {!assignmentPrompt && (
+              <TooltipIconButton
+                tooltip="Collapse Chat"
+                variant="ghost"
+                className="w-8 h-8"
+                delayDuration={400}
+                onClick={() => props.setChatCollapsed(true)}
+              >
+                <PanelRightOpen className="text-gray-600" />
+              </TooltipIconButton>
+            )}
             {!minimalCanvas && (
               <TooltipIconButton
                 tooltip="New chat"

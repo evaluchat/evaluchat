@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { APPARATUS_CATALOG, validateApparatusCatalog } from "./catalog";
 import { validateApparatusConfiguration } from "@opencanvas/shared";
+import { getTemplateById } from "../workspace/template-catalog";
 
 describe("generated apparatus catalog", () => {
   it("contains the canonical Essays profile and contrasting valid paths", () => {
@@ -15,6 +16,14 @@ describe("generated apparatus catalog", () => {
       "canvas-actions-off",
       "tracking-off",
     ]);
+    expect(essays?.run_brief_template).toBe("evaluchat-assignment-brief@1.0.0");
+    const brief = getTemplateById("evaluchat-assignment-brief");
+    expect(brief?.templateKind).toBe("form");
+    expect(brief?.version).toBe("1.0.0");
+    expect(essays?.platform).toEqual({
+      participant_invitations: "required",
+      review_surface: "essay-process-review",
+    });
 
     for (const profile of essays?.profiles ?? []) {
       expect(

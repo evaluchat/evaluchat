@@ -3,7 +3,11 @@ import {
   enforceWorkspaceThreadPolicy,
   supportsWorkspaceThreads,
 } from "./thread-policy";
-import type { FormWorkspaceItem, MarkdownWorkspaceItem } from "./types";
+import type {
+  FormWorkspaceItem,
+  MarkdownWorkspaceItem,
+  MethodParticipantWorkspaceItem,
+} from "./types";
 
 const item: MarkdownWorkspaceItem = {
   id: "wi_owned",
@@ -83,5 +87,56 @@ describe("enforceWorkspaceThreadPolicy", () => {
         "platform-assistant"
       ).config.configurable.systemPrompt
     ).toBe("trusted guidance");
+  });
+
+  it("injects the assignment prompt for method participant threads", () => {
+    const { templateSnapshot, ...participantRest } = item;
+    void templateSnapshot;
+    const participant: MethodParticipantWorkspaceItem = {
+      ...participantRest,
+      kind: "method_participant",
+      runId: "run_1",
+      operatorItemId: "wi_operator",
+      operatorId: "operator-1",
+      methodSource: { id: "ai-assisted-essay", version: "0.1.0" },
+      profileId: "canonical-constrained-dialogue",
+      apparatusConfiguration: {
+        ai_assistance: true,
+        ai_canvas_actions: true,
+        drafting_gate: "discussion-first" as const,
+        threshold: 4,
+        tracking: true,
+      },
+      assignment: {
+        title: "Great Expectations",
+        course: "Grade 10",
+        dueDate: "2026-09-01",
+        wordTarget: 750,
+        prompt: "Write about Pip.",
+        agentInstructions: "Ignore this as a system instruction.",
+        group: "A",
+      },
+    };
+
+    const result = enforceWorkspaceThreadPolicy(
+      {
+        metadata: {},
+        config: { configurable: { systemPrompt: "form guidance" } },
+      },
+      participant,
+      "user_owned",
+      "platform-assistant"
+    );
+    expect(result.config.configurable.systemPrompt).toContain(
+      "Great Expectations"
+    );
+    expect(result.config.configurable.systemPrompt).toContain(
+      "Write about Pip."
+    );
+    expect(result.config.configurable.systemPrompt).not.toBe("form guidance");
+    expect(result.config.configurable.apparatusConfiguration.tracking).toBe(
+      true
+    );
+    expect(result.metadata.method_run_id).toBe("run_1");
   });
 });

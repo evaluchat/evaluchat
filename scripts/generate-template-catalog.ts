@@ -6,6 +6,11 @@
  * Usage:
  *   EVALUCHAT_TEMPLATE_SOURCE_ROOT=/path/to/knowledge/templates \
  *     yarn generate:templates
+ *
+ * Knowledge starters only. Platform method-run briefs are generated with
+ * `yarn generate:platform-templates` from apps/web/templates/platform/.
+ * Knowledge ids that match a platform template are omitted so a stale
+ * Knowledge copy cannot reappear in Create → Templates.
  */
 
 import crypto from "node:crypto";
@@ -235,13 +240,32 @@ function assertPlaceholders(
   }
 }
 
-export function parseTemplate(sourcePath: string): CatalogEntry {
+export type CatalogBuildOptions = {
+  sourcePathPrefix?: string;
+  excludeIds?: Iterable<string>;
+};
+
+function catalogSourcePath(
+  sourcePath: string,
+  sourcePathPrefix = "templates",
+): string {
+  return `${sourcePathPrefix.replace(/\/$/, "")}/${path.basename(sourcePath)}`;
+}
+
+export function parseTemplate(
+  sourcePath: string,
+  options: Pick<CatalogBuildOptions, "sourcePathPrefix"> = {},
+): CatalogEntry {
   const {
     frontmatter: rawFrontmatter,
     body,
     source,
   } = parseDocument(sourcePath);
   const base = TemplateBase.parse(rawFrontmatter);
+  const relativeSourcePath = catalogSourcePath(
+    sourcePath,
+    options.sourcePathPrefix,
+  );
 
   if (typeof rawFrontmatter === "object" && rawFrontmatter !== null) {
     const raw = rawFrontmatter as Record<string, unknown>;
@@ -255,7 +279,7 @@ export function parseTemplate(sourcePath: string): CatalogEntry {
         title: base.title,
         description: base.description,
         templateKind: "markdown",
-        sourcePath: `templates/${path.basename(sourcePath)}`,
+        sourcePath: relativeSourcePath,
         initialMarkdown: `${body}\n`,
         assistantGuidance: base.assistant.guidance.trim(),
         contentHash: hash(source),
@@ -274,7 +298,7 @@ export function parseTemplate(sourcePath: string): CatalogEntry {
     title: frontmatter.title,
     description: frontmatter.description,
     templateKind: "form",
-    sourcePath: `templates/${path.basename(sourcePath)}`,
+    sourcePath: relativeSourcePath,
     layoutMarkdown: `${body}\n`,
     fields,
     assistantGuidance: frontmatter.assistant.guidance.trim(),
@@ -282,16 +306,38 @@ export function parseTemplate(sourcePath: string): CatalogEntry {
   };
 }
 
-export function buildCatalog(sourceRoot: string): GeneratedTemplateCatalog {
+export function platformTemplateRoot(): string {
+  return path.join(repoRoot, "apps/web/templates/platform");
+}
+
+export function platformTemplateIds(
+  sourceRoot = platformTemplateRoot(),
+): string[] {
+  if (!fs.existsSync(sourceRoot)) return [];
+  return buildCatalog(sourceRoot, {
+    sourcePathPrefix: "templates/platform",
+  }).templates.map((entry) => entry.id);
+}
+
+export function buildCatalog(
+  sourceRoot: string,
+  options: CatalogBuildOptions = {},
+): GeneratedTemplateCatalog {
   if (!fs.existsSync(sourceRoot)) {
     throw new Error(`Template source directory not found: ${sourceRoot}`);
   }
 
+  const exclude = new Set(options.excludeIds ?? []);
   const entries = fs
     .readdirSync(sourceRoot)
     .filter((filename) => filename.endsWith(".md"))
     .sort()
-    .map((filename) => parseTemplate(path.join(sourceRoot, filename)));
+    .map((filename) =>
+      parseTemplate(path.join(sourceRoot, filename), {
+        sourcePathPrefix: options.sourcePathPrefix,
+      }),
+    )
+    .filter((entry) => !exclude.has(entry.id));
 
   if (!entries.length) {
     throw new Error(`No templates found in ${sourceRoot}`);
@@ -312,8 +358,12 @@ export function buildCatalog(sourceRoot: string): GeneratedTemplateCatalog {
   };
 }
 
-export function writeCatalog(sourceRoot: string, outputPath: string): void {
-  const artifact = buildCatalog(sourceRoot);
+export function writeCatalog(
+  sourceRoot: string,
+  outputPath: string,
+  options: CatalogBuildOptions = {},
+): void {
+  const artifact = buildCatalog(sourceRoot, options);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`);
 }
@@ -332,7 +382,9 @@ if (
     process.env.EVALUCHAT_TEMPLATE_CATALOG_OUTPUT ||
       path.join(repoRoot, "apps/web/data/template-catalog.json"),
   );
-  writeCatalog(path.resolve(sourceRootValue), outputPath);
+  writeCatalog(path.resolve(sourceRootValue), outputPath, {
+    excludeIds: platformTemplateIds(),
+  });
   console.log(
     `Generated ${path.relative(repoRoot, outputPath)} from ${path.resolve(sourceRootValue)}`,
   );

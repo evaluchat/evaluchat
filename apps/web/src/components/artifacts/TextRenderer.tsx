@@ -150,6 +150,7 @@ export function TextRendererComponent(props: TextRendererProps) {
     pendingEdit,
     setPendingEdit,
     setEditorTextContent,
+    phaseState,
   } = graphData;
 
   // Track cursor position changes — push to GraphContext so all message paths get it
@@ -403,6 +404,7 @@ export function TextRendererComponent(props: TextRendererProps) {
   }, [pendingEdit, editor]);
 
   const handleKeep = () => {
+    if (phaseState === "submitted") return;
     // Track the keep action
     const aggregator = (window as any).__trackingAggregator;
     if (aggregator && pendingEdit) {
@@ -418,6 +420,7 @@ export function TextRendererComponent(props: TextRendererProps) {
   };
 
   const handleUndo = async () => {
+    if (phaseState === "submitted") return;
     if (!editor || !pendingEdit) return;
     // Track the undo action
     const aggregator = (window as any).__trackingAggregator;
@@ -528,7 +531,9 @@ export function TextRendererComponent(props: TextRendererProps) {
   return (
     <div className="w-full h-full mt-2 flex flex-col border-t-[1px] border-gray-200 overflow-y-auto py-5 relative">
       <EditActionBar
-        isActive={pendingEdit?.isActive ?? false}
+        isActive={
+          (pendingEdit?.isActive ?? false) && phaseState !== "submitted"
+        }
         onKeep={handleKeep}
         onUndo={handleUndo}
       />
@@ -543,6 +548,7 @@ export function TextRendererComponent(props: TextRendererProps) {
           className="whitespace-pre-wrap font-mono text-sm px-[54px] border-0 shadow-none h-full outline-none ring-0 rounded-none  focus-visible:ring-0 focus-visible:ring-offset-0"
           value={rawMarkdown}
           onChange={onChangeRawMarkdown}
+          readOnly={phaseState === "submitted"}
           data-tracking-id="canvas-editor"
           data-testid="canvas-editor-raw"
         />
@@ -556,6 +562,7 @@ export function TextRendererComponent(props: TextRendererProps) {
             onCompositionEndCapture={() => (isComposition.current = false)}
             onChange={onChange}
             editable={
+              phaseState !== "submitted" &&
               (!isStreaming || props.isEditing || !manuallyUpdatingArtifact) &&
               !pendingEdit?.isActive
             }

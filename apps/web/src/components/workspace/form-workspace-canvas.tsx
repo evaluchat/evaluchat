@@ -23,6 +23,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { workspaceItemTitle } from "@/lib/workspace/display";
+import { publicMethodPageUrl } from "@/lib/workspace/method-links";
 import { useWorkspaceItem } from "@/contexts/WorkspaceItemContext";
 import { useGraphContext } from "@/contexts/GraphContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
@@ -39,9 +41,9 @@ import { convertToOpenAIFormat } from "@/lib/convert_messages";
 import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
 import type { ArtifactV3, FormAgentContext } from "@opencanvas/shared/types";
 import type {
+  FormBackedWorkspaceItem,
   FormFieldDefinition,
   FormValue,
-  FormWorkspaceItem,
 } from "@/lib/workspace/types";
 import { findLatestFormUpdate, markFormPlaceholders } from "./form-markdown";
 import { WorkspaceItemBanner } from "./workspace-item-banner";
@@ -50,7 +52,7 @@ import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
 type FieldErrors = Record<string, string>;
 
 function buildFormAgentContext(
-  item: FormWorkspaceItem,
+  item: FormBackedWorkspaceItem,
   values: Record<string, FormValue>
 ): FormAgentContext {
   return {
@@ -69,7 +71,7 @@ function buildFormAgentContext(
 }
 
 function buildFormArtifact(
-  item: FormWorkspaceItem,
+  item: FormBackedWorkspaceItem,
   values: Record<string, FormValue>
 ): ArtifactV3 {
   const markdown = item.templateSnapshot.layoutMarkdown.replace(
@@ -216,7 +218,7 @@ function FormFieldControl({
 }
 
 type FormMarkdownContextValue = {
-  item: FormWorkspaceItem;
+  item: FormBackedWorkspaceItem;
   values: Record<string, FormValue>;
   errors: FieldErrors;
   disabled: boolean;
@@ -302,7 +304,7 @@ export function FormMarkdown({
   onChange,
   register,
 }: {
-  item: FormWorkspaceItem;
+  item: FormBackedWorkspaceItem;
   values: Record<string, FormValue>;
   errors: FieldErrors;
   disabled: boolean;
@@ -326,7 +328,11 @@ export function FormMarkdown({
   );
 }
 
-export function FormWorkspaceCanvas({ item }: { item: FormWorkspaceItem }) {
+export function FormWorkspaceCanvas({
+  item,
+}: {
+  item: FormBackedWorkspaceItem;
+}) {
   const { refresh } = useWorkspaceItem();
   const { graphData } = useGraphContext();
   const { threadId, setThreadId, getThread } = useThreadContext();
@@ -547,11 +553,13 @@ export function FormWorkspaceCanvas({ item }: { item: FormWorkspaceItem }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ values }),
+          body: JSON.stringify({
+            values,
+          }),
         }
       );
       const body = (await response.json()) as {
-        item?: FormWorkspaceItem;
+        item?: FormBackedWorkspaceItem;
         issues?: { fieldId: string; message: string }[];
         error?: string;
       };
@@ -618,6 +626,9 @@ export function FormWorkspaceCanvas({ item }: { item: FormWorkspaceItem }) {
         onSubmit={() => setConfirmOpen(true)}
         submitDisabled={submitted || isSubmitting}
         submitted={submitted}
+        submitLabel={
+          currentItem.kind === "method" ? "Start assignment" : undefined
+        }
       />
       <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
         {!chatCollapsed && (
@@ -667,7 +678,7 @@ export function FormWorkspaceCanvas({ item }: { item: FormWorkspaceItem }) {
                   </Button>
                 )}
                 <span className="truncate text-sm font-medium text-gray-700">
-                  {currentItem.templateSnapshot.title}
+                  {workspaceItemTitle(currentItem)}
                 </span>
               </div>
               {submitted && (
@@ -712,12 +723,50 @@ export function FormWorkspaceCanvas({ item }: { item: FormWorkspaceItem }) {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Submit and lock this form?</DialogTitle>
+            <DialogTitle>
+              {currentItem.kind === "method"
+                ? "Start this assignment?"
+                : "Submit and lock this form?"}
+            </DialogTitle>
             <DialogDescription>
-              Submission validates the fields and permanently locks this form.
-              You can still view the resolved Markdown afterwards.
+              {currentItem.kind === "method"
+                ? "This launches the assignment for the listed recipients. The published method is frozen for this run."
+                : "Submission validates the fields and permanently locks this form. You can still view the resolved Markdown afterwards."}
             </DialogDescription>
           </DialogHeader>
+          {currentItem.kind === "method" && (
+            <div className="space-y-2 text-sm">
+              <p>
+                <span className="font-medium">Method:</span>{" "}
+                {currentItem.methodSource.title || currentItem.methodSource.id}
+              </p>
+              <p>
+                <a
+                  href={publicMethodPageUrl(currentItem.methodSource.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  Read the method
+                </a>
+              </p>
+              <p className="font-medium">Recipients</p>
+              <ul className="list-disc pl-5 text-muted-foreground">
+                {Array.from(
+                  new Set(
+                    (Array.isArray(values.participants)
+                      ? values.participants
+                      : String(values.participants || "").split(/[;,\n]/)
+                    )
+                      .map((email) => String(email).trim().toLowerCase())
+                      .filter(Boolean)
+                  )
+                ).map((email) => (
+                  <li key={String(email)}>{String(email)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <DialogFooter className="gap-2">
             <Button
               variant="outline"
@@ -731,7 +780,13 @@ export function FormWorkspaceCanvas({ item }: { item: FormWorkspaceItem }) {
               disabled={isSubmitting}
               data-testid="confirm-form-submit"
             >
-              {isSubmitting ? "Submitting…" : "Submit and lock"}
+              {isSubmitting
+                ? currentItem.kind === "method"
+                  ? "Starting…"
+                  : "Submitting…"
+                : currentItem.kind === "method"
+                  ? "Start assignment"
+                  : "Submit and lock"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -740,7 +795,7 @@ export function FormWorkspaceCanvas({ item }: { item: FormWorkspaceItem }) {
         open={abandonOpen}
         onOpenChange={setAbandonOpen}
         onConfirm={() => void abandonItem()}
-        itemTitle={currentItem.templateSnapshot.title}
+        itemTitle={workspaceItemTitle(currentItem)}
         isDeleting={isAbandoning}
         confirmLabel="Abandon"
       />

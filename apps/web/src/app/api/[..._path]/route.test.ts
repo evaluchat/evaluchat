@@ -24,8 +24,6 @@ vi.mock("@/lib/teaching/seed-loader", () => ({
 import { POST } from "./route";
 
 const THREAD_ID = "thread-owned";
-const THREAD_URL = `http://localhost:54367/threads/${THREAD_ID}`;
-const RUNS_URL = `${THREAD_URL}/runs`;
 
 function runRequest(body: Record<string, unknown>) {
   return new NextRequest(`http://localhost/api/threads/${THREAD_ID}/runs`, {
@@ -67,7 +65,7 @@ describe("POST /api/threads/{id}/runs workspace policy", () => {
     let threadGets = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === THREAD_URL) {
+      if (url.endsWith(`/threads/${THREAD_ID}`)) {
         threadGets += 1;
         if (threadGets <= 2) {
           return jsonResponse(200, {
@@ -79,7 +77,7 @@ describe("POST /api/threads/{id}/runs workspace policy", () => {
         }
         return jsonResponse(503, { error: "unavailable" });
       }
-      if (url === RUNS_URL) {
+      if (url.endsWith(`/threads/${THREAD_ID}/runs`)) {
         return jsonResponse(200, { ok: true });
       }
       throw new Error(`unexpected fetch ${url}`);
@@ -98,7 +96,9 @@ describe("POST /api/threads/{id}/runs workspace policy", () => {
       error: "Could not resolve workspace item",
     });
     expect(
-      fetchMock.mock.calls.some(([input]) => String(input) === RUNS_URL)
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).endsWith(`/threads/${THREAD_ID}/runs`)
+      )
     ).toBe(false);
   });
 });

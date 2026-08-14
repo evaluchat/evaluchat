@@ -22,6 +22,10 @@ import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   formatWorkspaceItemDate,
+  workspaceItemDescription,
+  workspaceItemHref,
+  workspaceItemKicker,
+  workspaceItemTitle,
   workspaceItemType,
 } from "@/lib/workspace/display";
 import {
@@ -36,7 +40,7 @@ function WorkspaceItemTypeIcon({ item }: { item: WorkspaceItem }) {
   const Icon =
     item.kind === "form_template"
       ? ClipboardList
-      : item.kind === "method"
+      : item.kind === "method" || item.kind === "method_participant"
         ? FlaskConical
         : FileText;
 
@@ -67,9 +71,21 @@ export function WorkspaceHome() {
 
   useEffect(() => {
     fetch("/api/workspace/items", { credentials: "include" })
-      .then((response) => response.json())
-      .then((body: { items?: WorkspaceItem[] }) => setItems(body.items || []))
-      .catch((error) => console.error("Failed to load workspace", error))
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Could not load workspace");
+        }
+        return response.json() as Promise<{ items?: WorkspaceItem[] }>;
+      })
+      .then((body) => setItems(body.items || []))
+      .catch((error) => {
+        console.error("Failed to load workspace", error);
+        toast({
+          title: "Could not load workspace",
+          description: "Please refresh and try again.",
+          variant: "destructive",
+        });
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -143,23 +159,26 @@ export function WorkspaceHome() {
                 <CardContent className="flex items-center gap-3 px-4 py-3 sm:gap-4">
                   <WorkspaceItemTypeIcon item={item} />
                   <Link
-                    href={`/workspace/items/${item.id}`}
+                    href={workspaceItemHref(item)}
                     className="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <p className="truncate text-base font-medium text-slate-900">
-                      {item.templateSnapshot.title}
+                      {workspaceItemTitle(item)}
                     </p>
-                    {item.kind === "form_template" && (
+                    {workspaceItemKicker(item) && (
                       <span
                         className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          item.submission?.status === "submitted"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-amber-50 text-amber-700"
+                          item.kind === "method" && item.run
+                            ? "bg-violet-50 text-violet-700"
+                            : item.kind === "method_participant"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : item.kind === "form_template" &&
+                                  item.submission?.status === "submitted"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-amber-50 text-amber-700"
                         }`}
                       >
-                        {item.submission?.status === "submitted"
-                          ? "Submitted"
-                          : "Draft"}
+                        {workspaceItemKicker(item)}
                       </span>
                     )}
                     <TooltipProvider>
@@ -167,13 +186,13 @@ export function WorkspaceHome() {
                         <TooltipTrigger asChild>
                           <p
                             className="truncate text-sm text-slate-500"
-                            title={item.templateSnapshot.description}
+                            title={workspaceItemDescription(item)}
                           >
-                            {item.templateSnapshot.description}
+                            {workspaceItemDescription(item)}
                           </p>
                         </TooltipTrigger>
                         <TooltipContent className="max-w-sm">
-                          {item.templateSnapshot.description}
+                          {workspaceItemDescription(item)}
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -188,7 +207,7 @@ export function WorkspaceHome() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={`Delete ${item.templateSnapshot.title}`}
+                    aria-label={`Delete ${workspaceItemTitle(item)}`}
                     data-testid={`delete-workspace-item-${item.id}`}
                     onClick={() => setItemToDelete(item)}
                   >
@@ -205,7 +224,7 @@ export function WorkspaceHome() {
           open={Boolean(itemToDelete)}
           onOpenChange={(open) => !open && setItemToDelete(undefined)}
           onConfirm={() => void deleteItem()}
-          itemTitle={itemToDelete.templateSnapshot.title}
+          itemTitle={workspaceItemTitle(itemToDelete)}
           isDeleting={isDeleting}
         />
       )}

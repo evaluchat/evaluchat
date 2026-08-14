@@ -10,10 +10,6 @@ import {
   buildAssignmentKickoffUserMessage,
   studentFirstNameFromUser,
 } from "@/lib/teaching/assignment-prompt";
-import {
-  isEmptyKickoffThread,
-  isSubmittedThread,
-} from "@/lib/teaching/select-active-thread";
 import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
 import { HumanMessage } from "@langchain/core/messages";
 import { useEffect, useRef } from "react";
@@ -49,17 +45,17 @@ export function useAssignmentKickoff() {
       kickedOffRef.current = assignment.id;
       return;
     }
+    if (assignment.status === "submitted") {
+      kickedOffRef.current = assignment.id;
+      return;
+    }
 
     void (async () => {
       try {
         // Safety net: never mint a new kickoff when incomplete richer work exists.
-        // Submitted-only siblings must not block a fresh attempt (no Send on read-only).
+        // Submitted workspace assignments resume read-only instead of a fresh attempt.
         const existing = await getActiveThread(assignment.id);
-        if (
-          existing &&
-          !isSubmittedThread(existing) &&
-          !isEmptyKickoffThread(existing)
-        ) {
+        if (existing) {
           kickedOffRef.current = assignment.id;
           setThreadId(existing.thread_id);
           return;

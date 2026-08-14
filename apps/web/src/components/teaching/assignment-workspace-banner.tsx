@@ -6,7 +6,7 @@ import type { StudentAssignment } from "@/lib/teaching/types";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { TighterText } from "@/components/ui/header";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Send, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BRAND_PANEL_COLOR } from "@/components/auth/login/login-branding";
 
@@ -15,11 +15,19 @@ export function AssignmentWorkspaceBanner({
   phaseState,
   onSubmit,
   onAbandon,
+  homeHref = "/student",
+  homeLabel = "Assignments",
+  methodHref,
+  methodLabel,
 }: {
   assignment: StudentAssignment;
   phaseState?: string;
   onSubmit?: () => void;
   onAbandon?: () => void;
+  homeHref?: string;
+  homeLabel?: string;
+  methodHref?: string;
+  methodLabel?: string;
 }) {
   return (
     <div
@@ -62,7 +70,9 @@ export function AssignmentWorkspaceBanner({
         <div className="flex flex-1 min-w-0 justify-center">
           <div className="min-w-0 text-center">
             <p className="text-xs font-medium uppercase tracking-wide text-white/70 truncate">
-              {assignmentMetaLine(assignment)}
+              {[methodLabel, assignmentMetaLine(assignment)]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
             <div className="truncate text-sm font-medium text-white">
               {assignment.title}
@@ -72,15 +82,31 @@ export function AssignmentWorkspaceBanner({
 
         {/* Right: action buttons */}
         <div className="flex shrink-0 items-center gap-2">
+          {methodHref && (
+            <a
+              href={methodHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open published method: ${methodLabel || "method"}`}
+              data-testid="method-spec-link"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "max-w-[16rem] gap-1 border-white/35 bg-transparent text-white hover:bg-white/12 hover:text-white"
+              )}
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{methodLabel || "Method"}</span>
+            </a>
+          )}
           <Link
-            href="/student"
+            href={homeHref}
             className={cn(
               buttonVariants({ variant: "outline", size: "sm" }),
               "gap-1 border-white/35 bg-transparent text-white hover:bg-white/12 hover:text-white"
             )}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Assignments
+            {homeLabel}
           </Link>
           {phaseState !== "submitted" && onAbandon && (
             <Button

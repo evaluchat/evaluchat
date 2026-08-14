@@ -3,23 +3,32 @@
 import { useTeachingAssignmentOptional } from "@/contexts/TeachingAssignmentContext";
 import { useGraphContext } from "@/contexts/GraphContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
+import { useWorkspaceItemOptional } from "@/contexts/WorkspaceItemContext";
 import { ArtifactV3 } from "@opencanvas/shared/types";
 import { useEffect, useRef } from "react";
 
 /**
- * When an assignment is active (route `/student/assignment/[id]` or legacy
- * `?assignment=`), open a fresh canvas workspace with a blank document and
- * assignment-scoped agent instructions (via GraphContext systemPrompt).
+ * When an assignment is active, open a canvas workspace with starter markdown
+ * and assignment-scoped agent instructions (via GraphContext systemPrompt).
  *
- * On resume (?threadId= present), the canvas is restored from the existing
- * thread state via GraphContext's switchSelectedThread, so we skip
- * reinitialisation.
+ * On resume (?threadId= present, or a persisted workspace item thread), the
+ * canvas is restored from the existing thread state via GraphContext's
+ * switchSelectedThread, so we skip reinitialisation.
  */
 export function useAssignmentCanvasBootstrap() {
   const assignmentContext = useTeachingAssignmentOptional();
   const assignment = assignmentContext?.assignment;
   const { graphData } = useGraphContext();
   const { setThreadId, threadId } = useThreadContext();
+  const workspaceItem = useWorkspaceItemOptional()?.item;
+  const persistedThreadId =
+    workspaceItem && "threadId" in workspaceItem
+      ? workspaceItem.threadId
+      : undefined;
+  const submitted =
+    assignment?.status === "submitted" ||
+    (workspaceItem?.kind === "method_participant" &&
+      workspaceItem.submission?.status === "submitted");
   const bootstrappedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -28,17 +37,19 @@ export function useAssignmentCanvasBootstrap() {
       return;
     }
 
-    // If a threadId is present in the URL this is a resume.
-    // The existing thread will be loaded by GraphContext via
-    // switchSelectedThread, which restores artifact + messages.
-    // We must NOT clear state or reinitialise with empty starter markdown.
-    if (threadId) {
+    const resumeThreadId = persistedThreadId ?? threadId;
+    if (resumeThreadId) {
       bootstrappedIdRef.current = assignment.id;
+      if (threadId !== resumeThreadId) {
+        void setThreadId(resumeThreadId);
+      }
       graphData.setChatStarted(true);
+      if (submitted) {
+        graphData.setPhaseState("submitted");
+      }
       return;
     }
 
-    // Bootstraps once per assignment.id — effect dependencies handle dedup.
     bootstrappedIdRef.current = assignment.id;
 
     graphData.clearState();
@@ -60,7 +71,7 @@ export function useAssignmentCanvasBootstrap() {
     graphData.setChatStarted(true);
     // Run once per assignment id; graphData handlers are not memoized.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- assignment.id only
-  }, [assignment?.id, threadId]);
+  }, [assignment?.id, threadId, persistedThreadId, submitted]);
 
   return assignment;
 }

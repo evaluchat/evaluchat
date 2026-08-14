@@ -26,17 +26,21 @@ export function HeroSection() {
     <section className="hero">
       <div className="container hero-inner">
         <div>
-          <span className="eyebrow">Learning in the age of AI</span>
+          <span className="eyebrow">
+            Open evidence infrastructure for AI in education
+          </span>
           <h1>
-            AI isn&apos;t going away.
+            AI changes learning.
             <br />
-            <em>What should we be measuring?</em>
+            <em>What should we measure?</em>
           </h1>
           <p className="hero-sub">
-            Evaluchat is an open-source workspace for testing how education
-            responds to AI: using it, constraining it or examining evidence of
-            its use. We make the methods visible so we can see what each one
-            actually measures.
+            Evaluchat is an open-source, Markdown-native workspace for defining,
+            running, and inspecting research methods on AI in education.
+          </p>
+          <p className="hero-sub">
+            Methods, settings, and evidence are visible and versioned. Humans
+            review the evidence and write the findings.
           </p>
           <div className="hero-ctas">
             <OpenCanvasButton className="btn btn-primary">

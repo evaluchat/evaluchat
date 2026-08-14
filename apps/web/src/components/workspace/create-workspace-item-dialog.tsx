@@ -12,12 +12,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { WorkspaceItem } from "@/lib/workspace/types";
 
 type CatalogResult = {
   id: string;
   title: string;
   description: string;
+  kind: "template" | "method";
   templateKind?: "markdown" | "form";
   disabled?: boolean;
   status?: string;
@@ -34,19 +36,30 @@ export function CreateWorkspaceItemDialog({
   const [results, setResults] = useState<CatalogResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
+    setResults([]);
     fetch(
       `/api/workspace/catalog?kind=${kind}&q=${encodeURIComponent(query)}`,
       { credentials: "include" }
     )
       .then((response) => response.json())
-      .then((body: { results?: CatalogResult[] }) => {
-        if (!cancelled) setResults(body.results || []);
-      })
+      .then(
+        (body: { kind: "template" | "method"; results?: CatalogResult[] }) => {
+          if (!cancelled) {
+            setResults(
+              (body.results || []).map((result) => ({
+                ...result,
+                kind: body.kind,
+              }))
+            );
+          }
+        }
+      )
       .catch(() => {
         if (!cancelled) setResults([]);
       })
@@ -58,14 +71,18 @@ export function CreateWorkspaceItemDialog({
     };
   }, [open, kind, query]);
 
-  async function create(templateId: string) {
+  async function create(result: CatalogResult) {
     setCreating(true);
     try {
       const response = await fetch("/api/workspace/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ templateId }),
+        body: JSON.stringify(
+          result.kind === "method"
+            ? { methodId: result.id }
+            : { templateId: result.id }
+        ),
       });
       if (!response.ok) throw new Error("Could not create workspace item");
       const body = (await response.json()) as { item: WorkspaceItem };
@@ -74,6 +91,10 @@ export function CreateWorkspaceItemDialog({
       setQuery("");
     } catch (error) {
       console.error(error);
+      toast({
+        title: "Could not create workspace item",
+        variant: "destructive",
+      });
     } finally {
       setCreating(false);
     }
@@ -92,8 +113,8 @@ export function CreateWorkspaceItemDialog({
           <DialogTitle>Create workspace item</DialogTitle>
           <DialogDescription>
             Search reviewed templates and methods. Markdown templates are
-            editable; Form templates use a protected layout and validated
-            controls.
+            editable. Method run briefs are not listed here; choose Methods to
+            start an assignment.
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3">
@@ -135,7 +156,7 @@ export function CreateWorkspaceItemDialog({
                 key={result.id}
                 type="button"
                 disabled={result.disabled || creating}
-                onClick={() => void create(result.id)}
+                onClick={() => void create(result)}
                 className="w-full rounded-lg border p-4 text-left transition hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -149,11 +170,12 @@ export function CreateWorkspaceItemDialog({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {result.description}
                 </p>
-                {kind === "template" && result.templateKind === "form" && (
-                  <p className="mt-2 text-xs font-medium text-amber-700">
-                    Protected form · Submit to lock
-                  </p>
-                )}
+                {result.kind === "template" &&
+                  result.templateKind === "form" && (
+                    <p className="mt-2 text-xs font-medium text-amber-700">
+                      Protected form · Submit to lock
+                    </p>
+                  )}
               </button>
             ))}
         </div>

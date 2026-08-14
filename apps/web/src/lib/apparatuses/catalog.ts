@@ -24,6 +24,11 @@ export interface ApparatusCatalogUrls {
   questions: string[];
 }
 
+export interface ApparatusPlatform {
+  participant_invitations?: "required" | "optional" | "none";
+  review_surface?: string;
+}
+
 export interface ApparatusCatalogEntry {
   id: string;
   name: string;
@@ -40,6 +45,8 @@ export interface ApparatusCatalogEntry {
   description: string;
   profiles: ApparatusProfile[];
   catalog_urls?: ApparatusCatalogUrls;
+  run_brief_template?: string;
+  platform?: ApparatusPlatform;
 }
 
 /** Fallback stub — regenerate with scripts/generate-apparatus-mirror.ts */

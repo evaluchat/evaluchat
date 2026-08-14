@@ -69,6 +69,7 @@ export function ContentComposerChatInterfaceComponent(
     setIsStreaming,
     searchEnabled,
     isStreaming,
+    phaseState,
   } = graphData;
   const { getUserThreads } = useThreadContext();
   const [composerRunning, setComposerRunning] = useState(false);
@@ -181,6 +182,7 @@ export function ContentComposerChatInterfaceComponent(
           searchEnabled={searchEnabled}
           setChatCollapsed={props.setChatCollapsed}
           minimalCanvas={props.minimalCanvas}
+          disabled={phaseState === "submitted"}
           hideQuickStartButtons={props.hideQuickStartButtons}
           quickStartPrompts={props.quickStartPrompts}
         />

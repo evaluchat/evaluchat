@@ -187,4 +187,39 @@ describe("template catalog generator", () => {
       "Duplicate template id",
     );
   });
+
+  it("omits excluded ids when building a knowledge catalog", () => {
+    const directory = templateDirectory();
+    writeTemplate(
+      directory,
+      "form.md",
+      "{{title}}",
+      `fields:
+  title:
+    label: Title
+    type: text
+`,
+    );
+    fs.writeFileSync(
+      path.join(directory, "starter.md"),
+      `---
+type: Markdown Template
+id: getting-started
+version: 1.0.0
+locale: en
+title: Getting Started
+description: A starter.
+template_kind: markdown
+assistant:
+  guidance: Reviewed guidance.
+---
+
+# Hello
+`,
+    );
+    const catalog = buildCatalog(directory, { excludeIds: ["example-form"] });
+    expect(catalog.templates.map((entry) => entry.id)).toEqual([
+      "getting-started",
+    ]);
+  });
 });

@@ -64,6 +64,7 @@ export function isAbandonedThread(thread: ThreadLike): boolean {
 export function isSubmittedThread(thread: ThreadLike): boolean {
   if (Number(thread.metadata?.completionPercent) === 100) return true;
   if (thread.metadata?.phase_state === "submitted") return true;
+  if (thread.metadata?.phaseState === "submitted") return true;
   const values = thread.values;
   if (values && typeof values === "object" && !Array.isArray(values)) {
     if ((values as Record<string, unknown>).phase_state === "submitted") {
@@ -71,6 +72,20 @@ export function isSubmittedThread(thread: ThreadLike): boolean {
     }
   }
   return false;
+}
+
+/**
+ * Workspace-bound method assignments are a single attempt: resume the existing
+ * thread (read-only after submit). Donor `/student` still mints a fresh attempt
+ * when the only sibling is already submitted.
+ */
+export function shouldMintNewAssignmentThread(
+  existing: ThreadLike | undefined,
+  opts: { workspaceBound?: boolean } = {}
+): boolean {
+  if (!existing) return true;
+  if (opts.workspaceBound) return false;
+  return isSubmittedThread(existing);
 }
 
 /**

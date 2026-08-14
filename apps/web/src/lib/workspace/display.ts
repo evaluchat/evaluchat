@@ -50,6 +50,98 @@ export function formatWorkspaceItemDate(
     .join("/");
 }
 
+export function workspaceItemHref(item: WorkspaceItem): string {
+  const params = new URLSearchParams();
+  if (item.threadId) params.set("threadId", item.threadId);
+  if (
+    item.kind === "method_participant" &&
+    item.submission?.status === "submitted"
+  ) {
+    params.set("readonly", "1");
+  }
+  const query = params.toString();
+  return `/workspace/items/${item.id}${query ? `?${query}` : ""}`;
+}
+
+export function methodParticipantOpenHref(
+  runItemId: string,
+  participant: {
+    userId?: string;
+    itemId?: string;
+    threadId?: string;
+    submissionStatus: string;
+  },
+  currentUserId?: string
+): string | undefined {
+  if (!participant.itemId) return undefined;
+  if (
+    currentUserId &&
+    participant.userId &&
+    participant.userId === currentUserId
+  ) {
+    const params = new URLSearchParams();
+    if (participant.threadId) params.set("threadId", participant.threadId);
+    if (participant.submissionStatus === "submitted") {
+      params.set("readonly", "1");
+    }
+    const query = params.toString();
+    return `/workspace/items/${participant.itemId}${query ? `?${query}` : ""}`;
+  }
+  return `/workspace/items/${runItemId}/review/${participant.itemId}`;
+}
+
+export function ownParticipantItemId(
+  item: WorkspaceItem,
+  userId?: string
+): string | undefined {
+  if (!userId || item.kind !== "method" || !item.run) return undefined;
+  return item.run.participants.find(
+    (participant) => participant.userId === userId
+  )?.itemId;
+}
+
+export function workspaceItemTitle(item: WorkspaceItem): string {
+  if (item.kind === "method_participant") return item.assignment.title;
+  if (item.kind === "method" && item.run) return item.run.assignment.title;
+  if (item.kind === "method") {
+    return item.methodSource.title || item.templateSnapshot.title;
+  }
+  return item.templateSnapshot.title;
+}
+
+export function workspaceItemDescription(item: WorkspaceItem): string {
+  if (item.kind === "method_participant") return item.assignment.prompt;
+  if (item.kind === "method" && item.run) {
+    return item.methodSource.title || item.run.methodId;
+  }
+  if (item.kind === "method") {
+    return item.methodSource.description || item.templateSnapshot.description;
+  }
+  return item.templateSnapshot.description;
+}
+
+export function workspaceItemKicker(item: WorkspaceItem): string | undefined {
+  if (item.kind === "method" && !item.run) return "METHOD DRAFT";
+  if (item.kind === "method" && item.run) {
+    const invited = item.run.participants.length;
+    const submitted = item.run.participants.filter(
+      (participant) => participant.submissionStatus === "submitted"
+    ).length;
+    return `ASSIGNMENT RUN · ${invited} invited · ${submitted} submitted`;
+  }
+  if (item.kind === "method_participant") {
+    return item.submission?.status === "submitted"
+      ? "ASSIGNMENT · SUBMITTED"
+      : "ASSIGNMENT";
+  }
+  if (item.kind === "form_template") {
+    return item.submission?.status === "submitted"
+      ? "FORM · SUBMITTED"
+      : "FORM DRAFT";
+  }
+  return undefined;
+}
+
 export type WorkspaceItemType = {
   label: string;
   colorClass: string;
@@ -66,9 +158,15 @@ export function workspaceItemType(item: WorkspaceItem): WorkspaceItemType {
       };
     case "method":
       return {
-        label: "Method",
+        label: item.run ? "Assignment run" : "Method draft",
         colorClass: "border-violet-200 bg-violet-50 text-violet-700",
         iconClass: "text-violet-600",
+      };
+    case "method_participant":
+      return {
+        label: "Assignment",
+        colorClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        iconClass: "text-emerald-600",
       };
     case "markdown_template":
     default:
