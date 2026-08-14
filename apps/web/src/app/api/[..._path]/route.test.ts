@@ -24,8 +24,6 @@ vi.mock("@/lib/teaching/seed-loader", () => ({
 import { POST } from "./route";
 
 const THREAD_ID = "thread-owned";
-const THREAD_URL = `http://localhost:54367/threads/${THREAD_ID}`;
-const RUNS_URL = `${THREAD_URL}/runs`;
 
 function runRequest(body: Record<string, unknown>) {
   return new NextRequest(`http://localhost/api/threads/${THREAD_ID}/runs`, {

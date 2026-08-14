@@ -15,7 +15,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryState } from "nuqs";
 import {
   emptyKickoffsToAbandon,
-  isSubmittedThread,
   selectActiveThread,
   shouldMintNewAssignmentThread,
   shouldRejectCachedThread,

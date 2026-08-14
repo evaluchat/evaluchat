@@ -94,7 +94,8 @@ export async function inviteUserByEmail(
 }
 
 export async function inviteWorkspaceParticipant(
-  email: string
+  email: string,
+  options?: { correlationId?: string }
 ): Promise<{ emailed: boolean }> {
   const admin = createAdminClient();
   const redirectTo = `${getSiteUrl()}/auth/confirm?next=/workspace`;
@@ -116,7 +117,7 @@ export async function inviteWorkspaceParticipant(
   }
 
   console.error(
-    `[workspace] could not email ${email}:`,
+    `[workspace] could not email (${options?.correlationId ?? "unknown"}):`,
     inviteError.message,
     linkError.message
   );

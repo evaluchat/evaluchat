@@ -186,7 +186,11 @@ if (
     "data",
     "apparatuses.generated.json",
   );
-  writeApparatusMirror(researchRoot, outputPath);
+  const platformCatalogPath = path.resolve(
+    process.env.EVALUCHAT_PLATFORM_TEMPLATE_CATALOG_OUTPUT ||
+      path.join(repoRoot, "apps/web/data/platform-template-catalog.json"),
+  );
+  writeApparatusMirror(researchRoot, outputPath, platformCatalogPath);
   console.log(
     `Generated ${path.relative(repoRoot, outputPath)} from ${path.join(researchRoot, "methods")}`,
   );

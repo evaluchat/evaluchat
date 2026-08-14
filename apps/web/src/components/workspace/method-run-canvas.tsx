@@ -39,7 +39,8 @@ export function MethodRunCanvas({ item }: { item: MethodWorkspaceItem }) {
     ownParticipant &&
     methodParticipantOpenHref(item.id, ownParticipant, user?.id);
   const methodHref = publicMethodPageUrl(item.methodSource.id);
-  const methodTitle = item.methodSource.title || run?.methodId;
+  const methodTitle =
+    item.methodSource.title || run?.methodId || item.methodSource.id;
 
   async function abandonItem() {
     setIsAbandoning(true);
@@ -77,10 +78,7 @@ export function MethodRunCanvas({ item }: { item: MethodWorkspaceItem }) {
           </div>
           {ownAssignmentHref && (
             <Button asChild>
-              <Link
-                href={ownAssignmentHref}
-                data-testid="open-own-assignment"
-              >
+              <Link href={ownAssignmentHref} data-testid="open-own-assignment">
                 Open assignment
               </Link>
             </Button>
@@ -154,22 +152,22 @@ export function MethodRunCanvas({ item }: { item: MethodWorkspaceItem }) {
                 user?.id
               );
               return (
-              <div
-                key={participant.email}
-                className="flex items-center justify-between gap-3 rounded-md border bg-white px-3 py-2"
-              >
-                <div>
-                  <p className="font-medium">{participant.email}</p>
-                  <Badge variant="secondary">Submitted</Badge>
+                <div
+                  key={participant.email}
+                  className="flex items-center justify-between gap-3 rounded-md border bg-white px-3 py-2"
+                >
+                  <div>
+                    <p className="font-medium">{participant.email}</p>
+                    <Badge variant="secondary">Submitted</Badge>
+                  </div>
+                  {href && (
+                    <Button asChild size="sm">
+                      <Link href={href}>
+                        {participant.userId === user?.id ? "Open" : "Review"}
+                      </Link>
+                    </Button>
+                  )}
                 </div>
-                {href && (
-                  <Button asChild size="sm">
-                    <Link href={href}>
-                      {participant.userId === user?.id ? "Open" : "Review"}
-                    </Link>
-                  </Button>
-                )}
-              </div>
               );
             })}
           </CardContent>
@@ -191,30 +189,30 @@ export function MethodRunCanvas({ item }: { item: MethodWorkspaceItem }) {
                 user?.id
               );
               return (
-              <div
-                key={participant.email}
-                className="flex items-center justify-between gap-3 rounded-md border bg-white px-3 py-2"
-              >
-                <div>
-                  <p className="font-medium">{participant.email}</p>
-                  <Badge variant="outline">
-                    {participant.invitationStatus === "sent"
-                      ? "Invite sent"
-                      : participant.submissionStatus === "in_progress"
-                        ? "In progress"
-                        : "Not started"}
-                  </Badge>
+                <div
+                  key={participant.email}
+                  className="flex items-center justify-between gap-3 rounded-md border bg-white px-3 py-2"
+                >
+                  <div>
+                    <p className="font-medium">{participant.email}</p>
+                    <Badge variant="outline">
+                      {participant.invitationStatus === "sent"
+                        ? "Invite sent"
+                        : participant.submissionStatus === "in_progress"
+                          ? "In progress"
+                          : "Not started"}
+                    </Badge>
+                  </div>
+                  {href && (
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={href}>
+                        {participant.userId === user?.id
+                          ? "Open assignment"
+                          : "Open"}
+                      </Link>
+                    </Button>
+                  )}
                 </div>
-                {href && (
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={href}>
-                      {participant.userId === user?.id
-                        ? "Open assignment"
-                        : "Open"}
-                    </Link>
-                  </Button>
-                )}
-              </div>
               );
             })}
           </CardContent>

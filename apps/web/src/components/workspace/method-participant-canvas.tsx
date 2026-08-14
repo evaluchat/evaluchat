@@ -12,7 +12,9 @@ export function MethodParticipantCanvas({
   item: MethodParticipantWorkspaceItem;
 }) {
   return (
-    <WorkspaceAssignmentProvider assignment={methodParticipantAsAssignment(item)}>
+    <WorkspaceAssignmentProvider
+      assignment={methodParticipantAsAssignment(item)}
+    >
       <SessionRecorderWrapper>
         <Canvas />
       </SessionRecorderWrapper>

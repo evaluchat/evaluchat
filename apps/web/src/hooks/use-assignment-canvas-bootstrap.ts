@@ -37,11 +37,11 @@ export function useAssignmentCanvasBootstrap() {
       return;
     }
 
-    const resumeThreadId = threadId || persistedThreadId;
+    const resumeThreadId = persistedThreadId ?? threadId;
     if (resumeThreadId) {
       bootstrappedIdRef.current = assignment.id;
-      if (!threadId && persistedThreadId) {
-        void setThreadId(persistedThreadId);
+      if (threadId !== resumeThreadId) {
+        void setThreadId(resumeThreadId);
       }
       graphData.setChatStarted(true);
       if (submitted) {

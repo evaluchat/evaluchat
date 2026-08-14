@@ -1,4 +1,5 @@
 import { Client } from "@langchain/langgraph-sdk";
+import { randomUUID } from "node:crypto";
 import { LANGGRAPH_API_URL } from "@/constants";
 import { isValidTrackingId } from "@/lib/teaching/tracking-validation";
 
@@ -17,23 +18,35 @@ export async function appendTrackingEvents(
   threadId: string,
   events: unknown[]
 ): Promise<void> {
-  if (!isValidTrackingId(threadId) || !Array.isArray(events) || !events.length) {
+  if (
+    !isValidTrackingId(threadId) ||
+    !Array.isArray(events) ||
+    !events.length
+  ) {
     return;
   }
-  const existing = await client().store.getItem(namespace(threadId), "events");
-  const current = Array.isArray((existing?.value as { events?: unknown[] })?.events)
-    ? ((existing?.value as { events: unknown[] }).events)
-    : [];
-  await client().store.putItem(namespace(threadId), "events", {
-    events: [...current, ...events],
-  });
+  await client().store.putItem(
+    namespace(threadId),
+    `events:${new Date().toISOString()}:${randomUUID()}`,
+    { events }
+  );
 }
 
 export async function readTrackingEvents(threadId: string): Promise<unknown[]> {
   if (!isValidTrackingId(threadId)) return [];
-  const existing = await client().store.getItem(namespace(threadId), "events");
-  const events = (existing?.value as { events?: unknown[] })?.events;
-  return Array.isArray(events) ? events : [];
+  const response = await client().store.searchItems(namespace(threadId));
+  const items = Array.isArray(response)
+    ? response
+    : Array.isArray(response?.items)
+      ? response.items
+      : [];
+  return items
+    .filter((item) => {
+      const events = (item.value as { events?: unknown[] })?.events;
+      return item.key.startsWith("events:") && Array.isArray(events);
+    })
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .flatMap((item) => (item.value as { events: unknown[] }).events);
 }
 
 export function aggregateTrackingMetrics(

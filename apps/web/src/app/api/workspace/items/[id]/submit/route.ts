@@ -21,7 +21,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const result = await submitWorkspaceForm(auth.user.id, id, body?.values, {
       profileId:
         typeof body?.profileId === "string" ? body.profileId : undefined,
-      apparatusConfiguration: body?.apparatusConfiguration,
       threadId: typeof body?.threadId === "string" ? body.threadId : undefined,
     });
     return NextResponse.json(

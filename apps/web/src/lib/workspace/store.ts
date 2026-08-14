@@ -391,11 +391,10 @@ export async function submitWorkspaceForm(
   rawValues: unknown,
   options?: {
     profileId?: string;
-    apparatusConfiguration?: unknown;
     threadId?: string;
   }
 ): Promise<{ item: WorkspaceItem; idempotent: boolean }> {
-  return withUserLock(userId, async () => {
+  const result = await withUserLock(userId, async () => {
     const manifest = await readManifest(userId);
     const item = manifest.items[itemId];
     if (!item || item.ownerId !== userId || item.status !== "active") {
@@ -429,7 +428,7 @@ export async function submitWorkspaceForm(
     if (item.kind === "form_template") {
       if (item.submission) {
         if (submissionEquals(item.submission, values, resolvedMarkdown)) {
-          return { item, idempotent: true };
+          return { item, idempotent: true, deferred: [] };
         }
         throw new WorkspaceFormAlreadySubmittedError();
       }
@@ -443,7 +442,7 @@ export async function submitWorkspaceForm(
       item.updatedAt = item.submission.submittedAt;
       manifest.items[item.id] = item;
       await writeManifest(userId, manifest);
-      return { item, idempotent: false };
+      return { item, idempotent: false, deferred: [] };
     }
 
     if (item.run) {
@@ -451,7 +450,7 @@ export async function submitWorkspaceForm(
         item.submission &&
         submissionEquals(item.submission, values, resolvedMarkdown)
       ) {
-        return { item, idempotent: true };
+        return { item, idempotent: true, deferred: [] };
       }
       throw new WorkspaceFormAlreadySubmittedError();
     }
@@ -460,8 +459,14 @@ export async function submitWorkspaceForm(
       profileId: options?.profileId,
       resolvedMarkdown,
     });
-    return { item: launched, idempotent: false };
+    return {
+      item: launched.item,
+      idempotent: false,
+      deferred: launched.deferred,
+    };
   });
+  await Promise.all(result.deferred.map((job) => job()));
+  return { item: result.item, idempotent: result.idempotent };
 }
 
 async function attachOwnedThread(
@@ -594,7 +599,12 @@ async function submitMethodParticipant(
   manifest: WorkspaceManifest,
   item: MethodParticipantWorkspaceItem,
   liveThreadId?: string
-): Promise<{ item: WorkspaceItem; idempotent: boolean }> {
+): Promise<{
+  item: WorkspaceItem;
+  idempotent: boolean;
+  deferred: Array<() => Promise<void>>;
+}> {
+  const deferred: Array<() => Promise<void>> = [];
   let threadId = item.threadId;
   if (liveThreadId && liveThreadId !== threadId) {
     threadId = await attachOwnedThread(userId, item.id, liveThreadId);
@@ -616,13 +626,15 @@ async function submitMethodParticipant(
         await writeManifest(userId, manifest);
       }
     } else {
-      await syncOperatorParticipantSubmission(
-        item,
-        item.submission.submittedAt,
-        threadId
+      deferred.push(() =>
+        syncOperatorParticipantSubmission(
+          item,
+          item.submission!.submittedAt,
+          threadId
+        )
       );
     }
-    return { item, idempotent: true };
+    return { item, idempotent: true, deferred };
   }
 
   const submittedAt = new Date().toISOString();
@@ -675,10 +687,12 @@ async function submitMethodParticipant(
     );
     await writeManifest(userId, manifest);
   } else {
-    await syncOperatorParticipantSubmission(item, submittedAt, threadId);
+    deferred.push(() =>
+      syncOperatorParticipantSubmission(item, submittedAt, threadId)
+    );
   }
 
-  return { item, idempotent: false };
+  return { item, idempotent: false, deferred };
 }
 
 function assignmentFromValues(
@@ -765,7 +779,10 @@ async function launchMethodRun(
   item: MethodWorkspaceItem,
   values: Record<string, FormValue>,
   options: { profileId?: string; resolvedMarkdown: string }
-): Promise<MethodWorkspaceItem> {
+): Promise<{
+  item: MethodWorkspaceItem;
+  deferred: Array<() => Promise<void>>;
+}> {
   const emails = Array.isArray(values.participants)
     ? values.participants.map((email) => String(email).trim().toLowerCase())
     : [];
@@ -794,21 +811,24 @@ async function launchMethodRun(
   };
 
   const participants: MethodRunParticipant[] = [];
+  const deferred: Array<() => Promise<void>> = [];
 
   let pendingInviteCount = 0;
-  for (const email of emails) {
+  for (const [index, email] of emails.entries()) {
     const existing = await findUserByEmail(email);
     if (existing?.id) {
       const participantItem = createParticipantRecord(existing.id, snapshot);
       if (existing.id === operatorId) {
         manifest.items[participantItem.id] = participantItem;
       } else {
-        await withUserLock(existing.id, async () => {
-          const participantManifest = await readManifest(existing.id);
-          participantManifest.initialized = true;
-          participantManifest.items[participantItem.id] = participantItem;
-          await writeManifest(existing.id, participantManifest);
-        });
+        deferred.push(() =>
+          withUserLock(existing.id!, async () => {
+            const participantManifest = await readManifest(existing.id!);
+            participantManifest.initialized = true;
+            participantManifest.items[participantItem.id] = participantItem;
+            await writeManifest(existing.id!, participantManifest);
+          })
+        );
       }
       participants.push({
         email,
@@ -817,18 +837,27 @@ async function launchMethodRun(
         invitationStatus: "accepted",
         submissionStatus: "not_started",
       });
-      await inviteWorkspaceParticipant(email).catch((error) => {
-        console.error("[workspace] participant notify failed", email, error);
-      });
+      await inviteWorkspaceParticipant(email, { correlationId: runId }).catch(
+        (error) => {
+          console.error(
+            "[workspace] participant notify failed",
+            runId,
+            index,
+            error
+          );
+        }
+      );
       continue;
     }
 
     if (pendingInviteCount > 0 && INVITE_EMAIL_GAP_MS > 0) {
       await sleep(INVITE_EMAIL_GAP_MS);
     }
-    await inviteWorkspaceParticipant(email).catch((error) => {
-      console.error("[workspace] invite email failed", email, error);
-    });
+    await inviteWorkspaceParticipant(email, { correlationId: runId }).catch(
+      (error) => {
+        console.error("[workspace] invite email failed", runId, index, error);
+      }
+    );
     pendingInviteCount += 1;
     const pending: PendingMethodInvite = {
       email,
@@ -876,7 +905,7 @@ async function launchMethodRun(
   item.updatedAt = launchedAt;
   manifest.items[item.id] = item;
   await writeManifest(operatorId, manifest);
-  return item;
+  return { item, deferred };
 }
 
 export async function claimPendingMethodInvites(

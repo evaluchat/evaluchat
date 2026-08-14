@@ -404,6 +404,7 @@ export function TextRendererComponent(props: TextRendererProps) {
   }, [pendingEdit, editor]);
 
   const handleKeep = () => {
+    if (phaseState === "submitted") return;
     // Track the keep action
     const aggregator = (window as any).__trackingAggregator;
     if (aggregator && pendingEdit) {
@@ -419,6 +420,7 @@ export function TextRendererComponent(props: TextRendererProps) {
   };
 
   const handleUndo = async () => {
+    if (phaseState === "submitted") return;
     if (!editor || !pendingEdit) return;
     // Track the undo action
     const aggregator = (window as any).__trackingAggregator;

@@ -3,7 +3,11 @@ import {
   enforceWorkspaceThreadPolicy,
   supportsWorkspaceThreads,
 } from "./thread-policy";
-import type { FormWorkspaceItem, MarkdownWorkspaceItem } from "./types";
+import type {
+  FormWorkspaceItem,
+  MarkdownWorkspaceItem,
+  MethodParticipantWorkspaceItem,
+} from "./types";
 
 const item: MarkdownWorkspaceItem = {
   id: "wi_owned",
@@ -86,9 +90,11 @@ describe("enforceWorkspaceThreadPolicy", () => {
   });
 
   it("injects the assignment prompt for method participant threads", () => {
-    const participant = {
-      ...item,
-      kind: "method_participant" as const,
+    const { templateSnapshot, ...participantRest } = item;
+    void templateSnapshot;
+    const participant: MethodParticipantWorkspaceItem = {
+      ...participantRest,
+      kind: "method_participant",
       runId: "run_1",
       operatorItemId: "wi_operator",
       operatorId: "operator-1",
@@ -124,7 +130,9 @@ describe("enforceWorkspaceThreadPolicy", () => {
     expect(result.config.configurable.systemPrompt).toContain(
       "Great Expectations"
     );
-    expect(result.config.configurable.systemPrompt).toContain("Write about Pip.");
+    expect(result.config.configurable.systemPrompt).toContain(
+      "Write about Pip."
+    );
     expect(result.config.configurable.systemPrompt).not.toBe("form guidance");
     expect(result.config.configurable.apparatusConfiguration.tracking).toBe(
       true

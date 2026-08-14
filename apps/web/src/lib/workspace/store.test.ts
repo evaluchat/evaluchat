@@ -17,6 +17,9 @@ const harness = vi.hoisted(() => {
       else items.set("workspace_items/user-1:manifest", value);
     },
   };
+  const hooks = {
+    onParticipantManifestWrite: undefined as (() => void) | undefined,
+  };
 
   const client = {
     store: {
@@ -28,6 +31,12 @@ const harness = vi.hoisted(() => {
       }),
       putItem: vi.fn(async (namespace: string[], key: string, value: any) => {
         items.set(storeKey(namespace, key), structuredClone(value));
+        if (
+          namespace.join("/") === "workspace_items/user-2" &&
+          key === "manifest"
+        ) {
+          hooks.onParticipantManifestWrite?.();
+        }
       }),
     },
     threads: {
@@ -60,6 +69,7 @@ const harness = vi.hoisted(() => {
 
   return {
     state,
+    hooks,
     client,
     Client: vi.fn(() => client),
     findUserByEmail: vi.fn(
@@ -100,6 +110,7 @@ describe("workspace item lifecycle", () => {
   beforeEach(() => {
     harness.state.items.clear();
     harness.state.threads.clear();
+    harness.hooks.onParticipantManifestWrite = undefined;
     harness.findUserByEmail.mockReset();
     harness.inviteWorkspaceParticipant.mockReset();
     harness.findUserByEmail.mockResolvedValue(null);
@@ -267,13 +278,14 @@ function manifestFor(userId: string) {
 
 describe("method run launch", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     harness.state.items.clear();
     harness.state.threads.clear();
+    harness.hooks.onParticipantManifestWrite = undefined;
     harness.findUserByEmail.mockReset();
     harness.inviteWorkspaceParticipant.mockReset();
     harness.findUserByEmail.mockResolvedValue(null);
     harness.inviteWorkspaceParticipant.mockResolvedValue(undefined);
-    vi.clearAllMocks();
   });
 
   it("rejects a method submit without a roster", async () => {
@@ -301,13 +313,6 @@ describe("method run launch", () => {
       { ...assignmentBrief, participants: "a@example.com" },
       {
         profileId: "canonical-constrained-dialogue",
-        apparatusConfiguration: {
-          ai_assistance: false,
-          ai_canvas_actions: false,
-          drafting_gate: "none",
-          threshold: 0,
-          tracking: false,
-        },
       }
     );
 
@@ -356,10 +361,12 @@ describe("method run launch", () => {
     });
     expect(unknown?.userId).toBeUndefined();
     expect(harness.inviteWorkspaceParticipant).toHaveBeenCalledWith(
-      "unknown@example.com"
+      "unknown@example.com",
+      { correlationId: expect.any(String) }
     );
     expect(harness.inviteWorkspaceParticipant).toHaveBeenCalledWith(
-      "a@example.com"
+      "a@example.com",
+      { correlationId: expect.any(String) }
     );
 
     const participantManifest = manifestFor("user-2");
@@ -372,6 +379,75 @@ describe("method run launch", () => {
     );
     expect(participantItem.runId).toBe(result.item.run.id);
     expect(participantItem.operatorItemId).toBe(item.id);
+  });
+
+  it("does not deadlock a participant submit against a concurrent operator launch", async () => {
+    const first = await createMethodWorkspaceItem(
+      "user-1",
+      "ai-assisted-essay"
+    );
+    const second = await createMethodWorkspaceItem(
+      "user-1",
+      "ai-assisted-essay"
+    );
+    harness.findUserByEmail.mockResolvedValue({
+      id: "user-2",
+      email: "a@example.com",
+    });
+
+    const launched = await submitWorkspaceForm("user-1", first.id, {
+      ...assignmentBrief,
+      participants: "a@example.com",
+    });
+    if (launched.item.kind !== "method" || !launched.item.run) return;
+    const participantId = launched.item.run.participants[0].itemId!;
+    const participantManifest = manifestFor("user-2");
+    participantManifest.items[participantId].threadId = "thread-p";
+    harness.state.threads.set("thread-p", {
+      metadata: { user_id: "user-2", workspace_item_id: participantId },
+    });
+
+    let releaseThreadRead!: () => void;
+    const threadRead = new Promise<void>((resolve) => {
+      releaseThreadRead = resolve;
+    });
+    harness.client.threads.get.mockImplementationOnce(async (id: string) => {
+      await threadRead;
+      return harness.state.threads.get(id);
+    });
+
+    let resolveParticipantWrite!: () => void;
+    const participantWritten = new Promise<void>((resolve) => {
+      resolveParticipantWrite = resolve;
+    });
+    harness.hooks.onParticipantManifestWrite = resolveParticipantWrite;
+    const participantSubmit = submitWorkspaceForm("user-2", participantId, {});
+    await participantWritten;
+
+    let resolveOperatorLookup!: () => void;
+    const operatorLookup = new Promise<void>((resolve) => {
+      resolveOperatorLookup = resolve;
+    });
+    harness.findUserByEmail.mockImplementation(async () => {
+      resolveOperatorLookup();
+      return { id: "user-2", email: "a@example.com" };
+    });
+    const operatorLaunch = submitWorkspaceForm("user-1", second.id, {
+      ...assignmentBrief,
+      participants: "a@example.com",
+    });
+    await operatorLookup;
+    releaseThreadRead();
+
+    await Promise.race([
+      Promise.all([participantSubmit, operatorLaunch]),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("workspace user locks deadlocked")),
+          1000
+        )
+      ),
+    ]);
   });
 
   it("puts the assignment in the operator workspace when they invite themselves", async () => {
@@ -395,7 +471,8 @@ describe("method run launch", () => {
     if (assignment?.kind !== "method_participant") return;
     expect(assignment.assignment.title).toBe("Great Expectations");
     expect(harness.inviteWorkspaceParticipant).toHaveBeenCalledWith(
-      "cronjev@outlook.com"
+      "cronjev@outlook.com",
+      { correlationId: expect.any(String) }
     );
   });
 
@@ -481,6 +558,41 @@ describe("method run launch", () => {
     expect(harness.client.threads.update).toHaveBeenCalled();
   });
 
+  it("leaves a failed participant submit unsubmitted and retryable", async () => {
+    const item = await createMethodWorkspaceItem("user-1", "ai-assisted-essay");
+    harness.findUserByEmail.mockResolvedValue({
+      id: "user-2",
+      email: "a@example.com",
+    });
+    const launched = await submitWorkspaceForm("user-1", item.id, {
+      ...assignmentBrief,
+      participants: "a@example.com",
+    });
+    if (launched.item.kind !== "method" || !launched.item.run) return;
+    const participantId = launched.item.run.participants[0].itemId!;
+    harness.state.threads.set("foreign-thread", {
+      metadata: { user_id: "user-1", workspace_item_id: item.id },
+    });
+
+    await expect(
+      submitWorkspaceForm(
+        "user-2",
+        participantId,
+        {},
+        {
+          threadId: "foreign-thread",
+        }
+      )
+    ).rejects.toBeInstanceOf(WorkspaceThreadOwnershipError);
+
+    expect(
+      manifestFor("user-2").items[participantId].submission
+    ).toBeUndefined();
+    expect(
+      harness.state.threads.get("foreign-thread").metadata.phase_state
+    ).not.toBe("submitted");
+  });
+
   it("updates the operator run when the operator submits their own assignment", async () => {
     const item = await createMethodWorkspaceItem("user-1", "ai-assisted-essay");
     harness.findUserByEmail.mockResolvedValue({
@@ -524,9 +636,14 @@ describe("method run launch", () => {
       metadata: { user_id: "user-2", workspace_item_id: participantId },
     });
 
-    await submitWorkspaceForm("user-2", participantId, {}, {
-      threadId: "thread-live",
-    });
+    await submitWorkspaceForm(
+      "user-2",
+      participantId,
+      {},
+      {
+        threadId: "thread-live",
+      }
+    );
     const operator = await getWorkspaceItem("user-1", item.id);
     expect(
       operator?.kind === "method" &&

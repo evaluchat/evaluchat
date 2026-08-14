@@ -149,9 +149,9 @@ describe("shouldMintNewAssignmentThread", () => {
       shouldMintNewAssignmentThread(submitted, { workspaceBound: true })
     ).toBe(false);
     expect(shouldMintNewAssignmentThread(submitted)).toBe(true);
-    expect(shouldMintNewAssignmentThread(undefined, { workspaceBound: true })).toBe(
-      true
-    );
+    expect(
+      shouldMintNewAssignmentThread(undefined, { workspaceBound: true })
+    ).toBe(true);
   });
 });
 

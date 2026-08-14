@@ -752,12 +752,15 @@ export function FormWorkspaceCanvas({
               </p>
               <p className="font-medium">Recipients</p>
               <ul className="list-disc pl-5 text-muted-foreground">
-                {(Array.isArray(values.participants)
-                  ? values.participants
-                  : String(values.participants || "")
-                      .split(/[;,\n]/)
-                      .map((email) => email.trim().toLowerCase())
+                {Array.from(
+                  new Set(
+                    (Array.isArray(values.participants)
+                      ? values.participants
+                      : String(values.participants || "").split(/[;,\n]/)
+                    )
+                      .map((email) => String(email).trim().toLowerCase())
                       .filter(Boolean)
+                  )
                 ).map((email) => (
                   <li key={String(email)}>{String(email)}</li>
                 ))}

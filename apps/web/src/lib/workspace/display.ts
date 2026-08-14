@@ -74,7 +74,11 @@ export function methodParticipantOpenHref(
   currentUserId?: string
 ): string | undefined {
   if (!participant.itemId) return undefined;
-  if (participant.userId === currentUserId) {
+  if (
+    currentUserId &&
+    participant.userId &&
+    participant.userId === currentUserId
+  ) {
     const params = new URLSearchParams();
     if (participant.threadId) params.set("threadId", participant.threadId);
     if (participant.submissionStatus === "submitted") {
@@ -131,7 +135,9 @@ export function workspaceItemKicker(item: WorkspaceItem): string | undefined {
       : "ASSIGNMENT";
   }
   if (item.kind === "form_template") {
-    return item.submission?.status === "submitted" ? "Submitted" : "Draft";
+    return item.submission?.status === "submitted"
+      ? "FORM · SUBMITTED"
+      : "FORM DRAFT";
   }
   return undefined;
 }

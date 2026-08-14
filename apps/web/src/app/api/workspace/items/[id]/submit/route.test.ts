@@ -74,7 +74,6 @@ describe("POST /api/workspace/items/[id]/submit", () => {
       },
       {
         profileId: undefined,
-        apparatusConfiguration: undefined,
         threadId: undefined,
       }
     );

@@ -35,9 +35,8 @@ export function HeroSection() {
             <em>What should we measure?</em>
           </h1>
           <p className="hero-sub">
-            Evaluchat is an open-source, Markdown-native workspace for
-            defining, running, and inspecting research methods on AI in
-            education.
+            Evaluchat is an open-source, Markdown-native workspace for defining,
+            running, and inspecting research methods on AI in education.
           </p>
           <p className="hero-sub">
             Methods, settings, and evidence are visible and versioned. Humans

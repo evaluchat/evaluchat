@@ -44,17 +44,34 @@ export function MethodReviewView() {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
+    let cancelled = false;
+    setPayload(undefined);
+    setError(undefined);
     fetch(
       `/api/workspace/items/${encodeURIComponent(params.id)}/review/${encodeURIComponent(params.participantItemId)}`,
       { credentials: "include" }
     )
       .then(async (response) => {
-        if (!response.ok) throw new Error("Forbidden");
-        setPayload((await response.json()) as ReviewPayload);
+        if (!response.ok) {
+          throw new Error(
+            response.status === 401 || response.status === 403
+              ? "You cannot review this participant."
+              : "Could not load review"
+          );
+        }
+        const nextPayload = (await response.json()) as ReviewPayload;
+        if (!cancelled) setPayload(nextPayload);
       })
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Could not load review")
-      );
+      .catch((err) => {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Could not load review"
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [params.id, params.participantItemId]);
 
   const canvasContent =
@@ -115,7 +132,9 @@ export function MethodReviewView() {
                     <CardTitle>Canvas</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ReadonlyMarkdownRendererSuspense markdown={canvasContent} />
+                    <ReadonlyMarkdownRendererSuspense
+                      markdown={canvasContent}
+                    />
                   </CardContent>
                 </Card>
               </div>

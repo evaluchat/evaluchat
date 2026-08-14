@@ -1,9 +1,6 @@
 import { buildAssignmentSystemPrompt } from "@/lib/teaching/assignment-prompt";
 import type { StudentAssignment } from "@/lib/teaching/types";
-import type {
-  MethodParticipantWorkspaceItem,
-  WorkspaceItem,
-} from "./types";
+import type { MethodParticipantWorkspaceItem, WorkspaceItem } from "./types";
 
 export function supportsWorkspaceThreads(item: WorkspaceItem): boolean {
   return (
@@ -67,7 +64,13 @@ export function enforceWorkspaceThreadPolicy(
       configurable: {
         ...(body.config?.configurable &&
         typeof body.config.configurable === "object"
-          ? body.config.configurable
+          ? (() => {
+              const configurable = {
+                ...(body.config.configurable as Record<string, unknown>),
+              };
+              delete configurable.apparatusConfiguration;
+              return configurable;
+            })()
           : {}),
         workspace_item_id: item.id,
         systemPrompt: assistantGuidance(item),

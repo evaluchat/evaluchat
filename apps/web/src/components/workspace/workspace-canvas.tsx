@@ -141,7 +141,7 @@ function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
         open={abandonOpen}
         onOpenChange={setAbandonOpen}
         onConfirm={() => void abandonItem()}
-        itemTitle={item.templateSnapshot.title}
+        itemTitle={workspaceItemTitle(item)}
         isDeleting={isAbandoning}
         confirmLabel="Abandon"
       />

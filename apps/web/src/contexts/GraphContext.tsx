@@ -2013,21 +2013,22 @@ export function GraphProvider({ children }: { children: ReactNode }) {
 
     // Persist to thread
     if (threadData.threadId) {
+      const submitThreadId = threadData.threadId;
       const client = createClient();
 
       // 1. Save artifact to thread values (ensure canvas content is persisted)
       if (artifact) {
         try {
-          await client.threads.updateState(threadData.threadId, {
+          await client.threads.updateState(submitThreadId, {
             values: {
               artifact,
-              phase_state: "submitted",
+              phase_state: phaseState,
             },
           });
           lastSavedArtifact.current = artifact;
           try {
             localStorage.setItem(
-              `canvas_backup_${threadData.threadId}`,
+              `canvas_backup_${submitThreadId}`,
               JSON.stringify({ artifact, timestamp: Date.now() })
             );
           } catch (_) {}
@@ -2036,38 +2037,45 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 2. Update thread metadata with completion info
-      const thread = await client.threads.get(threadData.threadId);
-      const existingMetadata =
-        (thread?.metadata as Record<string, unknown>) || {};
-      await client.threads.update(threadData.threadId, {
-        metadata: {
-          ...existingMetadata,
-          completionPercent: 100,
-          phase_state: "submitted",
-          phaseState: "submitted",
-          submittedAt: new Date().toISOString(),
-        },
-      });
-    }
+      const markThreadSubmitted = async () => {
+        const thread = await client.threads.get(submitThreadId);
+        const existingMetadata =
+          (thread?.metadata as Record<string, unknown>) || {};
+        await client.threads.update(submitThreadId, {
+          metadata: {
+            ...existingMetadata,
+            completionPercent: 100,
+            phase_state: "submitted",
+            phaseState: "submitted",
+            submittedAt: new Date().toISOString(),
+          },
+        });
+        await client.threads.updateState(submitThreadId, {
+          values: { phase_state: "submitted" },
+        });
+      };
 
-    if (workspaceItem?.item?.kind === "method_participant") {
-      const response = await fetch(
-        `/api/workspace/items/${encodeURIComponent(workspaceItem.item.id)}/submit`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            values: {},
-            threadId: threadData.threadId,
-          }),
+      if (workspaceItem?.item?.kind === "method_participant") {
+        const response = await fetch(
+          `/api/workspace/items/${encodeURIComponent(workspaceItem.item.id)}/submit`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              values: {},
+              threadId: submitThreadId,
+            }),
+          }
+        );
+        if (!response.ok) {
+          throw new Error("Failed to submit assignment");
         }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to submit assignment");
+        await markThreadSubmitted();
+        await workspaceItem.refresh();
+      } else {
+        await markThreadSubmitted();
       }
-      await workspaceItem.refresh();
     }
     setPhaseState("submitted");
     return { wordCount, messageCount };
