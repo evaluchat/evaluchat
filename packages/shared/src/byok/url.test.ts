@@ -15,6 +15,9 @@ describe("assertPublicHttpsUrl", () => {
     expect(assertPublicHttpsUrl("  https://openrouter.ai/api/v1  ")).toBe(
       "https://openrouter.ai/api/v1"
     );
+    expect(assertPublicHttpsUrl("https://openrouter.ai./api/v1")).toBe(
+      "https://openrouter.ai./api/v1"
+    );
   });
 
   it("rejects http", () => {
@@ -27,6 +30,9 @@ describe("assertPublicHttpsUrl", () => {
     expect(() => assertPublicHttpsUrl("https://localhost/v1")).toThrow(
       /local or internal/
     );
+    expect(() => assertPublicHttpsUrl("https://localhost./v1")).toThrow(
+      /local or internal/
+    );
     expect(() => assertPublicHttpsUrl("https://foo.localhost/v1")).toThrow(
       /local or internal/
     );
@@ -34,6 +40,9 @@ describe("assertPublicHttpsUrl", () => {
       /local or internal/
     );
     expect(() => assertPublicHttpsUrl("https://svc.internal/v1")).toThrow(
+      /local or internal/
+    );
+    expect(() => assertPublicHttpsUrl("https://svc.internal./v1")).toThrow(
       /local or internal/
     );
     expect(() => assertPublicHttpsUrl("https://gw.lan/v1")).toThrow(

@@ -2,7 +2,10 @@ import { isIP } from "node:net";
 import dns from "node:dns/promises";
 
 function normalizeHostname(hostname: string): string {
-  const trimmed = hostname.trim().toLowerCase();
+  let trimmed = hostname.trim().toLowerCase();
+  if (trimmed.endsWith(".")) {
+    trimmed = trimmed.replace(/\.+$/, "");
+  }
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
     return trimmed.slice(1, -1);
   }
