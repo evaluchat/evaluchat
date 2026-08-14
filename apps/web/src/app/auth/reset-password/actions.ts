@@ -1,26 +1,9 @@
 "use server";
 
+import { validatePasswords } from "@/lib/auth/password-validation";
 import { createClient } from "@/lib/supabase/server";
 
 export type ResetPasswordResult = { ok: true } | { ok: false; error: string };
-
-const MIN_PASSWORD_LENGTH = 8;
-
-function validatePasswords(
-  password: string,
-  confirmPassword: string
-): string | null {
-  if (!password) {
-    return "Enter a new password.";
-  }
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
-  }
-  if (password !== confirmPassword) {
-    return "Passwords do not match.";
-  }
-  return null;
-}
 
 /**
  * PKCE recovery: exchange ?code= for a session, then set the new password.
@@ -63,6 +46,8 @@ export async function resetPasswordWithCode(
       error: updateError.message || "Could not update password.",
     };
   }
+
+  await supabase.auth.signOut({ scope: "others" });
 
   return { ok: true };
 }

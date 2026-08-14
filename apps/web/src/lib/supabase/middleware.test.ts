@@ -26,4 +26,11 @@ describe("password-reset auth routes", () => {
     expect(shouldBounceSignedInFromAuth("/auth/reset-password")).toBe(false);
     expect(shouldBounceSignedInFromAuth("/auth/login")).toBe(true);
   });
+
+  it("uses path-boundary matching for auth bounce and sign-out exemption", () => {
+    expect(shouldBounceSignedInFromAuth("/authentic")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/signout-old")).toBe(true);
+    expect(shouldBounceSignedInFromAuth("/auth/signout")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/signout/")).toBe(false);
+  });
 });

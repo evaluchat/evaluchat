@@ -39,6 +39,8 @@ describe("middleware public routes", () => {
       false
     );
     expect(shouldBounceSignedInFromAuth("/workspace")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/authentic")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/signout-old")).toBe(true);
   });
 
   it("redirects unauthenticated page shells to login, but not API routes", () => {

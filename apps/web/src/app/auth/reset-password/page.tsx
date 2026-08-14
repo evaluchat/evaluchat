@@ -9,10 +9,12 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
+import {
+  MIN_PASSWORD_LENGTH,
+  validatePasswords,
+} from "@/lib/auth/password-validation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { resetPasswordWithCode } from "./actions";
-
-const MIN_PASSWORD_LENGTH = 8;
 
 type PageStatus =
   | { kind: "loading" }
@@ -33,22 +35,6 @@ function parseHashParams(): URLSearchParams {
   return new URLSearchParams(hash);
 }
 
-function validatePasswords(
-  password: string,
-  confirmPassword: string
-): string | null {
-  if (!password) {
-    return "Enter a new password.";
-  }
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
-  }
-  if (password !== confirmPassword) {
-    return "Passwords do not match.";
-  }
-  return null;
-}
-
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const codeParam = searchParams.get("code");
@@ -63,31 +49,9 @@ function ResetPasswordContent() {
 
   useEffect(() => {
     let cancelled = false;
+    let resolved = false;
 
-    const run = async () => {
-      if (codeParam?.trim()) {
-        if (!cancelled) {
-          setStatus({
-            kind: "ready",
-            mode: "code",
-            code: codeParam.trim(),
-          });
-        }
-        return;
-      }
-
-      if (queryTokenHash && queryType === "recovery") {
-        window.history.replaceState(null, "", window.location.pathname);
-        if (!cancelled) {
-          setStatus({
-            kind: "ready",
-            mode: "token_hash",
-            tokenHash: queryTokenHash,
-          });
-        }
-        return;
-      }
-
+    const applyFromHash = (): boolean => {
       const hashParams = parseHashParams();
       const hashError =
         hashParams.get("error") ||
@@ -101,7 +65,7 @@ function ResetPasswordContent() {
             message: "This reset link is invalid or has expired.",
           });
         }
-        return;
+        return true;
       }
 
       const tokenHash = hashParams.get("token_hash");
@@ -120,39 +84,60 @@ function ResetPasswordContent() {
             tokenHash,
           });
         }
-        return;
+        return true;
       }
 
-      // Brief wait for late hash delivery, then treat as missing link.
-      await new Promise((r) => setTimeout(r, 1_500));
-      if (cancelled) return;
+      return false;
+    };
 
-      const lateHash = parseHashParams();
-      const lateToken = lateHash.get("token_hash");
-      const lateType = lateHash.get("type");
-      if (lateToken && lateType === "recovery") {
-        window.history.replaceState(
-          null,
-          "",
-          `${window.location.pathname}${window.location.search}`
-        );
-        setStatus({
-          kind: "ready",
-          mode: "token_hash",
-          tokenHash: lateToken,
-        });
+    if (codeParam?.trim()) {
+      setStatus({
+        kind: "ready",
+        mode: "code",
+        code: codeParam.trim(),
+      });
+      return;
+    }
+
+    if (queryTokenHash && queryType === "recovery") {
+      window.history.replaceState(null, "", window.location.pathname);
+      setStatus({
+        kind: "ready",
+        mode: "token_hash",
+        tokenHash: queryTokenHash,
+      });
+      return;
+    }
+
+    if (applyFromHash()) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled || resolved) return;
+      if (applyFromHash()) {
+        resolved = true;
         return;
       }
-
       setStatus({
         kind: "error",
         message: "This reset link is invalid or has expired.",
       });
+    }, 1_500);
+
+    const onHashChange = () => {
+      if (cancelled || resolved) return;
+      if (applyFromHash()) {
+        resolved = true;
+        window.clearTimeout(timeoutId);
+      }
     };
 
-    void run();
+    window.addEventListener("hashchange", onHashChange);
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("hashchange", onHashChange);
     };
   }, [codeParam, queryTokenHash, queryType]);
 

@@ -27,8 +27,9 @@ export function isPublicPath(pathname: string): boolean {
  */
 export function shouldBounceSignedInFromAuth(pathname: string): boolean {
   const path = pathname.split("?")[0].replace(/\/+$/, "") || "/";
-  if (!path.startsWith("/auth")) return false;
-  if (path.startsWith("/auth/signout")) return false;
+  if (path !== "/auth" && !path.startsWith("/auth/")) return false;
+  if (path === "/auth/signout" || path.startsWith("/auth/signout/"))
+    return false;
   if (
     path === "/auth/confirm" ||
     path === "/auth/forgot-password" ||

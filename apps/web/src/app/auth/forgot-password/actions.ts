@@ -1,6 +1,6 @@
 "use server";
 
-import { createActionClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/teaching/admin-client";
 
 export type ForgotPasswordResult = { ok: true } | { ok: false; error: string };
@@ -20,7 +20,7 @@ export async function requestPasswordReset(
   }
 
   const redirectTo = `${getSiteUrl().replace(/\/$/, "")}/auth/reset-password`;
-  const supabase = createActionClient();
+  const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo,
   });
