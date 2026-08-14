@@ -1013,6 +1013,65 @@ describe("method run launch", () => {
     }
   });
 
+  it("keeps the lease alive across TTL so a competitor waits for release", async () => {
+    workspaceLockTtlMs.value = 200;
+    workspaceLockRetryDelayMs.value = 1;
+
+    let releaseFirstManifestWrite!: () => void;
+    const firstManifestWriteGate = new Promise<void>((resolve) => {
+      releaseFirstManifestWrite = resolve;
+    });
+    let firstManifestWriteStarted = false;
+
+    const putItem = harness.client.store.putItem;
+    const previousPut = putItem.getMockImplementation()!;
+    putItem.mockImplementation(
+      async (
+        namespace: string[],
+        key: string,
+        value: any,
+        options?: { ttl?: number | null }
+      ) => {
+        if (
+          namespace.join("/") === "workspace_items/user-1" &&
+          key === "manifest" &&
+          !firstManifestWriteStarted
+        ) {
+          firstManifestWriteStarted = true;
+          await firstManifestWriteGate;
+        }
+        return previousPut(namespace, key, value, options);
+      }
+    );
+
+    try {
+      const firstPromise = ensureDefaultWorkspaceItem("user-1");
+      await waitFor(() => firstManifestWriteStarted);
+
+      const secondPromise = ensureDefaultWorkspaceItem("user-1");
+      let secondSettled = false;
+      void secondPromise.then(() => {
+        secondSettled = true;
+      });
+
+      // Hold past the 200ms TTL; renewal must keep the lease so the competitor waits.
+      await delay(300);
+      expect(secondSettled).toBe(false);
+      expect(harness.state.items.has("workspace_items/user-1:lock")).toBe(true);
+
+      releaseFirstManifestWrite();
+      const [first, second] = await Promise.all([firstPromise, secondPromise]);
+      expect(first?.id).toBeDefined();
+      expect(second?.id).toBe(first?.id);
+      expect(Object.keys(harness.state.manifest.items)).toHaveLength(1);
+      expect(harness.state.items.has("workspace_items/user-1:lock")).toBe(
+        false
+      );
+    } finally {
+      putItem.mockImplementation(previousPut);
+    }
+  });
+
   it("releases the store lock after a manifest op", async () => {
     await ensureDefaultWorkspaceItem("user-1");
     expect(harness.state.items.has("workspace_items/user-1:lock")).toBe(false);

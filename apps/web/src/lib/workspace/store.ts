@@ -252,7 +252,7 @@ async function withUserLock<T>(
 ): Promise<T> {
   const token = await acquireUserLock(userId);
   let released = false;
-  const renewalMs = Math.max(1000, Math.floor(workspaceLockTtlMs.value / 3));
+  const renewalMs = Math.max(1, Math.floor(workspaceLockTtlMs.value / 3));
   const heartbeat = setInterval(() => {
     if (released) return;
     void renewUserLock(userId, token);
