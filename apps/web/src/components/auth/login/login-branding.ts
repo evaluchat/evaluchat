@@ -1,7 +1,7 @@
 /** Shared copy for the login brand panel / footer. */
 export const DOCS_URL =
   "https://knowledge.evaluchat.org/platform-capabilities.html";
-export const COPYRIGHT_NOTICE = "© 2026 Evaluchat. All rights reserved.";
+export const COPYRIGHT_NOTICE = "© 2026 evaluchat. All rights reserved.";
 export const SUPPORT_EMAIL = "hello@evaluchat.org";
 export const PRIVACY_PATH = "/privacy";
 export const TERMS_PATH = "/terms";

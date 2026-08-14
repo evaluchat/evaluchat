@@ -118,8 +118,8 @@ export function AssistantProvider({
     ({
       assistant_id: assistantId,
       graph_id: "agent",
-      name: "Evaluchat",
-      description: "Evaluchat workspace assistant",
+      name: "evaluchat",
+      description: "evaluchat workspace assistant",
       metadata: { workspace: true },
       config: { configurable: {} },
       created_at: new Date().toISOString(),

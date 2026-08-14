@@ -10,7 +10,7 @@ export function TermsOfServiceContent() {
     <>
       <section className="space-y-3">
         <p>
-          These Terms of Service (“Terms”) govern access to and use of Evaluchat
+          These Terms of Service (“Terms”) govern access to and use of evaluchat
           (the “Service”). By creating an account or using the Service, you
           agree to these Terms.
         </p>
@@ -94,14 +94,14 @@ export function TermsOfServiceContent() {
         <h2>Intellectual property</h2>
         <p>
           You retain ownership of content you submit (essays, messages, class
-          materials). You grant Evaluchat a limited licence to host, process,
+          materials). You grant evaluchat a limited licence to host, process,
           display, and transmit that content solely to operate and improve the
           Service as described in these Terms and the Privacy Policy.
         </p>
         <p>
-          The Evaluchat product, branding, and software (aside from open-source
+          The evaluchat product, branding, and software (aside from open-source
           components under their own licences, including lineage from LangChain
-          Evaluchat) remain ours or our licensors’.
+          evaluchat) remain ours or our licensors’.
         </p>
       </section>
 
@@ -124,7 +124,7 @@ export function TermsOfServiceContent() {
       <section className="space-y-3">
         <h2>Governing law</h2>
         <p>
-          These Terms (as between you and Evaluchat regarding the Service) are
+          These Terms (as between you and evaluchat regarding the Service) are
           governed by the laws of South Africa, without regard to
           conflict-of-law rules. The public beta has no paid access or billing
           disputes.

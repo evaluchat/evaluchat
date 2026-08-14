@@ -68,7 +68,7 @@ export function HeroSection() {
               loop
               playsInline
               preload="metadata"
-              aria-label="Short demo of Evaluchat coaching a writing assignment"
+              aria-label="Short demo of evaluchat coaching a writing assignment"
             />
           </div>
         </div>
@@ -82,32 +82,30 @@ export function HypothesisSection() {
     <section className="hypothesis section" id="about">
       <div className="container hypo-grid">
         <div>
-          <h2>AI changed the conditions. Not the need for evidence.</h2>
+          <h2>
+            When AI is part of the work, the answer alone is not evidence.
+          </h2>
           <p className="hypo-stand">
-            An AI can write the paper, solve the problem and find the sources.
-            That does not tell us what the person using it understands.
+            AI can write an essay, solve a problem, and find sources.
           </p>
           <p className="hypo-stand">
-            Removing AI does not answer every question either. It can hide the
-            judgement, reasoning and decisions people make when AI is part of
-            the work.
+            A completed task no longer tells us, by itself, what a person
+            understood, decided, or can do.
           </p>
           <p className="hypo-stand">
-            <strong>
-              We don&apos;t know what learning and assessment should measure
-              now.
-            </strong>
+            Banning AI does not settle the question. It can hide the judgement
+            and reasoning involved in working with it.
           </p>
         </div>
         <div className="guide-card">
           <p className="g-label">The shared question</p>
           <p className="g-q">
-            What should people still know, decide, explain and demonstrate when
+            What should people still know, decide, explain, and demonstrate when
             AI is available?
           </p>
           <p className="g-sub">
-            Evaluchat does not offer a settled answer. It makes the alternatives
-            easier to try, inspect and improve together.
+            Evaluchat does not prescribe the answer. It makes competing methods
+            visible, testable, and easier to improve.
           </p>
         </div>
       </div>
@@ -119,33 +117,36 @@ export function MeasuresSection() {
   return (
     <section className="measures section" id="measures">
       <div className="container">
-        <h2>Three questions. Not one.</h2>
+        <h2>Three questions, not one.</h2>
         <p className="lede">
-          When we ask whether someone can &quot;do it&quot;, we might mean very
-          different things.
+          When we ask whether someone can “do it,” we may be asking about
+          different capabilities.
         </p>
         <div className="meas-grid">
           <div className="meas">
             <span className="m-n">01</span>
-            <b>Produce</b>
-            <p>Can they produce the conventional answer without AI?</p>
+            <b>Produce independently</b>
+            <p>Can they produce the work without AI?</p>
           </div>
           <div className="meas">
             <span className="m-n">02</span>
             <b>Understand</b>
-            <p>Do they have the underlying knowledge and understanding?</p>
+            <p>
+              Can they explain the underlying knowledge, choices, and reasoning?
+            </p>
           </div>
           <div className="meas">
             <span className="m-n">03</span>
             <b>Work with AI</b>
             <p>
-              Can they question it, evaluate it, correct it and use it
-              effectively?
+              Can they question it, evaluate it, correct it, and decide when not
+              to rely on it?
             </p>
           </div>
         </div>
         <p className="lede" style={{ marginTop: 28 }}>
-          These abilities overlap. They aren&apos;t interchangeable.
+          These capabilities overlap, but success in one does not establish the
+          others.
         </p>
       </div>
     </section>
@@ -327,7 +328,7 @@ export function ResearchSection() {
         <div className="dark-ctas">
           <a
             className="btn btn-outline"
-            href="https://research.evaluchat.org/apparatus/index.html"
+            href="https://research.evaluchat.org/methods/index.html"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -409,7 +410,7 @@ export function FinalCtaSection() {
           </OpenCanvasButton>
           <a
             className="btn btn-outline"
-            href="https://research.evaluchat.org/apparatus/index.html"
+            href="https://research.evaluchat.org/methods/index.html"
             target="_blank"
             rel="noopener noreferrer"
           >

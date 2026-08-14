@@ -13,11 +13,11 @@ export function LandingFooter() {
               <Image
                 className="brand-mark"
                 src="/evaluchat.png"
-                alt="Evaluchat"
+                alt="evaluchat"
                 width={32}
                 height={32}
               />
-              <span>Evaluchat</span>
+              <span>evaluchat</span>
             </Link>
             <p>
               Open-source infrastructure for experimenting with AI in education.
@@ -55,7 +55,7 @@ export function LandingFooter() {
           </div>
         </div>
         <div className="foot-bottom">
-          <span>© 2026 Evaluchat</span>
+          <span>© 2026 evaluchat</span>
         </div>
       </div>
     </footer>

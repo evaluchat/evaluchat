@@ -10,9 +10,9 @@ export function PrivacyPolicyContent() {
     <>
       <section className="space-y-3">
         <p>
-          This Privacy Policy explains how Evaluchat (“we”, “us”) collects,
+          This Privacy Policy explains how evaluchat (“we”, “us”) collects,
           uses, and shares personal data when you visit our websites, create an
-          account, or use the Evaluchat teaching Service (chat coaching, writing
+          account, or use the evaluchat teaching Service (chat coaching, writing
           canvas, and related teacher tools).
         </p>
         <p>
@@ -48,7 +48,7 @@ export function PrivacyPolicyContent() {
             When a teacher invites students into a class or assignment, that
             teacher (or their institution) may also be a controller for
             classroom personal data they choose to put into the Service. We
-            process that data to provide Evaluchat under their instructions and
+            process that data to provide evaluchat under their instructions and
             our <Link href={TERMS_PATH}>Terms of Service</Link>.
           </li>
         </ul>

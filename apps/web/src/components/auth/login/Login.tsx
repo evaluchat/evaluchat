@@ -89,10 +89,10 @@ export function Login() {
             src="/evaluchat.png"
             width={64}
             height={64}
-            alt="Evaluchat Logo"
+            alt="evaluchat Logo"
           />
           <span className="text-5xl font-semibold tracking-tight">
-            Evaluchat
+            evaluchat
           </span>
         </div>
         {/* Brand copy + workspace demo (desktop left panel) */}
