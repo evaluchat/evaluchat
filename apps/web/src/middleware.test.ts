@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { config } from "./middleware";
 import {
   isPublicPath,
+  shouldBounceSignedInFromAuth,
   unauthenticatedPageRedirect,
 } from "./lib/supabase/middleware";
 
@@ -18,10 +19,28 @@ describe("middleware public routes", () => {
     expect(isPublicPath("/terms")).toBe(true);
     expect(isPublicPath("/auth/login")).toBe(true);
     expect(isPublicPath("/auth/signup")).toBe(true);
+    expect(isPublicPath("/auth/forgot-password")).toBe(true);
+    expect(isPublicPath("/auth/reset-password")).toBe(true);
     expect(isPublicPath("/invite/accept")).toBe(false);
     expect(isPublicPath("/teacher")).toBe(false);
     expect(isPublicPath("/student")).toBe(false);
     expect(isPublicPath("/privacy-extra")).toBe(false);
+  });
+
+  it("does not bounce signed-in users away from password-reset auth routes", () => {
+    expect(shouldBounceSignedInFromAuth("/auth/login")).toBe(true);
+    expect(shouldBounceSignedInFromAuth("/auth/signup")).toBe(true);
+    expect(shouldBounceSignedInFromAuth("/auth/confirm")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/signout")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/forgot-password")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/reset-password")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/forgot-password/")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/reset-password?code=x")).toBe(
+      false
+    );
+    expect(shouldBounceSignedInFromAuth("/workspace")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/authentic")).toBe(false);
+    expect(shouldBounceSignedInFromAuth("/auth/signout-old")).toBe(true);
   });
 
   it("redirects unauthenticated page shells to login, but not API routes", () => {
@@ -34,6 +53,8 @@ describe("middleware public routes", () => {
 
     expect(unauthenticatedPageRedirect("/")).toBeNull();
     expect(unauthenticatedPageRedirect("/auth/login")).toBeNull();
+    expect(unauthenticatedPageRedirect("/auth/forgot-password")).toBeNull();
+    expect(unauthenticatedPageRedirect("/auth/reset-password")).toBeNull();
     expect(unauthenticatedPageRedirect("/privacy")).toBeNull();
     expect(unauthenticatedPageRedirect("/terms")).toBeNull();
     expect(unauthenticatedPageRedirect("/invite/accept")).toBe("/auth/login");
