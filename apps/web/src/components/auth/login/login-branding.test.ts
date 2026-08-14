@@ -15,7 +15,7 @@ import {
 describe("login-branding", () => {
   it("points docs to the public docs site", () => {
     expect(DOCS_URL).toBe(
-      "https://knowledge.evaluchat.org/platform-capabilities.html"
+      "https://knowledge.evaluchat.org/concepts/platform-capabilities.html"
     );
   });
 
