@@ -540,6 +540,64 @@ describe("method run launch", () => {
     );
   });
 
+  it("reconciles operator submitted counts when the participant manifest is ahead", async () => {
+    const item = await createMethodWorkspaceItem("user-1", "ai-assisted-essay");
+    harness.findUserByEmail.mockResolvedValue({
+      id: "user-2",
+      email: "a@example.com",
+    });
+    const launched = await submitWorkspaceForm("user-1", item.id, {
+      ...assignmentBrief,
+      participants: "a@example.com",
+    });
+    if (launched.item.kind !== "method" || !launched.item.run) return;
+    const participantId = launched.item.run.participants[0].itemId!;
+    const participantManifest = manifestFor("user-2");
+    participantManifest.items[participantId].submission = {
+      status: "submitted",
+      submittedAt: "2026-08-13T12:00:00.000Z",
+    };
+    participantManifest.items[participantId].threadId = "thread-stale";
+
+    const operator = await getWorkspaceItem("user-1", item.id);
+    expect(operator?.kind).toBe("method");
+    if (operator?.kind !== "method") return;
+    expect(operator.run?.participants[0].submissionStatus).toBe("submitted");
+    expect(operator.run?.participants[0].threadId).toBe("thread-stale");
+
+    const listed = await listWorkspaceItems("user-1");
+    const run = listed.find((candidate) => candidate.id === item.id);
+    expect(run?.kind).toBe("method");
+    if (run?.kind !== "method") return;
+    expect(run.run?.participants[0].submissionStatus).toBe("submitted");
+  });
+
+  it("syncs the operator row on idempotent participant submit", async () => {
+    const item = await createMethodWorkspaceItem("user-1", "ai-assisted-essay");
+    harness.findUserByEmail.mockResolvedValue({
+      id: "user-2",
+      email: "a@example.com",
+    });
+    const launched = await submitWorkspaceForm("user-1", item.id, {
+      ...assignmentBrief,
+      participants: "a@example.com",
+    });
+    if (launched.item.kind !== "method" || !launched.item.run) return;
+    const participantId = launched.item.run.participants[0].itemId!;
+    const participantManifest = manifestFor("user-2");
+    participantManifest.items[participantId].submission = {
+      status: "submitted",
+      submittedAt: "2026-08-13T12:00:00.000Z",
+    };
+
+    await submitWorkspaceForm("user-2", participantId, {});
+    const operator = await getWorkspaceItem("user-1", item.id);
+    expect(
+      operator?.kind === "method" &&
+        operator.run?.participants[0].submissionStatus
+    ).toBe("submitted");
+  });
+
   it("forbids a non-operator from loading the run review", async () => {
     const item = await createMethodWorkspaceItem("user-1", "ai-assisted-essay");
     harness.findUserByEmail.mockResolvedValue({

@@ -299,9 +299,17 @@ export async function listWorkspaceItems(
     }
   }
   const manifest = await readManifest(userId);
-  return Object.values(manifest.items)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .map(enrichWorkspaceItem);
+  const items = await Promise.all(
+    Object.values(manifest.items)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map(async (item) => {
+        if (item.kind === "method" && item.run) {
+          return reconcileMethodRunSubmissions(userId, item);
+        }
+        return item;
+      })
+  );
+  return items.map(enrichWorkspaceItem);
 }
 
 export async function createWorkspaceItem(
@@ -476,21 +484,109 @@ function markOperatorParticipantSubmitted(
   participantItemId: string,
   submittedAt: string,
   threadId?: string
-): void {
+): boolean {
   const operatorItem = manifest.items[operatorItemId];
-  if (operatorItem?.kind !== "method" || !operatorItem.run) return;
+  if (operatorItem?.kind !== "method" || !operatorItem.run) return false;
   const row = operatorItem.run.participants.find(
     (participant) =>
       participant.itemId === participantItemId || participant.userId === userId
   );
-  if (row) {
-    row.submissionStatus = "submitted";
-    row.submittedAt = submittedAt;
-    row.threadId = threadId;
-    row.invitationStatus = "accepted";
-  }
+  if (!row) return false;
+  row.submissionStatus = "submitted";
+  row.submittedAt = submittedAt;
+  row.threadId = threadId ?? row.threadId;
+  row.invitationStatus = "accepted";
   operatorItem.updatedAt = submittedAt;
   manifest.items[operatorItem.id] = operatorItem;
+  return true;
+}
+
+async function syncOperatorParticipantSubmission(
+  item: MethodParticipantWorkspaceItem,
+  submittedAt: string,
+  threadId?: string
+): Promise<void> {
+  await withUserLock(item.operatorId, async () => {
+    const manifest = await readManifest(item.operatorId);
+    if (
+      markOperatorParticipantSubmitted(
+        manifest,
+        item.operatorItemId,
+        item.ownerId,
+        item.id,
+        submittedAt,
+        threadId
+      )
+    ) {
+      await writeManifest(item.operatorId, manifest);
+    }
+  });
+}
+
+async function reconcileMethodRunSubmissions(
+  operatorId: string,
+  item: MethodWorkspaceItem
+): Promise<MethodWorkspaceItem> {
+  if (!item.run) return item;
+  let changed = false;
+  const submittedAtFallback = new Date().toISOString();
+
+  for (const row of item.run.participants) {
+    if (!row.userId || !row.itemId) continue;
+    if (row.submissionStatus === "submitted") continue;
+    try {
+      const participantManifest = await readManifest(row.userId);
+      const participant = participantManifest.items[row.itemId];
+      if (
+        participant?.kind !== "method_participant" ||
+        participant.operatorId !== operatorId ||
+        participant.operatorItemId !== item.id ||
+        participant.submission?.status !== "submitted"
+      ) {
+        continue;
+      }
+      row.submissionStatus = "submitted";
+      row.submittedAt =
+        participant.submission.submittedAt ?? submittedAtFallback;
+      row.threadId = participant.threadId ?? row.threadId;
+      row.invitationStatus = "accepted";
+      changed = true;
+    } catch (error) {
+      console.error(
+        "[workspace] failed to reconcile participant submission",
+        row.itemId,
+        error
+      );
+    }
+  }
+
+  if (!changed) return item;
+
+  await withUserLock(operatorId, async () => {
+    const manifest = await readManifest(operatorId);
+    const stored = manifest.items[item.id];
+    if (stored?.kind !== "method" || !stored.run) return;
+    for (const row of item.run!.participants) {
+      const storedRow = stored.run.participants.find(
+        (candidate) =>
+          candidate.itemId === row.itemId ||
+          (row.userId && candidate.userId === row.userId) ||
+          candidate.email === row.email
+      );
+      if (!storedRow || storedRow.submissionStatus === "submitted") continue;
+      if (row.submissionStatus === "submitted") {
+        storedRow.submissionStatus = "submitted";
+        storedRow.submittedAt = row.submittedAt;
+        storedRow.threadId = row.threadId;
+        storedRow.invitationStatus = "accepted";
+      }
+    }
+    stored.updatedAt = new Date().toISOString();
+    manifest.items[item.id] = stored;
+    await writeManifest(operatorId, manifest);
+  });
+
+  return item;
 }
 
 async function submitMethodParticipant(
@@ -499,14 +595,34 @@ async function submitMethodParticipant(
   item: MethodParticipantWorkspaceItem,
   liveThreadId?: string
 ): Promise<{ item: WorkspaceItem; idempotent: boolean }> {
-  if (item.submission?.status === "submitted") {
-    return { item, idempotent: true };
-  }
-
   let threadId = item.threadId;
   if (liveThreadId && liveThreadId !== threadId) {
     threadId = await attachOwnedThread(userId, item.id, liveThreadId);
     item.threadId = threadId;
+  }
+
+  if (item.submission?.status === "submitted") {
+    if (item.operatorId === userId) {
+      if (
+        markOperatorParticipantSubmitted(
+          manifest,
+          item.operatorItemId,
+          userId,
+          item.id,
+          item.submission.submittedAt,
+          threadId
+        )
+      ) {
+        await writeManifest(userId, manifest);
+      }
+    } else {
+      await syncOperatorParticipantSubmission(
+        item,
+        item.submission.submittedAt,
+        threadId
+      );
+    }
+    return { item, idempotent: true };
   }
 
   const submittedAt = new Date().toISOString();
@@ -542,7 +658,9 @@ async function submitMethodParticipant(
         });
       }
     } catch (error) {
-      if (!isMissingThreadError(error)) throw error;
+      if (!isMissingThreadError(error)) {
+        console.error("[workspace] failed to mark thread submitted", error);
+      }
     }
   }
 
@@ -557,18 +675,7 @@ async function submitMethodParticipant(
     );
     await writeManifest(userId, manifest);
   } else {
-    await withUserLock(item.operatorId, async () => {
-      const operatorManifest = await readManifest(item.operatorId);
-      markOperatorParticipantSubmitted(
-        operatorManifest,
-        item.operatorItemId,
-        userId,
-        item.id,
-        submittedAt,
-        threadId
-      );
-      await writeManifest(item.operatorId, operatorManifest);
-    });
+    await syncOperatorParticipantSubmission(item, submittedAt, threadId);
   }
 
   return { item, idempotent: false };
@@ -824,7 +931,7 @@ export async function claimPendingMethodInvites(
       participantItemId = participantItem.id;
     });
 
-    if (invite.operatorId !== userId && participantItemId) {
+    if (participantItemId) {
       await withUserLock(invite.operatorId, async () => {
         const operatorManifest = await readManifest(invite.operatorId);
         const operatorItem = operatorManifest.items[invite.operatorItemId];
@@ -931,6 +1038,11 @@ export async function getWorkspaceItem(
   const item = manifest.items[itemId];
   if (!item || item.ownerId !== userId || item.status !== "active") {
     return undefined;
+  }
+  if (item.kind === "method" && item.run) {
+    return enrichWorkspaceItem(
+      await reconcileMethodRunSubmissions(userId, item)
+    );
   }
   return enrichWorkspaceItem(item);
 }
