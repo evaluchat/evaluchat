@@ -2,13 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  ClipboardList,
-  FileText,
-  FlaskConical,
-  LogOut,
-  Trash2,
-} from "lucide-react";
+import { ClipboardList, FileText, FlaskConical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateWorkspaceItemDialog } from "./create-workspace-item-dialog";
 import type { WorkspaceItem } from "@/lib/workspace/types";
@@ -19,6 +13,8 @@ import {
 } from "@/components/teaching/workspace-site-header";
 import { DOCS_URL } from "@/components/auth/login/login-branding";
 import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
+import { UserMenu } from "./user-menu";
+import { useUserContext } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   formatWorkspaceItemDate,
@@ -68,6 +64,7 @@ export function WorkspaceHome() {
   const [itemToDelete, setItemToDelete] = useState<WorkspaceItem>();
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
+  const { user, loading: userLoading } = useUserContext();
 
   useEffect(() => {
     fetch("/api/workspace/items", { credentials: "include" })
@@ -125,10 +122,7 @@ export function WorkspaceHome() {
         >
           Docs
         </a>
-        <Link href="/auth/signout" className={workspaceNavGhostClass}>
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </Link>
+        {!userLoading && user ? <UserMenu user={user} /> : null}
       </WorkspaceSiteHeader>
       <section className="mx-auto flex h-[calc(100vh-60px)] max-w-5xl flex-col overflow-hidden px-4 py-6 sm:px-6">
         <div className="mb-4 flex justify-end">
