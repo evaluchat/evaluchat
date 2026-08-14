@@ -42,12 +42,33 @@ import {
 } from "@/lib/teaching/invitation-helpers";
 
 const MANIFEST_KEY = "manifest";
-const locks = new Map<string, Promise<void>>();
+const LOCK_KEY = "lock";
+/** Store SDK TTL is in minutes (see @langchain/langgraph-sdk StoreClient.putItem). */
+const WORKSPACE_LOCK_TTL_MINUTES = 1;
+
+/** Test seam: mutate `.value` for lease TTL / renewal-interval math. */
+export const workspaceLockTtlMs = { value: 60_000 };
+/** Test seam: mutate `.value` to keep lock-timeout tests fast. */
+export const workspaceLockRetryDelayMs = { value: 100 };
+/** Test seam: mutate `.value` to bound acquisition wait; default ~10s. */
+export const workspaceLockAcquireTimeoutMs = { value: 10_000 };
+
+type WorkspaceLockValue = {
+  token: string;
+  expiresAt: number;
+};
 
 export class WorkspaceItemNotFoundError extends Error {
   constructor() {
     super("Workspace item not found");
     this.name = "WorkspaceItemNotFoundError";
+  }
+}
+
+export class WorkspaceLockTimeoutError extends Error {
+  constructor(userId: string) {
+    super(`Timed out acquiring workspace lock for user ${userId}`);
+    this.name = "WorkspaceLockTimeoutError";
   }
 }
 
@@ -146,22 +167,112 @@ async function writeManifest(
   await client().store.putItem(namespace(userId), MANIFEST_KEY, manifest);
 }
 
+function lockValue(value: unknown): WorkspaceLockValue | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<WorkspaceLockValue>;
+  if (
+    typeof candidate.token !== "string" ||
+    typeof candidate.expiresAt !== "number"
+  ) {
+    return undefined;
+  }
+  return { token: candidate.token, expiresAt: candidate.expiresAt };
+}
+
+async function acquireUserLock(userId: string): Promise<string> {
+  const ns = namespace(userId);
+  const token = randomUUID();
+  const deadline = Date.now() + workspaceLockAcquireTimeoutMs.value;
+
+  while (Date.now() < deadline) {
+    const existing = lockValue(
+      (await client().store.getItem(ns, LOCK_KEY))?.value
+    );
+    const heldByOther =
+      existing && existing.token !== token && existing.expiresAt > Date.now();
+
+    if (heldByOther) {
+      await sleep(workspaceLockRetryDelayMs.value);
+      continue;
+    }
+
+    // Free, missing, or expired: claim (last-writer-wins among contenders).
+    const expiresAt = Date.now() + workspaceLockTtlMs.value;
+    await client().store.putItem(
+      ns,
+      LOCK_KEY,
+      { token, expiresAt },
+      { ttl: WORKSPACE_LOCK_TTL_MINUTES }
+    );
+    const stored = lockValue(
+      (await client().store.getItem(ns, LOCK_KEY))?.value
+    );
+    if (stored?.token === token) {
+      // Settle-verify: catch a late contender putItem that landed after read-back.
+      await sleep(workspaceLockRetryDelayMs.value);
+      const settled = lockValue(
+        (await client().store.getItem(ns, LOCK_KEY))?.value
+      );
+      if (settled?.token === token) {
+        return token;
+      }
+    }
+    await sleep(workspaceLockRetryDelayMs.value);
+  }
+
+  throw new WorkspaceLockTimeoutError(userId);
+}
+
+async function releaseUserLock(userId: string, token: string): Promise<void> {
+  const ns = namespace(userId);
+  const stored = lockValue((await client().store.getItem(ns, LOCK_KEY))?.value);
+  if (stored?.token !== token) return;
+  await client().store.deleteItem(ns, LOCK_KEY);
+  // An in-flight heartbeat renewal may have re-created our lock after the
+  // delete; at most one can be in flight (interval cleared before release).
+  const after = lockValue((await client().store.getItem(ns, LOCK_KEY))?.value);
+  if (after?.token === token) {
+    await client().store.deleteItem(ns, LOCK_KEY);
+  }
+}
+
+async function renewUserLock(userId: string, token: string): Promise<void> {
+  const ns = namespace(userId);
+  await client().store.putItem(
+    ns,
+    LOCK_KEY,
+    { token, expiresAt: Date.now() + workspaceLockTtlMs.value },
+    { ttl: WORKSPACE_LOCK_TTL_MINUTES }
+  );
+}
+
 async function withUserLock<T>(
   userId: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  const previous = locks.get(userId) ?? Promise.resolve();
-  let release!: () => void;
-  const current = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  locks.set(userId, current);
-  await previous;
+  const token = await acquireUserLock(userId);
+  let released = false;
+  let renewalPromise: Promise<void> | null = null;
+  const renewalMs = Math.max(1, Math.floor(workspaceLockTtlMs.value / 3));
+  const heartbeat = setInterval(() => {
+    if (released) return;
+    renewalPromise = renewUserLock(userId, token);
+  }, renewalMs);
   try {
     return await operation();
   } finally {
-    release();
-    if (locks.get(userId) === current) locks.delete(userId);
+    released = true;
+    clearInterval(heartbeat);
+    // Await any renewal already in flight so it cannot re-create the lock
+    // after release deletes it. Renewals are best-effort; swallow errors.
+    if (renewalPromise) {
+      try {
+        await renewalPromise;
+      } catch {
+        // best-effort renewal failure — the lock will expire via TTL
+      }
+    }
+    await releaseUserLock(userId, token);
   }
 }
 
@@ -1168,6 +1279,13 @@ export async function getMethodParticipantReview(
   };
 }
 
+/**
+ * Resolve whether method tracking may be written/read for a thread.
+ * Accepts either owner metadata key: authoritative `user_id` (server-stamped
+ * via the proxy) preferred, with `supabase_user_id` (client ThreadProvider)
+ * as fallback. This is tracking-policy only — thread ownership gates stay
+ * strict on `user_id`.
+ */
 export async function resolveMethodTrackingAccess(
   threadId: string,
   userId: string
@@ -1176,8 +1294,14 @@ export async function resolveMethodTrackingAccess(
   if (!threadId) return denied;
   try {
     const thread = await client().threads.get(threadId);
-    const ownerId = thread?.metadata?.user_id;
-    const itemId = thread?.metadata?.workspace_item_id;
+    const metadata = (thread?.metadata || {}) as Record<string, unknown>;
+    const ownerId =
+      typeof metadata.user_id === "string"
+        ? metadata.user_id
+        : typeof metadata.supabase_user_id === "string"
+          ? metadata.supabase_user_id
+          : undefined;
+    const itemId = metadata.workspace_item_id;
     if (typeof ownerId !== "string" || typeof itemId !== "string")
       return denied;
     const manifest = await readManifest(ownerId);
