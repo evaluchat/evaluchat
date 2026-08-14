@@ -531,7 +531,9 @@ export function TextRendererComponent(props: TextRendererProps) {
   return (
     <div className="w-full h-full mt-2 flex flex-col border-t-[1px] border-gray-200 overflow-y-auto py-5 relative">
       <EditActionBar
-        isActive={pendingEdit?.isActive ?? false}
+        isActive={
+          (pendingEdit?.isActive ?? false) && phaseState !== "submitted"
+        }
         onKeep={handleKeep}
         onUndo={handleUndo}
       />

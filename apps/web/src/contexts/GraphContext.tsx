@@ -2077,6 +2077,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         await markThreadSubmitted();
       }
     }
+    setPendingEdit(null);
     setPhaseState("submitted");
     return { wordCount, messageCount };
   };
