@@ -204,8 +204,8 @@ export const getModelConfig = (
   baseUrl?: string;
   defaultHeaders?: Record<string, string>;
 } => {
-  const customModelName = config.configurable?.customModelName as string;
-  if (!customModelName) throw new Error("Model name is missing in config.");
+  const customModelName =
+    (config.configurable?.customModelName as string) || FREE_ASSIGNMENT_MODEL;
 
   const modelConfig = config.configurable?.modelConfig as CustomModelConfig;
 

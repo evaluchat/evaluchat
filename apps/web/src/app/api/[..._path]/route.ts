@@ -283,6 +283,62 @@ async function handleRequest(req: NextRequest, method: string) {
           );
         }
 
+        // Model name is server-authoritative. Strip client-supplied
+        // customModelName; override from the assignment record when set.
+        if (
+          classification.kind === "thread_by_id" ||
+          isThreadCreate(method, classification)
+        ) {
+          try {
+            let assignmentId: unknown = parsedBody.metadata?.assignment_id;
+            if (classification.kind === "thread_by_id") {
+              const threadRes = await fetch(
+                `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
+                {
+                  headers: { "x-api-key": process.env.LANGCHAIN_API_KEY || "" },
+                }
+              );
+              const thread = threadRes.ok ? await threadRes.json() : null;
+              assignmentId = thread?.metadata?.assignment_id;
+            }
+            const assignment =
+              typeof assignmentId === "string" && assignmentId.length > 0
+                ? (await getCustomAssignmentById(assignmentId)) ||
+                  (await getSeedAssignmentById(assignmentId))
+                : undefined;
+            const assignmentModel =
+              typeof assignment?.customModelName === "string"
+                ? assignment.customModelName
+                : "";
+            if (parsedBody.input && typeof parsedBody.input === "object") {
+              delete parsedBody.input.customModelName;
+            }
+            if (
+              parsedBody.metadata &&
+              typeof parsedBody.metadata === "object"
+            ) {
+              delete parsedBody.metadata.customModelName;
+            }
+            if (assignmentModel) {
+              parsedBody.config.configurable.customModelName = assignmentModel;
+            } else {
+              delete parsedBody.config.configurable.customModelName;
+            }
+          } catch (modelError) {
+            console.error("Failed to resolve server model name", modelError);
+            if (parsedBody.input && typeof parsedBody.input === "object") {
+              delete parsedBody.input.customModelName;
+            }
+            if (
+              parsedBody.metadata &&
+              typeof parsedBody.metadata === "object"
+            ) {
+              delete parsedBody.metadata.customModelName;
+            }
+            delete parsedBody.config.configurable.customModelName;
+          }
+        }
+
         options.body = JSON.stringify(parsedBody);
       } else {
         options.body = bodyText;
