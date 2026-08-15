@@ -38,6 +38,12 @@ const request = (values: unknown) =>
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ values }),
   });
+const malformedRequest = () =>
+  new NextRequest("http://localhost/api/workspace/items/wi_1/submit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{",
+  });
 
 describe("POST /api/workspace/items/[id]/submit", () => {
   beforeEach(() => {
@@ -78,6 +84,18 @@ describe("POST /api/workspace/items/[id]/submit", () => {
       }
     );
     expect(await response.json()).toMatchObject({ idempotent: false });
+  });
+
+  it("rejects malformed JSON without submitting the form", async () => {
+    harness.verifyUserAuthenticated.mockResolvedValue({
+      user: { id: "user-1" },
+    });
+
+    const response = await POST(malformedRequest(), context("wi_1"));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid request body" });
+    expect(harness.submitWorkspaceForm).not.toHaveBeenCalled();
   });
 
   it("returns validation issues without writing", async () => {

@@ -16,13 +16,36 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const { id } = await context.params;
+  let body: unknown;
   try {
-    const body = await request.json();
-    const result = await submitWorkspaceForm(auth.user.id, id, body?.values, {
-      profileId:
-        typeof body?.profileId === "string" ? body.profileId : undefined,
-      threadId: typeof body?.threadId === "string" ? body.threadId : undefined,
-    });
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
+    );
+  }
+
+  const parsedBody =
+    body !== null && typeof body === "object"
+      ? (body as Record<string, unknown>)
+      : {};
+  try {
+    const result = await submitWorkspaceForm(
+      auth.user.id,
+      id,
+      parsedBody.values,
+      {
+        profileId:
+          typeof parsedBody.profileId === "string"
+            ? parsedBody.profileId
+            : undefined,
+        threadId:
+          typeof parsedBody.threadId === "string"
+            ? parsedBody.threadId
+            : undefined,
+      }
+    );
     return NextResponse.json(
       { item: result.item, idempotent: result.idempotent },
       { status: result.idempotent ? 200 : 201 }

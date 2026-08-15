@@ -37,19 +37,40 @@ export async function POST(request: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  let body: unknown;
   try {
-    const body = await request.json();
-    if (typeof body?.methodId === "string" && body.methodId) {
-      const item = await createMethodWorkspaceItem(user.id, body.methodId);
-      return NextResponse.json({ item }, { status: 201 });
-    }
-    if (typeof body?.templateId !== "string" || !body.templateId) {
-      return NextResponse.json(
-        { error: "Unsupported template" },
-        { status: 400 }
-      );
-    }
-    const item = await createWorkspaceItem(user.id, body.templateId);
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
+    );
+  }
+
+  const parsedBody =
+    body !== null && typeof body === "object"
+      ? (body as Record<string, unknown>)
+      : {};
+  const methodId =
+    typeof parsedBody.methodId === "string" && parsedBody.methodId
+      ? parsedBody.methodId
+      : undefined;
+  const templateId =
+    typeof parsedBody.templateId === "string" && parsedBody.templateId
+      ? parsedBody.templateId
+      : undefined;
+  const hasMethodId = methodId !== undefined;
+  if (!hasMethodId && templateId === undefined) {
+    return NextResponse.json(
+      { error: "Unsupported template" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const item = hasMethodId
+      ? await createMethodWorkspaceItem(user.id, methodId)
+      : await createWorkspaceItem(user.id, templateId!);
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
     if (error instanceof UnsupportedMethodError) {
@@ -61,7 +82,7 @@ export async function POST(request: NextRequest) {
     console.error("[workspace] failed to create item", error);
     return NextResponse.json(
       { error: "Could not create workspace item" },
-      { status: 400 }
+      { status: 500 }
     );
   }
 }
