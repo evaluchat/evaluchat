@@ -60,6 +60,42 @@ async function assertThreadOwnership(
   return null;
 }
 
+/** Keep only sampling fields from a client-supplied CustomModelConfig. */
+function whitelistModelConfigSampling(
+  container: Record<string, unknown> | undefined
+): void {
+  if (!container || typeof container !== "object") return;
+  if (!Object.prototype.hasOwnProperty.call(container, "modelConfig")) return;
+  const src = container.modelConfig;
+  const next: Record<string, unknown> = {};
+  if (src && typeof src === "object" && !Array.isArray(src)) {
+    const rec = src as Record<string, unknown>;
+    if ("temperatureRange" in rec) {
+      next.temperatureRange = rec.temperatureRange;
+    }
+    if ("maxTokens" in rec) {
+      next.maxTokens = rec.maxTokens;
+    }
+  }
+  container.modelConfig = next;
+}
+
+function sanitizeClientModelConfig(parsedBody: {
+  config?: { configurable?: Record<string, unknown> };
+  input?: unknown;
+  metadata?: unknown;
+}): void {
+  whitelistModelConfigSampling(parsedBody.config?.configurable);
+  if (parsedBody.input && typeof parsedBody.input === "object") {
+    whitelistModelConfigSampling(parsedBody.input as Record<string, unknown>);
+  }
+  if (parsedBody.metadata && typeof parsedBody.metadata === "object") {
+    whitelistModelConfigSampling(
+      parsedBody.metadata as Record<string, unknown>
+    );
+  }
+}
+
 async function getAssignmentTreatment(assignmentId: unknown) {
   if (typeof assignmentId !== "string" || assignmentId.length === 0) {
     return undefined;
@@ -324,6 +360,7 @@ async function handleRequest(req: NextRequest, method: string) {
             } else {
               delete parsedBody.config.configurable.customModelName;
             }
+            sanitizeClientModelConfig(parsedBody);
           } catch (modelError) {
             console.error("Failed to resolve server model name", modelError);
             if (parsedBody.input && typeof parsedBody.input === "object") {
@@ -336,6 +373,7 @@ async function handleRequest(req: NextRequest, method: string) {
               delete parsedBody.metadata.customModelName;
             }
             delete parsedBody.config.configurable.customModelName;
+            sanitizeClientModelConfig(parsedBody);
           }
         }
 

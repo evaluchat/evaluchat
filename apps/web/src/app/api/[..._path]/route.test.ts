@@ -128,9 +128,19 @@ const clientModelPayload = {
   config: {
     configurable: {
       customModelName: CLIENT_MODEL,
-      modelConfig: { temperatureRange: { current: 0.4 } },
+      modelConfig: {
+        provider: "azure_openai",
+        temperatureRange: { current: 0.4 },
+        maxTokens: { current: 4096 },
+        azureConfig: { azureOpenAIApiKey: "sk-client" },
+      },
     },
   },
+};
+
+const expectedSamplingModelConfig = {
+  temperatureRange: { current: 0.4 },
+  maxTokens: { current: 4096 },
 };
 
 describe("model sanitization", () => {
@@ -176,9 +186,13 @@ describe("model sanitization", () => {
     expect(body.config.configurable).not.toHaveProperty("customModelName");
     expect(body.input.customModelName).toBeUndefined();
     expect(body.metadata.customModelName).toBeUndefined();
-    expect(body.config.configurable.modelConfig).toEqual({
-      temperatureRange: { current: 0.4 },
-    });
+    expect(body.config.configurable.modelConfig).toEqual(
+      expectedSamplingModelConfig
+    );
+    expect(body.config.configurable.modelConfig).not.toHaveProperty("provider");
+    expect(body.config.configurable.modelConfig).not.toHaveProperty(
+      "azureConfig"
+    );
   });
 
   it("overrides customModelName from the assignment record", async () => {
@@ -210,6 +224,13 @@ describe("model sanitization", () => {
     expect(body.config.configurable.customModelName).toBe(ASSIGNMENT_MODEL);
     expect(body.input.customModelName).toBeUndefined();
     expect(body.metadata.customModelName).toBeUndefined();
+    expect(body.config.configurable.modelConfig).toEqual(
+      expectedSamplingModelConfig
+    );
+    expect(body.config.configurable.modelConfig).not.toHaveProperty("provider");
+    expect(body.config.configurable.modelConfig).not.toHaveProperty(
+      "azureConfig"
+    );
   });
 
   it("strips customModelName when the assignment has no model", async () => {
