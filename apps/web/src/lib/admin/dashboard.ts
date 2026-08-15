@@ -15,6 +15,7 @@ import { listUsage } from "@/lib/workspace/usage-store";
 
 const USER_PAGE_SIZE = 200;
 const RECENT_REGISTRATION_LIMIT = 20;
+const USAGE_READ_CONCURRENCY = 20;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type AdminDashboardData = {
@@ -77,6 +78,21 @@ function dateTime(value: string): number {
   return Number.isFinite(time) ? time : 0;
 }
 
+async function listUsageForUsers(
+  users: User[]
+): Promise<Array<readonly [string, UsageTotals]>> {
+  const entries: Array<readonly [string, UsageTotals]> = [];
+  for (let index = 0; index < users.length; index += USAGE_READ_CONCURRENCY) {
+    const batch = await Promise.all(
+      users
+        .slice(index, index + USAGE_READ_CONCURRENCY)
+        .map(async (user) => [user.id, await listUsage(user.id)] as const)
+    );
+    entries.push(...batch);
+  }
+  return entries;
+}
+
 export async function getAdminDashboardData(
   now = new Date()
 ): Promise<AdminDashboardData> {
@@ -85,13 +101,11 @@ export async function getAdminDashboardData(
   const nowTime = now.getTime();
   const workspaceCountsPromise = listAllWorkspaceItemCounts(users);
   const invitationCountsPromise = listInvitationCounts(users);
-  const usagePromises = users.map(
-    async (user) => [user.id, await listUsage(user.id)] as const
-  );
+  const usagePromise = listUsageForUsers(users);
   const [workspaceCounts, invitationCounts, usageEntries] = await Promise.all([
     workspaceCountsPromise,
     invitationCountsPromise,
-    Promise.all(usagePromises),
+    usagePromise,
   ]);
   const usage = Object.fromEntries(usageEntries);
   const totalUsage = usageEntries.reduce(

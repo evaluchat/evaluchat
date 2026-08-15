@@ -64,16 +64,28 @@ export function aggregateUsageEvents(events: unknown[]): UsageTotals {
     (totals, event) => {
       if (!event || typeof event !== "object") return totals;
       const value = event as Record<string, unknown>;
-      const requests = Number(value.requests);
-      const tokensIn = Number(value.tokensIn);
-      const tokensOut = Number(value.tokensOut);
-      if (Number.isFinite(requests) && requests > 0) {
+      const requests = value.requests;
+      const tokensIn = value.tokensIn;
+      const tokensOut = value.tokensOut;
+      if (
+        typeof requests === "number" &&
+        Number.isFinite(requests) &&
+        requests > 0
+      ) {
         totals.requests += requests;
       }
-      if (Number.isFinite(tokensIn) && tokensIn > 0) {
+      if (
+        typeof tokensIn === "number" &&
+        Number.isFinite(tokensIn) &&
+        tokensIn > 0
+      ) {
         totals.tokensIn += tokensIn;
       }
-      if (Number.isFinite(tokensOut) && tokensOut > 0) {
+      if (
+        typeof tokensOut === "number" &&
+        Number.isFinite(tokensOut) &&
+        tokensOut > 0
+      ) {
         totals.tokensOut += tokensOut;
       }
       return totals;

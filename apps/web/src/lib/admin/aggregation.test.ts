@@ -73,6 +73,17 @@ describe("admin dashboard aggregation helpers", () => {
     ).toEqual({ requests: 3, tokensIn: 120, tokensOut: 43 });
   });
 
+  it.each([true, [1], "2", Number.NaN, -1, 0])(
+    "rejects non-positive or non-number usage values: %p",
+    (invalid) => {
+      expect(
+        aggregateUsageEvents([
+          { requests: invalid, tokensIn: invalid, tokensOut: invalid },
+        ])
+      ).toEqual({ requests: 0, tokensIn: 0, tokensOut: 0 });
+    }
+  );
+
   it("ranks usage by exact request count and masks missing emails", () => {
     expect(
       rankUsersByUsage(

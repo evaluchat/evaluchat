@@ -27,7 +27,7 @@ describe("provider usage meter", () => {
   beforeEach(() => {
     harness.maybeSingle
       .mockReset()
-      .mockResolvedValue({ data: null, error: null });
+      .mockResolvedValue({ data: { enabled: false }, error: null });
     harness.appendProviderUsageEvent.mockReset().mockResolvedValue(undefined);
   });
 
@@ -64,5 +64,28 @@ describe("provider usage meter", () => {
     });
     await recordPlatformProviderRun("user-1", "POST", "threads/one/runs", 200);
     expect(harness.appendProviderUsageEvent).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the BYOK lookup returns an error", async () => {
+    harness.maybeSingle.mockResolvedValue({
+      data: null,
+      error: new Error("lookup failed"),
+    });
+
+    await recordPlatformProviderRun("user-1", "POST", "threads/one/runs", 200);
+
+    expect(harness.appendProviderUsageEvent).not.toHaveBeenCalled();
+  });
+
+  it("passes token metadata to the usage event", async () => {
+    await recordPlatformProviderRun("user-1", "POST", "threads/one/runs", 200, {
+      tokensIn: 12,
+      tokensOut: 8,
+    });
+
+    expect(harness.appendProviderUsageEvent).toHaveBeenCalledWith("user-1", {
+      tokensIn: 12,
+      tokensOut: 8,
+    });
   });
 });
