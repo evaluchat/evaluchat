@@ -17,6 +17,7 @@ import {
   enforceWorkspaceThreadPolicy,
   supportsWorkspaceThreads,
 } from "../../../lib/workspace/thread-policy";
+import { recordPlatformProviderRun } from "../../../lib/admin/provider-meter";
 
 function getCorsHeaders() {
   return {
@@ -400,6 +401,8 @@ async function handleRequest(req: NextRequest, method: string) {
         statusText: res.statusText,
       });
     }
+
+    await recordPlatformProviderRun(user.id, method, path, res.status);
 
     const headers = new Headers({
       ...getCorsHeaders(),

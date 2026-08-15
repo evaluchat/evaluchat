@@ -49,6 +49,10 @@ export function unauthenticatedPageRedirect(
 ): "/auth/login" | null {
   const path = pathname.split("?")[0].replace(/\/+$/, "") || "/";
   if (path.startsWith("/api/")) return null;
+  // Let the route-level admin guard decide between a disabled 404 and the
+  // normal auth redirect. This keeps the disabled surface inert even before
+  // authentication is available to the middleware.
+  if (path === "/admin" || path.startsWith("/admin/")) return null;
   if (isPublicPath(path)) return null;
   return "/auth/login";
 }
@@ -129,7 +133,8 @@ export async function updateSession(request: NextRequest) {
     "/api/teacher",
     "/api/teaching",
     "/api/tracking",
-    "/api/admin",
+    "/api/admin/invitations",
+    "/api/admin/teachers",
     "/api/invitations",
   ];
 
@@ -138,13 +143,6 @@ export async function updateSession(request: NextRequest) {
       { error: "This product surface is no longer available" },
       { status: 410 }
     );
-  }
-
-  // Legacy role routes now land on the universal workspace.
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/workspace";
-    return NextResponse.redirect(url, 308);
   }
 
   // E2E test mode: skip Supabase auth check
