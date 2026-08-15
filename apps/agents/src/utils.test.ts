@@ -139,6 +139,35 @@ describe("provider resolution", () => {
     vi.restoreAllMocks();
   });
 
+  it("defaults to the budget model when customModelName is missing", () => {
+    const config = createMockConfig();
+    delete config.configurable!.customModelName;
+
+    const modelConfig = getModelConfig(config);
+
+    expect(modelConfig).toMatchObject({
+      modelName: "mimo-v2.5-free",
+      modelProvider: "openai",
+      apiKey: "zen-key",
+      baseUrl: "https://opencode.ai/zen/v1",
+    });
+  });
+
+  it("defaults to the budget model when customModelName is empty", () => {
+    const config = createMockConfig({
+      customModelName: "",
+    });
+
+    const modelConfig = getModelConfig(config);
+
+    expect(modelConfig).toMatchObject({
+      modelName: "mimo-v2.5-free",
+      modelProvider: "openai",
+      apiKey: "zen-key",
+      baseUrl: "https://opencode.ai/zen/v1",
+    });
+  });
+
   it("routes free assignments through the OpenCode Zen rail", async () => {
     const config = createMockConfig({
       customModelName: "mimo-v2.5-free",

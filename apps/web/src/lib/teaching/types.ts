@@ -26,6 +26,8 @@ export interface StudentAssignment {
   prompt: string;
   /** Injected as LangGraph configurable systemPrompt for this assignment */
   agentInstructions: string;
+  /** Server-authoritative chat model; omit to use the budget default. */
+  customModelName?: string;
   wordTarget?: number;
   /** Initial canvas markdown (usually empty) */
   starterMarkdown?: string;
