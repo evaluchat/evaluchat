@@ -375,16 +375,36 @@ rm -f "$package_path"
 
 if [[ -n "$catalog_revision" ]]; then
   release_dir="$catalog_root/releases/$catalog_revision"
-  mkdir -p "$release_dir"
-  install -m 644 "$catalog_path" "$release_dir/template-catalog.json"
+  staged="$catalog_root/.staged-$deploy_id"
+  trap 'rm -f -- "${staged:-}"' EXIT
+  mkdir -p "$catalog_root"
+  install -m 644 "$catalog_path" "$staged"
   rm -f "$catalog_path"
-  actual_catalog_sha="$(sha256sum "$release_dir/template-catalog.json" | awk '{print $1}')"
-  [[ "$actual_catalog_sha" == "$catalog_sha" ]] || { echo 'catalog upload checksum mismatch' >&2; exit 1; }
-  embedded="$(grep -o '"catalogRevision": *"sha256:[a-f0-9]*"' "$release_dir/template-catalog.json" | head -1 | sed -E 's/.*"(sha256:[a-f0-9]*)".*/\1/')" || embedded=""
-  [[ "$embedded" == "$catalog_revision" || "sha256:$actual_catalog_sha" == "$catalog_revision" ]] || {
-    echo 'catalog identity mismatch' >&2
+  staged_catalog_sha="$(sha256sum "$staged" | awk '{print $1}')"
+  [[ "$staged_catalog_sha" == "$catalog_sha" ]] || {
+    echo 'catalog upload checksum mismatch' >&2
+    rm -f "$staged"
     exit 1
   }
+  embedded="$(grep -o '"catalogRevision": *"sha256:[a-f0-9]*"' "$staged" | head -1 | sed -E 's/.*"(sha256:[a-f0-9]*)".*/\1/')" || embedded=""
+  [[ "$embedded" == "$catalog_revision" || "sha256:$staged_catalog_sha" == "$catalog_revision" ]] || {
+    echo 'catalog identity mismatch' >&2
+    rm -f "$staged"
+    exit 1
+  }
+  if [[ -f "$release_dir/template-catalog.json" ]]; then
+    existing_catalog_sha="$(sha256sum "$release_dir/template-catalog.json" | awk '{print $1}')"
+    if [[ "$existing_catalog_sha" == "$staged_catalog_sha" ]]; then
+      rm -f "$staged"
+    else
+      echo 'catalog release exists with different content' >&2
+      rm -f "$staged"
+      exit 1
+    fi
+  else
+    mkdir -p "$release_dir"
+    mv -f "$staged" "$release_dir/template-catalog.json"
+  fi
   next_link="$catalog_root/.current-$deploy_id"
   ln -s "$release_dir" "$next_link"
   mv -Tf "$next_link" "$catalog_root/current"

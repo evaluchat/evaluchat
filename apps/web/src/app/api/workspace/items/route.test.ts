@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 
 const harness = vi.hoisted(() => ({
   UnsupportedMethodError: class UnsupportedMethodError extends Error {},
+  UnsupportedTemplateError: class UnsupportedTemplateError extends Error {},
   verifyUserAuthenticated: vi.fn(),
   createWorkspaceItem: vi.fn(),
   createMethodWorkspaceItem: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock("@/lib/supabase/verify_user_server", () => ({
 }));
 vi.mock("@/lib/workspace/store", () => ({
   UnsupportedMethodError: harness.UnsupportedMethodError,
+  UnsupportedTemplateError: harness.UnsupportedTemplateError,
   createWorkspaceItem: harness.createWorkspaceItem,
   createMethodWorkspaceItem: harness.createMethodWorkspaceItem,
   ensureDefaultWorkspaceItem: harness.ensureDefaultWorkspaceItem,
@@ -88,5 +90,16 @@ describe("POST /api/workspace/items", () => {
     expect(await response.json()).toEqual({
       error: "Could not create workspace item",
     });
+  });
+
+  it("returns 400 when the store rejects with an unsupported template", async () => {
+    harness.createWorkspaceItem.mockRejectedValue(
+      new harness.UnsupportedTemplateError("Unsupported workspace template")
+    );
+
+    const response = await POST(request({ templateId: "starter" }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Unsupported template" });
   });
 });

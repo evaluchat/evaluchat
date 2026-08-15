@@ -6,6 +6,7 @@ import {
   ensureDefaultWorkspaceItem,
   listWorkspaceItems,
   UnsupportedMethodError,
+  UnsupportedTemplateError,
 } from "@/lib/workspace/store";
 
 async function authenticatedUser() {
@@ -76,6 +77,12 @@ export async function POST(request: NextRequest) {
     if (error instanceof UnsupportedMethodError) {
       return NextResponse.json(
         { error: "Unsupported method" },
+        { status: 400 }
+      );
+    }
+    if (error instanceof UnsupportedTemplateError) {
+      return NextResponse.json(
+        { error: "Unsupported template" },
         { status: 400 }
       );
     }
