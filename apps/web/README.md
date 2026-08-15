@@ -84,6 +84,19 @@ Next, navigate to the `Project Settings` page inside your project, and then to t
 
 After this, navigate to the `Authentication` page, and the `Providers` tab. Make sure `Email` is enabled (also ensure you've enabled `Confirm Email`). You may also enable `GitHub`, and/or `Google` if you'd like to use those for authentication. (see these pages for documentation on how to setup each provider: [GitHub](https://supabase.com/docs/guides/auth/social-login/auth-github), [Google](https://supabase.com/docs/guides/auth/social-login/auth-google))
 
+### Optional operator dashboard
+
+The server-rendered `/admin` dashboard is disabled unless `ADMIN_EMAILS` is set
+to a comma-separated list of operator email addresses. Matching is trimmed and
+case-insensitive. The dashboard exposes aggregate counts, masked registration
+emails, and platform-provider usage; it does not expose prompts or workspace
+content. Changes to `ADMIN_EMAILS` are picked up on the next request.
+
+For defense in depth, operators should also configure an edge-layer allowlist
+for `/admin` and `/api/admin/dashboard` (for example, a Cloudflare WAF Custom
+Rule limited to the operator's IP or corporate network). The in-app guard still
+applies after the edge rule and returns 404 for authenticated non-admin users.
+
 #### Test authentication
 
 To verify authentication works, run `yarn dev` and visit [localhost:3000](http://localhost:3000). This should redirect you to the [login page](http://localhost:3000/auth/login). From here, you can either login with Google or GitHub, or if you did not configure these providers, navigate to the [signup page](http://localhost:3000/auth/signup) and create a new account with an email and password. This should then redirect you to a conformation page, and after confirming your email you should be redirected to the [home page](http://localhost:3000).

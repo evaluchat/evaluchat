@@ -17,6 +17,134 @@ import {
   enforceWorkspaceThreadPolicy,
   supportsWorkspaceThreads,
 } from "../../../lib/workspace/thread-policy";
+import {
+  recordPlatformProviderRun,
+  type ProviderTokenUsage,
+} from "../../../lib/admin/provider-meter";
+
+const PROVIDER_METERING_TIMEOUT_MS = 2500;
+
+function tokenCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function tokenUsageFromObject(value: unknown): ProviderTokenUsage | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const tokensIn =
+    tokenCount(record.input_tokens) ??
+    tokenCount(record.prompt_tokens) ??
+    tokenCount(record.inputTokens) ??
+    tokenCount(record.tokensIn);
+  const tokensOut =
+    tokenCount(record.output_tokens) ??
+    tokenCount(record.completion_tokens) ??
+    tokenCount(record.outputTokens) ??
+    tokenCount(record.tokensOut);
+  if (tokensIn === undefined && tokensOut === undefined) return undefined;
+  return { tokensIn: tokensIn ?? 0, tokensOut: tokensOut ?? 0 };
+}
+
+function tokenUsageFromMessage(value: unknown): ProviderTokenUsage | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    tokenUsageFromObject(record) ??
+    tokenUsageFromObject(record.usage) ??
+    tokenUsageFromObject(record.usage_metadata) ??
+    tokenUsageFromObject(
+      record.response_metadata && typeof record.response_metadata === "object"
+        ? (record.response_metadata as Record<string, unknown>).token_usage
+        : undefined
+    )
+  );
+}
+
+function extractProviderTokenUsage(
+  body: unknown
+): ProviderTokenUsage | undefined {
+  const directUsage = tokenUsageFromMessage(body);
+  if (directUsage) return directUsage;
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return undefined;
+  }
+  const messages = (body as Record<string, unknown>).messages;
+  if (!Array.isArray(messages)) return undefined;
+
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let found = false;
+  for (const message of messages) {
+    const usage = tokenUsageFromMessage(message);
+    if (!usage) continue;
+    found = true;
+    tokensIn += usage.tokensIn ?? 0;
+    tokensOut += usage.tokensOut ?? 0;
+  }
+  return found ? { tokensIn, tokensOut } : undefined;
+}
+
+async function runProviderMetering(
+  userId: string,
+  method: string,
+  path: string,
+  status: number,
+  usageResponse?: Response
+): Promise<void> {
+  try {
+    let tokens: ProviderTokenUsage | undefined;
+    if (usageResponse) {
+      tokens = extractProviderTokenUsage(await usageResponse.json());
+    }
+    if (tokens) {
+      await recordPlatformProviderRun(userId, method, path, status, tokens);
+    } else {
+      await recordPlatformProviderRun(userId, method, path, status);
+    }
+  } catch (error) {
+    console.error("Failed to run provider usage metering", error);
+  }
+}
+
+function scheduleProviderMetering(
+  userId: string,
+  method: string,
+  path: string,
+  status: number,
+  usageResponse?: Response
+): void {
+  // There is no post-response hook in this proxy, so defer all metering work
+  // until after the response has been returned to the caller.
+  setTimeout(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timeoutId = setTimeout(resolve, PROVIDER_METERING_TIMEOUT_MS);
+    });
+    const metering = runProviderMetering(
+      userId,
+      method,
+      path,
+      status,
+      usageResponse
+    );
+    void Promise.race([metering, timeout]).then(
+      () => {
+        if (timeoutId) clearTimeout(timeoutId);
+      },
+      (error) => {
+        if (timeoutId) clearTimeout(timeoutId);
+        console.error("Provider usage metering failed", error);
+      }
+    );
+  }, 0);
+}
 
 function getCorsHeaders() {
   return {
@@ -401,6 +529,15 @@ async function handleRequest(req: NextRequest, method: string) {
       });
     }
 
+    const usageResponse =
+      !path.endsWith("/stream") &&
+      res.status < 400 &&
+      /^threads\/[^/]+\/runs$/.test(path)
+        ? res.clone()
+        : undefined;
+    // Stream token totals are intentionally not counted in v1 (best-effort per
+    // issue #66); never consume or buffer a streaming response to meter tokens.
+
     const headers = new Headers({
       ...getCorsHeaders(),
     });
@@ -413,11 +550,13 @@ async function handleRequest(req: NextRequest, method: string) {
       }
     });
 
-    return new Response(res.body, {
+    const response = new Response(res.body, {
       status: res.status,
       statusText: res.statusText,
       headers,
     });
+    scheduleProviderMetering(user.id, method, path, res.status, usageResponse);
+    return response;
   } catch (e: any) {
     console.error("Error in proxy");
     console.error(e);

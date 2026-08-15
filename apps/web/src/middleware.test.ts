@@ -12,6 +12,8 @@ describe("middleware public routes", () => {
 
     expect(matcher.test("/api/teaching/assignments")).toBe(true);
     expect(matcher.test("/api/tracking/events")).toBe(true);
+    expect(matcher.test("/api/admin/dashboard")).toBe(true);
+    expect(matcher.test("/admin")).toBe(true);
   });
 
   it("treats privacy, terms, and auth as unauthenticated public paths", () => {
@@ -62,5 +64,6 @@ describe("middleware public routes", () => {
     // Data APIs already 401 server-side — do not HTML-redirect them.
     expect(unauthenticatedPageRedirect("/api/teaching/assignments")).toBeNull();
     expect(unauthenticatedPageRedirect("/api/tracking/events")).toBeNull();
+    expect(unauthenticatedPageRedirect("/admin")).toBeNull();
   });
 });

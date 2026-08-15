@@ -6,6 +6,7 @@ const harness = vi.hoisted(() => ({
   getWorkspaceItem: vi.fn(),
   getCustomAssignmentById: vi.fn(),
   getSeedAssignmentById: vi.fn(),
+  recordPlatformProviderRun: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/verify_user_server", () => ({
@@ -19,6 +20,9 @@ vi.mock("@/lib/teaching/assignment-file-store", () => ({
 }));
 vi.mock("@/lib/teaching/seed-loader", () => ({
   getSeedAssignmentById: harness.getSeedAssignmentById,
+}));
+vi.mock("@/lib/admin/provider-meter", () => ({
+  recordPlatformProviderRun: harness.recordPlatformProviderRun,
 }));
 
 import { POST } from "./route";
@@ -46,6 +50,7 @@ describe("POST /api/threads/{id}/runs workspace policy", () => {
     harness.getWorkspaceItem.mockReset();
     harness.getCustomAssignmentById.mockReset();
     harness.getSeedAssignmentById.mockReset();
+    harness.recordPlatformProviderRun.mockReset();
     harness.verifyUserAuthenticated.mockResolvedValue({
       session: { access_token: "tok" },
       user: { id: "user-1" },
