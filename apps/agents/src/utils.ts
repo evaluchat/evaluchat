@@ -462,9 +462,12 @@ export async function getModelFromConfig(
     isToolCalling?: boolean;
   }
 ): Promise<ReturnType<typeof initChatModel>> {
-  const byokSettings = await getByokModelSettings(config);
+  // Shared instructor BYOK overrides a participant's own settings within
+  // assignments so all participants get consistent model behavior. Scoped to
+  // live method_participant threads with an active, unrevoked grant.
+  const sharedByokSettings = await getSharedByokModelSettings(config);
   const resolvedByokSettings =
-    byokSettings ?? (await getSharedByokModelSettings(config));
+    sharedByokSettings ?? (await getByokModelSettings(config));
   if (resolvedByokSettings) {
     const modelConfig = config.configurable?.modelConfig as
       | CustomModelConfig
