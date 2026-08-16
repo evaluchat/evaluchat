@@ -39,22 +39,51 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       { status: 404 }
     );
 
+  let body: unknown;
   try {
-    const body = await request.json();
-    if (body?.threadId !== null && typeof body?.threadId !== "string") {
-      return NextResponse.json({ error: "Invalid thread id" }, { status: 400 });
-    }
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
+    );
+  }
+
+  const parsedBody =
+    body !== null && typeof body === "object"
+      ? (body as Record<string, unknown>)
+      : {};
+  if (parsedBody.threadId !== null && typeof parsedBody.threadId !== "string") {
+    return NextResponse.json({ error: "Invalid thread id" }, { status: 400 });
+  }
+
+  try {
     const item = await reconcileWorkspaceItemThread(
       auth.user.id,
       id,
-      body.threadId ?? null
+      (parsedBody.threadId as string | null | undefined) ?? null
     );
     return NextResponse.json({ item });
   } catch (error) {
+    if (error instanceof WorkspaceItemNotFoundError) {
+      return NextResponse.json(
+        { error: "Workspace item not found" },
+        { status: 404 }
+      );
+    }
+    if (error instanceof WorkspaceThreadOwnershipError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (error instanceof WorkspaceItemThreadNotAllowedError) {
+      return NextResponse.json(
+        { error: "This item does not support an assistant thread" },
+        { status: 400 }
+      );
+    }
     console.error("[workspace] failed to reconcile thread", error);
     return NextResponse.json(
       { error: "Could not attach workspace thread" },
-      { status: 403 }
+      { status: 500 }
     );
   }
 }

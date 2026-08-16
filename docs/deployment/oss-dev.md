@@ -27,6 +27,8 @@ yarn deploy:oss-dev -- rollback
 yarn deploy:oss-dev -- catalog-rollback sha256:<catalog-revision>
 ```
 
+The catalog revision is the `catalogRevision` field of `template-catalog.json` (also recorded as `catalog_revision` in `/opt/evaluchat-oss/.deploy-meta` and as a directory name under `/opt/evaluchat-catalog/releases/`).
+
 Use `--skip-build` only when `apps/web/.next` is already the intended local
 build. Use `--skip-catalog` only when the current VPS catalog is intentionally
 being retained. The deploy env defaults to

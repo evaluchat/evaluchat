@@ -100,6 +100,8 @@ export class UnsupportedMethodError extends Error {
   }
 }
 
+export class UnsupportedTemplateError extends Error {}
+
 export function parseCatalogTemplateRef(ref: string): {
   id: string;
   version?: string;
@@ -429,7 +431,7 @@ export async function createWorkspaceItem(
 ): Promise<WorkspaceItem> {
   return withUserLock(userId, async () => {
     if (!isSelectableTemplate(templateId)) {
-      throw new Error("Unsupported workspace template");
+      throw new UnsupportedTemplateError("Unsupported workspace template");
     }
     const manifest = await readManifest(userId);
     const item = createItem(userId, templateId);

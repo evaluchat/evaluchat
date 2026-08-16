@@ -12,19 +12,29 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 user_home="${HOME:?HOME is required}"
 
+env_file="${EVALUCHAT_DEPLOY_ENV_FILE:-$user_home/open-canvas/teaching-prototype/.env}"
+[[ -r "$env_file" ]] || {
+  printf 'ERROR: deployment env file not found: %s\n' "$env_file" >&2
+  exit 1
+}
+set -a
+# shellcheck disable=SC1090
+source "$env_file"
+set +a
+
 remote_app_dir="${OSS_DEV_REMOTE_APP_DIR:-/opt/evaluchat-oss}"
 remote_catalog_root="${OSS_DEV_REMOTE_CATALOG_ROOT:-/opt/evaluchat-catalog}"
 web_service="${OSS_DEV_WEB_SERVICE:-evaluchat-oss-web.service}"
 agents_service="${OSS_DEV_AGENTS_SERVICE:-evaluchat-oss-agents.service}"
 dev_url="${OSS_DEV_URL:-https://dev.evaluchat.org}"
 agent_url="${OSS_DEV_AGENT_URL:-http://127.0.0.1:54367}"
-env_file="${EVALUCHAT_DEPLOY_ENV_FILE:-$user_home/open-canvas/teaching-prototype/.env}"
 
 work_dir=""
 package_file=""
 catalog_file=""
 package_name=""
 catalog_name=""
+catalog_file_sha=""
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -94,12 +104,6 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
-
-[[ -r "$env_file" ]] || die "deployment env file not found: $env_file"
-set -a
-# shellcheck disable=SC1090
-source "$env_file"
-set +a
 
 required_command() { command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"; }
 required_command ssh
@@ -182,17 +186,19 @@ case "$assistant_search" in
 esac
 
 actual_build="$(tr -d '\n' < "$app_dir/apps/web/.next/BUILD_ID")"
-actual_catalog="$(sha256sum "$catalog_root/current/template-catalog.json" | awk '{print $1}')"
+actual_catalog_sha="$(sha256sum "$catalog_root/current/template-catalog.json" | awk '{print $1}')"
+embedded_catalog="$(grep -o '"catalogRevision": *"sha256:[a-f0-9]*"' "$catalog_root/current/template-catalog.json" | head -1 | sed -E 's/.*"(sha256:[a-f0-9]*)".*/\1/')" || embedded_catalog=""
 if [[ -n "$expected_build" && "$actual_build" != "$expected_build" ]]; then
   echo "build mismatch: expected $expected_build, got $actual_build" >&2
   exit 1
 fi
-if [[ -n "$expected_catalog" && "$actual_catalog" != "${expected_catalog#sha256:}" ]]; then
-  echo "catalog mismatch: expected ${expected_catalog#sha256:}, got $actual_catalog" >&2
+if [[ -n "$expected_catalog" && "$embedded_catalog" != "$expected_catalog" && "sha256:$actual_catalog_sha" != "$expected_catalog" ]]; then
+  echo "catalog mismatch: expected $expected_catalog, got ${embedded_catalog:-sha256:$actual_catalog_sha}" >&2
   exit 1
 fi
 
-echo "remote services active; build=$actual_build catalog=sha256:$actual_catalog"
+actual_catalog="${embedded_catalog:-sha256:$actual_catalog_sha}"
+echo "remote services active; build=$actual_build catalog=$actual_catalog"
 REMOTE_VERIFY
 }
 
@@ -312,10 +318,11 @@ deploy() {
       EVALUCHAT_TEMPLATE_SOURCE_ROOT="$template_source_root" \
       EVALUCHAT_TEMPLATE_CATALOG_OUTPUT="$catalog_file" \
       yarn generate:templates)
-    node -e 'const fs=require("node:fs"); const v=JSON.parse(fs.readFileSync(process.argv[1], "utf8")).catalogRevision; if (!/^sha256:[a-f0-9]{64}$/.test(v)) process.exit(1)' "$catalog_file"
-    catalog_revision="sha256:$(sha256_file "$catalog_file")"
+    catalog_revision="$(node -e 'const fs=require("node:fs"); const v=JSON.parse(fs.readFileSync(process.argv[1], "utf8")).catalogRevision; if (!/^sha256:[a-f0-9]{64}$/.test(v)) process.exit(1); process.stdout.write(v)' "$catalog_file")"
+    catalog_file_sha="$(sha256_file "$catalog_file")"
   else
     catalog_revision=""
+    catalog_file_sha=""
   fi
 
   log "Packaging $build_id"
@@ -347,7 +354,7 @@ deploy() {
 
   log "Installing application and catalog"
   package_sha="$(sha256_file "$package_file")"
-  ssh_remote bash -s -- "$remote_app_dir" "$remote_catalog_root" "$package_name" "$catalog_name" "${catalog_revision:--}" "$package_sha" "$deploy_id" <<'REMOTE_INSTALL'
+  ssh_remote bash -s -- "$remote_app_dir" "$remote_catalog_root" "$package_name" "$catalog_name" "${catalog_revision:--}" "$package_sha" "${catalog_file_sha:--}" "$deploy_id" <<'REMOTE_INSTALL'
 set -Eeuo pipefail
 app_dir="$1"
 catalog_root="$2"
@@ -355,8 +362,10 @@ package_name="$3"
 catalog_name="$4"
 catalog_revision="$5"
 package_sha="$6"
-deploy_id="$7"
+catalog_sha="$7"
+deploy_id="$8"
 [[ "$catalog_revision" == "-" ]] && catalog_revision=""
+[[ "$catalog_sha" == "-" ]] && catalog_sha=""
 
 package_path="/tmp/$package_name"
 catalog_path="/tmp/$catalog_name"
@@ -366,11 +375,36 @@ rm -f "$package_path"
 
 if [[ -n "$catalog_revision" ]]; then
   release_dir="$catalog_root/releases/$catalog_revision"
-  mkdir -p "$release_dir"
-  install -m 644 "$catalog_path" "$release_dir/template-catalog.json"
+  staged="$catalog_root/.staged-$deploy_id"
+  trap 'rm -f -- "${staged:-}"' EXIT
+  mkdir -p "$catalog_root"
+  install -m 644 "$catalog_path" "$staged"
   rm -f "$catalog_path"
-  actual_catalog="$(sha256sum "$release_dir/template-catalog.json" | awk '{print $1}')"
-  [[ "$actual_catalog" == "${catalog_revision#sha256:}" ]] || { echo 'catalog checksum mismatch' >&2; exit 1; }
+  staged_catalog_sha="$(sha256sum "$staged" | awk '{print $1}')"
+  [[ "$staged_catalog_sha" == "$catalog_sha" ]] || {
+    echo 'catalog upload checksum mismatch' >&2
+    rm -f "$staged"
+    exit 1
+  }
+  embedded="$(grep -o '"catalogRevision": *"sha256:[a-f0-9]*"' "$staged" | head -1 | sed -E 's/.*"(sha256:[a-f0-9]*)".*/\1/')" || embedded=""
+  [[ "$embedded" == "$catalog_revision" || "sha256:$staged_catalog_sha" == "$catalog_revision" ]] || {
+    echo 'catalog identity mismatch' >&2
+    rm -f "$staged"
+    exit 1
+  }
+  if [[ -f "$release_dir/template-catalog.json" ]]; then
+    existing_catalog_sha="$(sha256sum "$release_dir/template-catalog.json" | awk '{print $1}')"
+    if [[ "$existing_catalog_sha" == "$staged_catalog_sha" ]]; then
+      rm -f "$staged"
+    else
+      echo 'catalog release exists with different content' >&2
+      rm -f "$staged"
+      exit 1
+    fi
+  else
+    mkdir -p "$release_dir"
+    mv -f "$staged" "$release_dir/template-catalog.json"
+  fi
   next_link="$catalog_root/.current-$deploy_id"
   ln -s "$release_dir" "$next_link"
   mv -Tf "$next_link" "$catalog_root/current"
@@ -462,8 +496,12 @@ catalog_root="$1"
 revision="$2"
 release_dir="$catalog_root/releases/$revision"
 [[ -f "$release_dir/template-catalog.json" ]] || { echo "catalog release not found: $revision" >&2; exit 1; }
-actual="$(sha256sum "$release_dir/template-catalog.json" | awk '{print $1}')"
-[[ "$actual" == "${revision#sha256:}" ]] || { echo "catalog release checksum mismatch" >&2; exit 1; }
+actual_sha="$(sha256sum "$release_dir/template-catalog.json" | awk '{print $1}')"
+embedded="$(grep -o '"catalogRevision": *"sha256:[a-f0-9]*"' "$release_dir/template-catalog.json" | head -1 | sed -E 's/.*"(sha256:[a-f0-9]*)".*/\1/')" || embedded=""
+[[ "$embedded" == "$revision" || "sha256:$actual_sha" == "$revision" ]] || {
+  echo "catalog release checksum mismatch" >&2
+  exit 1
+}
 next_link="$catalog_root/.current-rollback-$$"
 ln -s "$release_dir" "$next_link"
 mv -Tf "$next_link" "$catalog_root/current"

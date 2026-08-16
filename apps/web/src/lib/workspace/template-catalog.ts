@@ -157,6 +157,7 @@ export type TemplateCatalog = z.infer<typeof CatalogSchema>;
 
 let lastKnownGood: TemplateCatalog | undefined;
 let lastExternalRevision: string | undefined;
+let lastExternalMeta: { mtimeMs: number; size: number } | undefined;
 
 function parseCatalog(raw: string): TemplateCatalog {
   return CatalogSchema.parse(JSON.parse(raw));
@@ -202,15 +203,29 @@ export function getTemplateCatalog(): TemplateCatalog {
   }
 
   try {
-    const parsed = parseCatalog(readFileSync(path, "utf8"));
-    if (lastKnownGood && lastExternalRevision === parsed.catalogRevision) {
+    const metadata = statSync(path);
+    if (
+      lastKnownGood &&
+      lastExternalRevision !== undefined &&
+      lastExternalMeta &&
+      lastExternalMeta.mtimeMs === metadata.mtimeMs &&
+      lastExternalMeta.size === metadata.size
+    ) {
       return lastKnownGood;
     }
+
+    const parsed = parseCatalog(readFileSync(path, "utf8"));
     lastKnownGood = parsed;
     lastExternalRevision = parsed.catalogRevision;
+    lastExternalMeta = {
+      mtimeMs: metadata.mtimeMs,
+      size: metadata.size,
+    };
     return parsed;
   } catch (error) {
     console.error("[workspace] ignoring malformed template catalog", error);
+    lastExternalRevision = undefined;
+    lastExternalMeta = undefined;
     if (lastKnownGood) return lastKnownGood;
     lastKnownGood = fallbackCatalog();
     return lastKnownGood;
