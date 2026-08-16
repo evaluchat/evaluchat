@@ -92,11 +92,13 @@ describe("useSharedProviderLabel", () => {
   it("sets the provider label from a successful lookup", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(true, [
-          { itemId: "item-a", providerLabel: INSTRUCTOR_LABEL },
-        ])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(true, [
+            { itemId: "item-a", providerLabel: INSTRUCTOR_LABEL },
+          ])
+        )
     );
 
     useSharedProviderLabel("item-a");
@@ -112,11 +114,13 @@ describe("useSharedProviderLabel", () => {
   });
 
   it("clears a stale label as soon as itemId switches", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      jsonResponse(true, [
-        { itemId: "item-a", providerLabel: INSTRUCTOR_LABEL },
-      ])
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(true, [
+          { itemId: "item-a", providerLabel: INSTRUCTOR_LABEL },
+        ])
+      );
     fetchMock.mockImplementationOnce(() => new Promise(() => undefined));
     vi.stubGlobal("fetch", fetchMock);
 
