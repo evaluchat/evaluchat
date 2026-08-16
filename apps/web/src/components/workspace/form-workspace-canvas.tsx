@@ -67,6 +67,18 @@ function buildFormAgentContext(
       ])
     ),
     values,
+    ...(item.kind === "method"
+      ? {
+          methodContext: {
+            title: item.methodSource.title ?? item.templateSnapshot.title,
+            description:
+              item.methodSource.description ??
+              item.templateSnapshot.description,
+            guidance: item.templateSnapshot.assistantGuidance,
+            briefTemplate: item.templateSnapshot.layoutMarkdown,
+          },
+        }
+      : {}),
   };
 }
 
