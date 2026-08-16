@@ -9,6 +9,10 @@ as $$
 declare
   r record;
 begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'byok_append_share: caller may only update their own settings';
+  end if;
+
   select * into r
   from public.user_byok_settings
   where user_id = p_user_id
@@ -37,3 +41,9 @@ begin
   where user_id = p_user_id;
 end;
 $$;
+
+-- Server-only executor surfaces: anonymous clients must never invoke it.
+-- PUBLIC has a default EXECUTE grant on new functions; revoke it and re-grant
+-- explicitly to the authenticated role the session-scoped client runs as.
+revoke execute on function public.byok_append_share(uuid, uuid) from public;
+grant execute on function public.byok_append_share(uuid, uuid) to authenticated;
