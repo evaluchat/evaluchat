@@ -456,9 +456,11 @@ export function ByokSettingsCard() {
 
   function handleShareModeChange(next: ByokShareMode) {
     setShareMode(next);
-    setShareItemIdsReplace(undefined);
     if (next !== "specific_items") {
       setSharedItemIds([]);
+      setShareItemIdsReplace([]);
+    } else {
+      setShareItemIdsReplace(undefined);
     }
   }
 

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { UserByokSettingsRow } from "@opencanvas/shared/byok/types";
 import { verifyUserAuthenticated } from "@/lib/supabase/verify_user_server";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -19,39 +18,15 @@ async function authenticatedUser() {
 async function recordByokShare(userId: string, itemId: string): Promise<void> {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("user_byok_settings")
-      .select("enabled, share_mode, shared_item_ids")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const { error } = await supabase.rpc("byok_append_share", {
+      p_user_id: userId,
+      p_item_id: itemId,
+    });
 
     if (error) {
-      console.error("[workspace] failed to load BYOK sharing settings", error);
-      return;
-    }
-
-    const settings = data as UserByokSettingsRow | null;
-    if (!settings?.enabled || settings.share_mode === "all_assignments") {
-      return;
-    }
-
-    const sharedItemIds = Array.isArray(settings.shared_item_ids)
-      ? settings.shared_item_ids
-      : [];
-    const nextSharedItemIds = [...new Set([...sharedItemIds, itemId])];
-    const { error: updateError } = await supabase
-      .from("user_byok_settings")
-      .update({
-        share_mode: "specific_items",
-        shared_item_ids: nextSharedItemIds,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
-
-    if (updateError) {
       console.error(
         "[workspace] failed to record BYOK assignment share",
-        updateError
+        error
       );
     }
   } catch (error) {

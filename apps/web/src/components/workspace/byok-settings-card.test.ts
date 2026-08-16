@@ -207,6 +207,53 @@ describe("ByokSettingsCard helpers", () => {
       shareItemIdsReplace: [],
     });
   });
+
+  it("clears persisted ids when leaving specific sharing before a later new-item share", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        settings: {
+          enabled: true,
+          base_url: "https://provider.example/v1",
+          model: "provider/model",
+          api_key_masked: "sk-…abcd",
+        },
+      }),
+    });
+
+    await saveByokSettings(
+      {
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        shareMode: "none",
+        sharedItemIds: [],
+        shareItemIdsReplace: [],
+      },
+      fetchMock as unknown as typeof fetch
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      share_mode: "none",
+      shareItemIdsReplace: [],
+    });
+
+    await saveByokSettings(
+      {
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        shareMode: "specific_items",
+        sharedItemIds: ["method-new"],
+        shareItemIdsReplace: ["method-new"],
+      },
+      fetchMock as unknown as typeof fetch
+    );
+    expect(
+      JSON.parse(fetchMock.mock.calls[1][1].body).shareItemIdsReplace
+    ).toEqual(["method-new"]);
+  });
 });
 
 describe("ByokSettingsCardView", () => {

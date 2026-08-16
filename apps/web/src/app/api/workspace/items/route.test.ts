@@ -2,12 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const harness = vi.hoisted(() => ({
-  maybeSingle: vi.fn(),
-  selectEq: vi.fn(),
-  select: vi.fn(),
-  updateEq: vi.fn(),
-  update: vi.fn(),
-  from: vi.fn(),
+  rpc: vi.fn(),
   UnsupportedMethodError: class UnsupportedMethodError extends Error {},
   UnsupportedTemplateError: class UnsupportedTemplateError extends Error {},
   verifyUserAuthenticated: vi.fn(),
@@ -56,21 +51,9 @@ describe("POST /api/workspace/items", () => {
     harness.verifyUserAuthenticated.mockReset();
     harness.createWorkspaceItem.mockReset();
     harness.createMethodWorkspaceItem.mockReset();
-    harness.maybeSingle
-      .mockReset()
-      .mockResolvedValue({ data: null, error: null });
-    harness.selectEq
-      .mockReset()
-      .mockReturnValue({ maybeSingle: harness.maybeSingle });
-    harness.select.mockReset().mockReturnValue({ eq: harness.selectEq });
-    harness.updateEq.mockReset().mockResolvedValue({ error: null });
-    harness.update.mockReset().mockReturnValue({ eq: harness.updateEq });
-    harness.from.mockReset().mockReturnValue({
-      select: harness.select,
-      update: harness.update,
-    });
+    harness.rpc.mockReset().mockResolvedValue({ error: null });
     harness.createClient.mockReset().mockResolvedValue({
-      from: harness.from,
+      rpc: harness.rpc,
     });
     harness.verifyUserAuthenticated.mockResolvedValue({
       user: { id: "user-1" },
@@ -89,20 +72,13 @@ describe("POST /api/workspace/items", () => {
       "ai-assisted-essay"
     );
     expect(harness.createWorkspaceItem).not.toHaveBeenCalled();
+    expect(harness.rpc).not.toHaveBeenCalled();
   });
 
-  it("records a specific BYOK share after creating a method item", async () => {
+  it("appends a BYOK share after creating a method item", async () => {
     harness.createMethodWorkspaceItem.mockResolvedValue({
       id: "wi_method",
       kind: "method",
-    });
-    harness.maybeSingle.mockResolvedValue({
-      data: {
-        enabled: true,
-        share_mode: "none",
-        shared_item_ids: [],
-      },
-      error: null,
     });
 
     const response = await POST(
@@ -110,59 +86,42 @@ describe("POST /api/workspace/items", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(harness.update).toHaveBeenCalledWith({
-      share_mode: "specific_items",
-      shared_item_ids: ["wi_method"],
-      updated_at: expect.any(String),
+    expect(harness.rpc).toHaveBeenCalledTimes(1);
+    expect(harness.rpc).toHaveBeenCalledWith("byok_append_share", {
+      p_user_id: "user-1",
+      p_item_id: "wi_method",
     });
   });
 
-  it("appends to an existing specific BYOK share without changing its mode", async () => {
+  it("appends a new item without sending existing shared item ids", async () => {
     harness.createMethodWorkspaceItem.mockResolvedValue({
       id: "wi_method",
       kind: "method",
-    });
-    harness.maybeSingle.mockResolvedValue({
-      data: {
-        enabled: true,
-        share_mode: "specific_items",
-        shared_item_ids: ["wi_existing"],
-      },
-      error: null,
     });
 
     await POST(request({ methodId: "ai-assisted-essay", shareByok: true }));
 
-    expect(harness.update).toHaveBeenCalledWith({
-      share_mode: "specific_items",
-      shared_item_ids: ["wi_existing", "wi_method"],
-      updated_at: expect.any(String),
+    expect(harness.rpc).toHaveBeenCalledTimes(1);
+    expect(harness.rpc).toHaveBeenCalledWith("byok_append_share", {
+      p_user_id: "user-1",
+      p_item_id: "wi_method",
     });
   });
 
-  it("does not override all-assignment sharing", async () => {
+  it("leaves all-assignment handling to the append function", async () => {
     harness.createMethodWorkspaceItem.mockResolvedValue({
       id: "wi_method",
       kind: "method",
     });
-    harness.maybeSingle.mockResolvedValue({
-      data: {
-        enabled: true,
-        share_mode: "all_assignments",
-        shared_item_ids: [],
-      },
-      error: null,
-    });
-
     const response = await POST(
       request({ methodId: "ai-assisted-essay", shareByok: true })
     );
 
     expect(response.status).toBe(201);
-    expect(harness.update).not.toHaveBeenCalled();
+    expect(harness.rpc).toHaveBeenCalledTimes(1);
   });
 
-  it("creates the item without sharing when no BYOK settings row exists", async () => {
+  it("still attempts the append when no BYOK settings row exists", async () => {
     harness.createMethodWorkspaceItem.mockResolvedValue({
       id: "wi_method",
       kind: "method",
@@ -173,7 +132,43 @@ describe("POST /api/workspace/items", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(harness.update).not.toHaveBeenCalled();
+    expect(harness.rpc).toHaveBeenCalledTimes(1);
+    expect(harness.rpc).toHaveBeenCalledWith("byok_append_share", {
+      p_user_id: "user-1",
+      p_item_id: "wi_method",
+    });
+  });
+
+  it("creates the item when the share append RPC errors", async () => {
+    harness.createMethodWorkspaceItem.mockResolvedValue({
+      id: "wi_method",
+      kind: "method",
+    });
+    harness.rpc.mockResolvedValue({ error: new Error("rpc unavailable") });
+
+    const response = await POST(
+      request({ methodId: "ai-assisted-essay", shareByok: true })
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      item: { id: "wi_method", kind: "method" },
+    });
+    expect(harness.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes only the new item id when stale shared ids exist", async () => {
+    harness.createMethodWorkspaceItem.mockResolvedValue({
+      id: "wi_new",
+      kind: "method",
+    });
+
+    await POST(request({ methodId: "ai-assisted-essay", shareByok: true }));
+
+    expect(harness.rpc).toHaveBeenCalledWith("byok_append_share", {
+      p_user_id: "user-1",
+      p_item_id: "wi_new",
+    });
   });
 
   it("rejects an empty body", async () => {
