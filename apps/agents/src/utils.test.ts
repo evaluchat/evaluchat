@@ -89,6 +89,7 @@ vi.mock("@supabase/supabase-js", () => ({
 vi.mock("pdf-parse", () => ({ default: vi.fn() }));
 
 import { getModelConfig, getModelFromConfig } from "./utils.js";
+import { getSharedByokModelSettings } from "./byok.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -99,6 +100,8 @@ function mockByokRow(
     model: string;
     api_key_enc: string;
     enabled: boolean;
+    share_mode?: "none" | "all_assignments" | "specific_items";
+    shared_item_ids?: string[];
   } | null
 ) {
   supabaseAuthGetUserMock.mockResolvedValue({
@@ -363,6 +366,154 @@ describe("provider resolution", () => {
     expect(chatOpenAIInvocations[0]).toMatchObject({
       model: "mimo-v2.5-free",
       apiKey: "zen-key",
+    });
+  });
+
+  it("uses an owner's actively shared BYOK settings for a participant thread", async () => {
+    process.env.BYOK_ENCRYPTION_KEY = BYOK_TEST_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE = "service-role-key";
+
+    const participantItem = {
+      id: "participant-item",
+      ownerId: "participant-user",
+      kind: "method_participant",
+      operatorId: "owner-user",
+      operatorItemId: "method-item",
+    };
+    const ownerItem = {
+      id: "method-item",
+      ownerId: "owner-user",
+      kind: "method",
+      run: {
+        participants: [
+          {
+            itemId: "participant-item",
+            userId: "participant-user",
+            email: "student@example.com",
+          },
+        ],
+      },
+    };
+    const store = {
+      get: vi.fn(async (namespace: string[], key: string) => {
+        const items =
+          namespace[1] === "participant-user"
+            ? { "participant-item": participantItem }
+            : { "method-item": ownerItem };
+        return key === "manifest" ? { value: { items } } : undefined;
+      }),
+    };
+    supabaseAuthGetUserMock.mockResolvedValue({
+      data: {
+        user: { id: "participant-user", email: "student@example.com" },
+      },
+    });
+    maybeSingleMock
+      .mockReset()
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({
+        data: {
+          user_id: "owner-user",
+          base_url: "https://openrouter.ai/api/v1",
+          model: "openai/gpt-4o-mini",
+          api_key_enc: encryptApiKey("sk-owner-secret", BYOK_TEST_KEY),
+          enabled: true,
+          share_mode: "all_assignments",
+          shared_item_ids: [],
+        },
+        error: null,
+      });
+
+    const config = createMockConfig({
+      customModelName: "mimo-v2.5-free",
+      store,
+      supabase_session: { access_token: "participant-token" },
+    });
+    config.configurable!.workspace_item_id = "participant-item";
+
+    await getModelFromConfig(config);
+
+    expect(chatOpenAIInvocations[0]).toMatchObject({
+      model: "openai/gpt-4o-mini",
+      apiKey: "sk-owner-secret",
+      configuration: { baseURL: "https://openrouter.ai/api/v1" },
+    });
+    expect(store.get).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back when a shared grant is revoked or does not cover the method", async () => {
+    process.env.BYOK_ENCRYPTION_KEY = BYOK_TEST_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE = "service-role-key";
+
+    const participantItem = {
+      id: "participant-item",
+      ownerId: "participant-user",
+      kind: "method_participant",
+      operatorId: "owner-user",
+      operatorItemId: "method-item",
+    };
+    const ownerItem = {
+      id: "method-item",
+      ownerId: "owner-user",
+      kind: "method",
+      run: {
+        participants: [
+          { itemId: "participant-item", userId: "participant-user" },
+        ],
+      },
+    };
+    const store = {
+      get: vi.fn(async (namespace: string[], key: string) => ({
+        value:
+          key === "manifest"
+            ? {
+                items:
+                  namespace[1] === "participant-user"
+                    ? { "participant-item": participantItem }
+                    : { "method-item": ownerItem },
+              }
+            : undefined,
+      })),
+    };
+    supabaseAuthGetUserMock.mockResolvedValue({
+      data: { user: { id: "participant-user" } },
+    });
+    const revokedRow = {
+      user_id: "owner-user",
+      base_url: "https://openrouter.ai/api/v1",
+      model: "openai/gpt-4o-mini",
+      api_key_enc: encryptApiKey("sk-owner-secret", BYOK_TEST_KEY),
+      enabled: true,
+      share_mode: "specific_items" as const,
+      shared_item_ids: ["another-method-item"],
+    };
+    maybeSingleMock.mockReset().mockResolvedValueOnce({
+      data: revokedRow,
+      error: null,
+    });
+
+    const config = createMockConfig({
+      customModelName: "mimo-v2.5-free",
+      store,
+      supabase_session: { access_token: "participant-token" },
+    });
+    config.configurable!.workspace_item_id = "participant-item";
+
+    await expect(getSharedByokModelSettings(config)).resolves.toBeNull();
+    maybeSingleMock
+      .mockReset()
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: revokedRow, error: null });
+    await getModelFromConfig(config);
+
+    expect(chatOpenAIInvocations[0]).toMatchObject({
+      model: "mimo-v2.5-free",
+      apiKey: "zen-key",
+    });
+    expect(chatOpenAIInvocations[0]).not.toMatchObject({
+      apiKey: "sk-owner-secret",
     });
   });
 });

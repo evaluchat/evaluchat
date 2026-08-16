@@ -140,6 +140,22 @@ describe("ByokSettingsCard helpers", () => {
     });
   });
 
+  it("carries specific assignment sharing in the PUT body", () => {
+    expect(
+      buildByokPutBody({
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        shareMode: "specific_items",
+        sharedItemIds: ["method-1", "method-2"],
+      })
+    ).toMatchObject({
+      share_mode: "specific_items",
+      shared_item_ids: ["method-1", "method-2"],
+    });
+  });
+
   it("detects dirty form vs saved snapshot", () => {
     const saved = {
       enabled: true,
@@ -272,5 +288,37 @@ describe("ByokSettingsCardView", () => {
     );
     expect(errMarkup).toContain("HTTP 401 Unauthorized");
     expect(errMarkup).toContain("text-red-700");
+  });
+
+  it("renders owner sharing controls without exposing provider secrets", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ByokSettingsCardView, {
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        savedMaskedKey: "sk-…abcd",
+        saving: false,
+        testing: false,
+        testResult: null,
+        shareMode: "specific_items",
+        sharedItemIds: ["method-1"],
+        ownedMethodItems: [{ id: "method-1", title: "Assignment one" }],
+        onEnabledChange: () => undefined,
+        onBaseUrlChange: () => undefined,
+        onModelChange: () => undefined,
+        onApiKeyChange: () => undefined,
+        onShareModeChange: () => undefined,
+        onSharedItemIdsChange: () => undefined,
+        onSave: () => undefined,
+        onTest: () => undefined,
+      })
+    );
+
+    expect(markup).toContain('data-testid="byok-share-control"');
+    expect(markup).toContain("Specific assignments");
+    expect(markup).toContain("Assignment one");
+    expect(markup).toContain("Provided by instructor");
+    expect(markup).not.toContain("sk-owner-secret");
   });
 });

@@ -9,7 +9,14 @@ import {
 import { CustomModelConfig } from "@opencanvas/shared/types";
 import { Thread } from "@langchain/langgraph-sdk";
 import { createClient } from "../hooks/utils";
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useUserContext } from "./UserContext";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryState } from "nuqs";
@@ -28,6 +35,7 @@ type ThreadContentType = {
   modelName: ALL_MODEL_NAMES;
   modelConfig: CustomModelConfig;
   modelConfigs: Record<ALL_MODEL_NAMES, CustomModelConfig>;
+  sharedProviderLabel?: string;
   createThreadLoading: boolean;
   getThread: (id: string) => Promise<Thread | undefined>;
   createThread: (
@@ -66,6 +74,7 @@ export function ThreadProvider({
       ? OPENROUTER_DEFAULT_MODEL_NAME
       : DEFAULT_MODEL_NAME;
   const [modelName, setModelName] = useState<ALL_MODEL_NAMES>(defaultModelName);
+  const [sharedProviderLabel, setSharedProviderLabel] = useState<string>();
   const [createThreadLoading, setCreateThreadLoading] = useState(false);
 
   const [modelConfigs, setModelConfigs] = useState<
@@ -115,6 +124,35 @@ export function ThreadProvider({
       modelConfigs[modelName] || modelConfigs[modelName.replace("azure/", "")]
     );
   }, [modelName, modelConfigs]);
+
+  useEffect(() => {
+    if (!workspaceItemId) {
+      setSharedProviderLabel(undefined);
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/byok/shared", {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const entries = (await response.json()) as Array<{
+          itemId?: string;
+          providerLabel?: string;
+        }>;
+        const entry = entries.find(
+          (candidate) => candidate.itemId === workspaceItemId
+        );
+        if (!cancelled) setSharedProviderLabel(entry?.providerLabel);
+      })
+      .catch(() => {
+        if (!cancelled) setSharedProviderLabel(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceItemId]);
 
   const setModelConfig = (
     modelName: ALL_MODEL_NAMES,
@@ -193,6 +231,28 @@ export function ThreadProvider({
     const client = createClient();
     setCreateThreadLoading(true);
     const ownedWorkspaceItemId = workspaceItemIdOverride ?? workspaceItemId;
+    let activeSharedProviderLabel = sharedProviderLabel;
+    if (ownedWorkspaceItemId) {
+      try {
+        const response = await fetch("/api/byok/shared", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (response.ok) {
+          const entries = (await response.json()) as Array<{
+            itemId?: string;
+            providerLabel?: string;
+          }>;
+          activeSharedProviderLabel = entries.find(
+            (candidate) => candidate.itemId === ownedWorkspaceItemId
+          )?.providerLabel;
+          setSharedProviderLabel(activeSharedProviderLabel);
+        }
+      } catch {
+        // The server remains authoritative; an unavailable surface endpoint
+        // must not block normal thread creation.
+      }
+    }
 
     try {
       // Reuse an incomplete active thread; allow minting when only submitted
@@ -224,7 +284,7 @@ export function ThreadProvider({
           ...(ownedWorkspaceItemId
             ? { workspace_item_id: ownedWorkspaceItemId }
             : {}),
-          customModelName: modelName,
+          customModelName: activeSharedProviderLabel || modelName,
           modelConfig: {
             ...modelConfig,
             // Ensure Azure config is included if needed
@@ -547,6 +607,7 @@ export function ThreadProvider({
     modelName,
     modelConfig,
     modelConfigs,
+    sharedProviderLabel,
     createThreadLoading,
     getThread,
     createThread,

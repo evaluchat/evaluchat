@@ -41,7 +41,7 @@ import {
   wrapModelWithFallback,
 } from "./provider-registry.js";
 import { createSafeFetch } from "@opencanvas/shared/byok/url";
-import { getByokModelSettings } from "./byok.js";
+import { getByokModelSettings, getSharedByokModelSettings } from "./byok.js";
 
 const FREE_ASSIGNMENT_MODEL = "mimo-v2.5-free";
 /** Legacy free id — still route via Zen rail if an old client sends it. */
@@ -463,22 +463,24 @@ export async function getModelFromConfig(
   }
 ): Promise<ReturnType<typeof initChatModel>> {
   const byokSettings = await getByokModelSettings(config);
-  if (byokSettings) {
+  const resolvedByokSettings =
+    byokSettings ?? (await getSharedByokModelSettings(config));
+  if (resolvedByokSettings) {
     const modelConfig = config.configurable?.modelConfig as
       | CustomModelConfig
       | undefined;
     const generationConfig = buildGenerationConfig(
-      byokSettings.model,
+      resolvedByokSettings.model,
       modelConfig,
       extra
     );
     return new ChatOpenAI({
-      model: byokSettings.model,
+      model: resolvedByokSettings.model,
       ...generationConfig,
-      apiKey: byokSettings.apiKey,
+      apiKey: resolvedByokSettings.apiKey,
       maxRetries: 0,
       configuration: {
-        baseURL: byokSettings.baseUrl,
+        baseURL: resolvedByokSettings.baseUrl,
         fetch: createSafeFetch(),
       } as any,
     }) as any;

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import type { ByokShareMode } from "@opencanvas/shared/byok/types";
 
 export type ByokTestResult = { ok: boolean; message: string };
 
@@ -14,6 +15,8 @@ export type ByokFormState = {
   baseUrl: string;
   model: string;
   apiKey: string;
+  shareMode?: ByokShareMode;
+  sharedItemIds?: string[];
 };
 
 export type ByokSavedSnapshot = {
@@ -21,7 +24,11 @@ export type ByokSavedSnapshot = {
   baseUrl: string;
   model: string;
   apiKeyMasked: string;
+  shareMode?: ByokShareMode;
+  sharedItemIds?: string[];
 };
+
+export type ByokOwnedMethodItem = { id: string; title: string };
 
 export function buildByokPutBody(form: ByokFormState): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -32,6 +39,10 @@ export function buildByokPutBody(form: ByokFormState): Record<string, unknown> {
   const key = form.apiKey.trim();
   if (key) {
     body.api_key = key;
+  }
+  if (form.shareMode !== undefined) {
+    body.share_mode = form.shareMode;
+    body.shared_item_ids = form.sharedItemIds ?? [];
   }
   return body;
 }
@@ -52,7 +63,10 @@ export function isByokFormDirty(
     form.enabled !== saved.enabled ||
     form.baseUrl.trim() !== saved.baseUrl ||
     form.model.trim() !== saved.model ||
-    form.apiKey.trim() !== ""
+    form.apiKey.trim() !== "" ||
+    (form.shareMode ?? "none") !== (saved.shareMode ?? "none") ||
+    JSON.stringify(form.sharedItemIds ?? []) !==
+      JSON.stringify(saved.sharedItemIds ?? [])
   );
 }
 
@@ -69,6 +83,8 @@ export async function loadByokSettings(
       base_url: string;
       model: string;
       api_key_masked: string;
+      share_mode?: ByokShareMode;
+      shared_item_ids?: string[];
     } | null;
   };
   if (!data.settings) return null;
@@ -77,6 +93,12 @@ export async function loadByokSettings(
     baseUrl: data.settings.base_url,
     model: data.settings.model,
     apiKeyMasked: data.settings.api_key_masked,
+    ...(data.settings.share_mode
+      ? { shareMode: data.settings.share_mode }
+      : {}),
+    ...(data.settings.shared_item_ids
+      ? { sharedItemIds: data.settings.shared_item_ids }
+      : {}),
   };
 }
 
@@ -95,6 +117,8 @@ export async function saveByokSettings(
       base_url: string;
       model: string;
       api_key_masked: string;
+      share_mode?: ByokShareMode;
+      shared_item_ids?: string[];
     };
     error?: string;
   };
@@ -106,6 +130,12 @@ export async function saveByokSettings(
     baseUrl: data.settings.base_url,
     model: data.settings.model,
     apiKeyMasked: data.settings.api_key_masked,
+    ...(data.settings.share_mode
+      ? { shareMode: data.settings.share_mode }
+      : {}),
+    ...(data.settings.shared_item_ids
+      ? { sharedItemIds: data.settings.shared_item_ids }
+      : {}),
   };
 }
 
@@ -136,10 +166,15 @@ type ByokSettingsCardViewProps = {
   saving: boolean;
   testing: boolean;
   testResult: ByokTestResult | null;
+  shareMode?: ByokShareMode;
+  sharedItemIds?: string[];
+  ownedMethodItems?: ByokOwnedMethodItem[];
   onEnabledChange: (enabled: boolean) => void;
   onBaseUrlChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
+  onShareModeChange?: (value: ByokShareMode) => void;
+  onSharedItemIdsChange?: (value: string[]) => void;
   onSave: () => void;
   onTest: () => void;
 };
@@ -154,10 +189,15 @@ export function ByokSettingsCardView({
   saving,
   testing,
   testResult,
+  shareMode = "none",
+  sharedItemIds = [],
+  ownedMethodItems = [],
   onEnabledChange,
   onBaseUrlChange,
   onModelChange,
   onApiKeyChange,
+  onShareModeChange = () => undefined,
+  onSharedItemIdsChange = () => undefined,
   onSave,
   onTest,
 }: ByokSettingsCardViewProps) {
@@ -234,9 +274,73 @@ export function ByokSettingsCardView({
           </div>
           <p className="text-xs text-muted-foreground">
             Your key is encrypted on the server and only used for your own AI
-            interactions in evaluchat. Create a dedicated API key with a
-            sensible usage limit.
+            interactions in evaluchat unless you opt into sharing below. Create
+            a dedicated API key with a sensible usage limit.
           </p>
+          <div className="space-y-2" data-testid="byok-share-control">
+            <Label>Share with assignment participants</Label>
+            <div
+              className="grid grid-cols-3 gap-1 rounded-md border bg-slate-50 p-1"
+              role="radiogroup"
+              aria-label="Share with assignment participants"
+            >
+              {(
+                [
+                  ["none", "No sharing"],
+                  ["all_assignments", "All assignments"],
+                  ["specific_items", "Specific assignments"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={shareMode === value}
+                  className={`rounded px-2 py-1.5 text-xs ${
+                    shareMode === value
+                      ? "bg-white font-medium shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                  onClick={() => onShareModeChange(value)}
+                  data-testid={`byok-share-${value}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {shareMode === "specific_items" ? (
+              ownedMethodItems.length > 0 ? (
+                <select
+                  multiple
+                  value={sharedItemIds}
+                  onChange={(event) =>
+                    onSharedItemIdsChange(
+                      Array.from(
+                        event.target.selectedOptions,
+                        (option) => option.value
+                      )
+                    )
+                  }
+                  className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  data-testid="byok-share-items"
+                >
+                  {ownedMethodItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Create an assignment item before selecting specific items.
+                </p>
+              )
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Participants see only “Provided by instructor” and the model name.
+              They never receive your key or base URL.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={saving} data-testid="byok-save">
               {saving ? "Saving…" : "Save"}
@@ -275,6 +379,11 @@ export function ByokSettingsCard() {
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [shareMode, setShareMode] = useState<ByokShareMode>("none");
+  const [sharedItemIds, setSharedItemIds] = useState<string[]>([]);
+  const [ownedMethodItems, setOwnedMethodItems] = useState<
+    ByokOwnedMethodItem[]
+  >([]);
   const [saved, setSaved] = useState<ByokSavedSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -290,6 +399,8 @@ export function ByokSettingsCard() {
         setEnabled(loaded.enabled);
         setBaseUrl(loaded.baseUrl);
         setModel(loaded.model);
+        setShareMode(loaded.shareMode ?? "none");
+        setSharedItemIds(loaded.sharedItemIds ?? []);
       } catch {
         if (!cancelled) {
           toast({
@@ -299,12 +410,44 @@ export function ByokSettingsCard() {
         }
       }
     })();
+    void fetch("/api/workspace/items", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = (await response.json()) as {
+          items?: Array<{
+            id: string;
+            kind: string;
+            methodSource?: { title?: string; id?: string };
+            templateSnapshot?: { title?: string };
+          }>;
+        };
+        setOwnedMethodItems(
+          (body.items ?? [])
+            .filter((item) => item.kind === "method")
+            .map((item) => ({
+              id: item.id,
+              title:
+                item.methodSource?.title ||
+                item.templateSnapshot?.title ||
+                item.methodSource?.id ||
+                item.id,
+            }))
+        );
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [toast]);
 
-  const form: ByokFormState = { enabled, baseUrl, model, apiKey };
+  const form: ByokFormState = {
+    enabled,
+    baseUrl,
+    model,
+    apiKey,
+    shareMode,
+    sharedItemIds,
+  };
 
   async function handleSave() {
     setSaving(true);
@@ -316,6 +459,8 @@ export function ByokSettingsCard() {
       setEnabled(next.enabled);
       setBaseUrl(next.baseUrl);
       setModel(next.model);
+      setShareMode(next.shareMode ?? "none");
+      setSharedItemIds(next.sharedItemIds ?? []);
       toast({ title: "Saved" });
     } catch (err) {
       toast({
@@ -362,10 +507,15 @@ export function ByokSettingsCard() {
       saving={saving}
       testing={testing}
       testResult={testResult}
+      shareMode={shareMode}
+      sharedItemIds={sharedItemIds}
+      ownedMethodItems={ownedMethodItems}
       onEnabledChange={setEnabled}
       onBaseUrlChange={setBaseUrl}
       onModelChange={setModel}
       onApiKeyChange={setApiKey}
+      onShareModeChange={setShareMode}
+      onSharedItemIdsChange={setSharedItemIds}
       onSave={handleSave}
       onTest={handleTest}
     />
