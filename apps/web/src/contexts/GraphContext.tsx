@@ -886,8 +886,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
           streamMode: "events",
           config: {
             configurable: {
-              customModelName:
-                threadData.sharedProviderLabel ?? threadData.modelName,
+              customModelName: threadData.modelName,
               modelConfig: threadData.modelConfig,
               ...(assignmentSystemPrompt
                 ? { systemPrompt: assignmentSystemPrompt }

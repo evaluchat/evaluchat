@@ -1,21 +1,9 @@
 import { NextResponse } from "next/server";
-import type {
-  ByokShareMode,
-  UserByokSettingsRow,
-} from "@opencanvas/shared/byok/types";
+import { shareCoversItem } from "@opencanvas/shared/byok/shares";
+import type { UserByokSettingsRow } from "@opencanvas/shared/byok/types";
 import { createAdminClient } from "@/lib/teaching/admin-client";
 import { verifyUserAuthenticated } from "@/lib/supabase/verify_user_server";
 import { getWorkspaceItem, listWorkspaceItems } from "@/lib/workspace/store";
-
-function shareCoversItem(row: UserByokSettingsRow, itemId: string): boolean {
-  const mode = row.share_mode ?? "none";
-  return (
-    row.enabled &&
-    (mode === ("all_assignments" satisfies ByokShareMode) ||
-      (mode === "specific_items" &&
-        (row.shared_item_ids ?? []).includes(itemId)))
-  );
-}
 
 export async function GET() {
   const auth = await verifyUserAuthenticated();
@@ -81,6 +69,8 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Failed to resolve shared BYOK providers", error);
-    return NextResponse.json([]);
+    return NextResponse.json([], {
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 }

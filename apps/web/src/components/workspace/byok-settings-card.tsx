@@ -313,6 +313,7 @@ export function ByokSettingsCardView({
                 <select
                   multiple
                   value={sharedItemIds}
+                  aria-label="Assignments to share with"
                   onChange={(event) =>
                     onSharedItemIdsChange(
                       Array.from(

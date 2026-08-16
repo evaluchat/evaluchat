@@ -5,6 +5,7 @@ import {
   assertPublicHost,
   assertPublicHttpsUrl,
 } from "@opencanvas/shared/byok/url";
+import { shareCoversItem } from "@opencanvas/shared/byok/shares";
 import type {
   ByokDecryptedSettings,
   UserByokSettingsRow,
@@ -249,13 +250,7 @@ export async function getSharedByokModelSettings(
     if (!data) return null;
 
     const row = data as UserByokSettingsRow;
-    const shareMode = row.share_mode ?? "none";
-    const covered =
-      row.enabled &&
-      (shareMode === "all_assignments" ||
-        (shareMode === "specific_items" &&
-          (row.shared_item_ids ?? []).includes(ownerItemId)));
-    if (!covered) return null;
+    if (!shareCoversItem(row, ownerItemId)) return null;
 
     const apiKey = decryptApiKey(
       row.api_key_enc,
@@ -264,9 +259,13 @@ export async function getSharedByokModelSettings(
     const baseUrl = assertPublicHttpsUrl(row.base_url);
     await assertPublicHost(new URL(baseUrl).hostname);
     return { baseUrl, model: row.model, apiKey };
-  } catch {
+  } catch (error) {
     // A shared grant is optional. Any missing, revoked, deleted, or invalid
     // owner configuration follows the normal platform-provider path.
+    console.warn(
+      "[byok] shared grant resolution failed; using platform provider",
+      error
+    );
     return null;
   }
 }

@@ -6,37 +6,14 @@ import { WorkspaceAssignmentProvider } from "@/contexts/TeachingAssignmentContex
 import { SessionRecorderWrapper } from "@/components/tracking/session-recorder-wrapper";
 import type { MethodParticipantWorkspaceItem } from "@/lib/workspace/types";
 import { methodParticipantAsAssignment } from "@/lib/workspace/thread-policy";
-import { useEffect, useState } from "react";
+import { useSharedProviderLabel } from "@/lib/workspace/shared-provider";
 
 export function MethodParticipantCanvas({
   item,
 }: {
   item: MethodParticipantWorkspaceItem;
 }) {
-  const [providerLabel, setProviderLabel] = useState<string>();
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/byok/shared", {
-      credentials: "include",
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        if (!response.ok) return;
-        const entries = (await response.json()) as Array<{
-          itemId?: string;
-          providerLabel?: string;
-        }>;
-        const entry = entries.find((candidate) => candidate.itemId === item.id);
-        if (!cancelled && entry?.providerLabel) {
-          setProviderLabel(entry.providerLabel);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [item.id]);
+  const providerLabel = useSharedProviderLabel(item.id);
 
   return (
     <WorkspaceAssignmentProvider
