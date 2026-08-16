@@ -290,4 +290,84 @@ describe("replyToGeneralInput", () => {
       ...state._messages,
     ]);
   });
+
+  it("orients Method brief chats to the assignment initiator", async () => {
+    const state = createMockState({
+      _messages: [new HumanMessage({ content: "Review the brief", id: "1" })],
+      formContext: {
+        templateId: "assignment-brief",
+        title: "Assignment brief",
+        description: "A brief for an assignment",
+        layoutMarkdown: "# {{title}}",
+        fields: {},
+        values: {},
+        methodContext: {
+          title: "AI-assisted essay",
+          description: "Constrained dialogic drafting.",
+          guidance: "Keep the assignment open to student interpretation.",
+          briefTemplate: "# {{title}}",
+        },
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining(
+          "You are assisting the person creating and initiating this assignment"
+        ),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining(
+          '"guidance": "Keep the assignment open to student interpretation."'
+        ),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining(
+          "This initiator orientation overrides the generic AI writing coach"
+        ),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("does not add Method initiator orientation without Method context", async () => {
+    const state = createMockState({
+      _messages: [new HumanMessage({ content: "Set the title", id: "1" })],
+      formContext: {
+        templateId: "assignment-brief",
+        title: "Assignment brief",
+        description: "A brief for an assignment",
+        layoutMarkdown: "# {{title}}",
+        fields: {},
+        values: {},
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining(
+          "You are an AI writing coach helping a student"
+        ),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<method-context>"),
+      }),
+      ...state._messages,
+    ]);
+  });
 });

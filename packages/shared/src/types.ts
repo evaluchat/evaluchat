@@ -217,6 +217,12 @@ export interface FormAgentContext {
     }
   >;
   values: Record<string, FormAgentValue>;
+  methodContext?: {
+    title: string;
+    description?: string;
+    guidance?: string;
+    briefTemplate?: string;
+  };
 }
 
 /**
