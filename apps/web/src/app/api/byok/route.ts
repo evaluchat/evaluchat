@@ -95,6 +95,7 @@ export async function PUT(req: NextRequest) {
     api_key?: string;
     share_mode?: ByokShareMode;
     shared_item_ids?: string[];
+    shareItemIdsReplace?: string[];
   };
   try {
     body = await req.json();
@@ -123,8 +124,13 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  const sharedItemIdsRaw =
-    body.shared_item_ids ?? existingRow?.shared_item_ids ?? [];
+  const hasShareItemIdsReplace = Object.prototype.hasOwnProperty.call(
+    body,
+    "shareItemIdsReplace"
+  );
+  const sharedItemIdsRaw = hasShareItemIdsReplace
+    ? body.shareItemIdsReplace
+    : (body.shared_item_ids ?? existingRow?.shared_item_ids ?? []);
   if (
     !Array.isArray(sharedItemIdsRaw) ||
     !sharedItemIdsRaw.every(
@@ -133,7 +139,11 @@ export async function PUT(req: NextRequest) {
     )
   ) {
     return NextResponse.json(
-      { error: "shared_item_ids must be an array of item ids" },
+      {
+        error: hasShareItemIdsReplace
+          ? "shareItemIdsReplace must be an array of item ids"
+          : "shared_item_ids must be an array of item ids",
+      },
       { status: 400 }
     );
   }
@@ -151,7 +161,10 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  if (shareModeRaw === "specific_items") {
+  if (
+    shareModeRaw === "specific_items" ||
+    (hasShareItemIdsReplace && sharedItemIds.length > 0)
+  ) {
     try {
       const ownedItems = await Promise.all(
         sharedItemIds.map((itemId) => getWorkspaceItem(user.id, itemId))

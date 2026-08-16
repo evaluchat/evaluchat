@@ -6,6 +6,7 @@ import {
   buildByokPutBody,
   isByokFormDirty,
   loadByokSettings,
+  revokeSharedItem,
   saveByokSettings,
   testByokConnection,
 } from "./byok-settings-card";
@@ -140,7 +141,18 @@ describe("ByokSettingsCard helpers", () => {
     });
   });
 
-  it("carries specific assignment sharing in the PUT body", () => {
+  it("sends the selected scope and an authoritative replacement list", () => {
+    expect(
+      buildByokPutBody({
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        shareMode: "all_assignments",
+      })
+    ).toMatchObject({
+      share_mode: "all_assignments",
+    });
     expect(
       buildByokPutBody({
         enabled: true,
@@ -149,10 +161,11 @@ describe("ByokSettingsCard helpers", () => {
         apiKey: "",
         shareMode: "specific_items",
         sharedItemIds: ["method-1", "method-2"],
+        shareItemIdsReplace: ["method-2"],
       })
     ).toMatchObject({
       share_mode: "specific_items",
-      shared_item_ids: ["method-1", "method-2"],
+      shareItemIdsReplace: ["method-2"],
     });
   });
 
@@ -185,6 +198,14 @@ describe("ByokSettingsCard helpers", () => {
         saved
       )
     ).toBe(true);
+  });
+
+  it("resets the sharing scope when the last specific assignment is revoked", () => {
+    expect(revokeSharedItem(["method-1"], "method-1")).toEqual({
+      shareMode: "none",
+      sharedItemIds: [],
+      shareItemIdsReplace: [],
+    });
   });
 });
 
@@ -303,21 +324,22 @@ describe("ByokSettingsCardView", () => {
         testResult: null,
         shareMode: "specific_items",
         sharedItemIds: ["method-1"],
-        ownedMethodItems: [{ id: "method-1", title: "Assignment one" }],
         onEnabledChange: () => undefined,
         onBaseUrlChange: () => undefined,
         onModelChange: () => undefined,
         onApiKeyChange: () => undefined,
         onShareModeChange: () => undefined,
-        onSharedItemIdsChange: () => undefined,
+        onRevokeSharedItem: () => undefined,
         onSave: () => undefined,
         onTest: () => undefined,
       })
     );
 
     expect(markup).toContain('data-testid="byok-share-control"');
-    expect(markup).toContain("Specific assignments");
-    expect(markup).toContain("Assignment one");
+    expect(markup).not.toContain("Specific assignments");
+    expect(markup).toContain("method-1");
+    expect(markup).toContain('data-testid="byok-share-revoke-method-1"');
+    expect(markup).not.toContain("<select");
     expect(markup).toContain("Provided by instructor");
     expect(markup).not.toContain("sk-owner-secret");
   });

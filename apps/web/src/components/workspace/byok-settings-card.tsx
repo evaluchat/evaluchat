@@ -17,6 +17,7 @@ export type ByokFormState = {
   apiKey: string;
   shareMode?: ByokShareMode;
   sharedItemIds?: string[];
+  shareItemIdsReplace?: string[];
 };
 
 export type ByokSavedSnapshot = {
@@ -28,7 +29,21 @@ export type ByokSavedSnapshot = {
   sharedItemIds?: string[];
 };
 
-export type ByokOwnedMethodItem = { id: string; title: string };
+export function revokeSharedItem(
+  sharedItemIds: string[],
+  itemId: string
+): {
+  shareMode: ByokShareMode;
+  sharedItemIds: string[];
+  shareItemIdsReplace: string[];
+} {
+  const nextSharedItemIds = sharedItemIds.filter((id) => id !== itemId);
+  return {
+    shareMode: nextSharedItemIds.length > 0 ? "specific_items" : "none",
+    sharedItemIds: nextSharedItemIds,
+    shareItemIdsReplace: nextSharedItemIds,
+  };
+}
 
 export function buildByokPutBody(form: ByokFormState): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -41,8 +56,13 @@ export function buildByokPutBody(form: ByokFormState): Record<string, unknown> {
     body.api_key = key;
   }
   if (form.shareMode !== undefined) {
+    // The selectable settings-page scopes are none/all_assignments. Keep a
+    // legacy or launch-created specific_items scope intact when only provider
+    // fields are being saved or its IDs are being revoked.
     body.share_mode = form.shareMode;
-    body.shared_item_ids = form.sharedItemIds ?? [];
+  }
+  if (form.shareItemIdsReplace !== undefined) {
+    body.shareItemIdsReplace = form.shareItemIdsReplace;
   }
   return body;
 }
@@ -168,13 +188,12 @@ type ByokSettingsCardViewProps = {
   testResult: ByokTestResult | null;
   shareMode?: ByokShareMode;
   sharedItemIds?: string[];
-  ownedMethodItems?: ByokOwnedMethodItem[];
   onEnabledChange: (enabled: boolean) => void;
   onBaseUrlChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
   onShareModeChange?: (value: ByokShareMode) => void;
-  onSharedItemIdsChange?: (value: string[]) => void;
+  onRevokeSharedItem?: (itemId: string) => void;
   onSave: () => void;
   onTest: () => void;
 };
@@ -191,13 +210,12 @@ export function ByokSettingsCardView({
   testResult,
   shareMode = "none",
   sharedItemIds = [],
-  ownedMethodItems = [],
   onEnabledChange,
   onBaseUrlChange,
   onModelChange,
   onApiKeyChange,
   onShareModeChange = () => undefined,
-  onSharedItemIdsChange = () => undefined,
+  onRevokeSharedItem = () => undefined,
   onSave,
   onTest,
 }: ByokSettingsCardViewProps) {
@@ -280,7 +298,7 @@ export function ByokSettingsCardView({
           <div className="space-y-2" data-testid="byok-share-control">
             <Label>Share with assignment participants</Label>
             <div
-              className="grid grid-cols-3 gap-1 rounded-md border bg-slate-50 p-1"
+              className="grid grid-cols-2 gap-1 rounded-md border bg-slate-50 p-1"
               role="radiogroup"
               aria-label="Share with assignment participants"
             >
@@ -288,7 +306,6 @@ export function ByokSettingsCardView({
                 [
                   ["none", "No sharing"],
                   ["all_assignments", "All assignments"],
-                  ["specific_items", "Specific assignments"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -309,33 +326,43 @@ export function ByokSettingsCardView({
               ))}
             </div>
             {shareMode === "specific_items" ? (
-              ownedMethodItems.length > 0 ? (
-                <select
-                  multiple
-                  value={sharedItemIds}
-                  aria-label="Assignments to share with"
-                  onChange={(event) =>
-                    onSharedItemIdsChange(
-                      Array.from(
-                        event.target.selectedOptions,
-                        (option) => option.value
-                      )
-                    )
-                  }
-                  className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  data-testid="byok-share-items"
-                >
-                  {ownedMethodItems.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.title}
-                    </option>
-                  ))}
-                </select>
-              ) : (
+              <div
+                className="space-y-2 rounded-md border bg-slate-50 p-3"
+                data-testid="byok-share-specific-items"
+              >
                 <p className="text-xs text-muted-foreground">
-                  Create an assignment item before selecting specific items.
+                  Shared specific assignments
                 </p>
-              )
+                {sharedItemIds.length > 0 ? (
+                  <ul className="space-y-1">
+                    {sharedItemIds.map((itemId) => (
+                      <li
+                        key={itemId}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <code title={itemId} className="truncate">
+                          {itemId.length > 18
+                            ? `${itemId.slice(0, 10)}…${itemId.slice(-6)}`
+                            : itemId}
+                        </code>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onRevokeSharedItem(itemId)}
+                          data-testid={`byok-share-revoke-${itemId}`}
+                        >
+                          Revoke
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    No specific assignments are currently shared.
+                  </p>
+                )}
+              </div>
             ) : null}
             <p className="text-xs text-muted-foreground">
               Participants see only “Provided by instructor” and the model name.
@@ -382,9 +409,9 @@ export function ByokSettingsCard() {
   const [apiKey, setApiKey] = useState("");
   const [shareMode, setShareMode] = useState<ByokShareMode>("none");
   const [sharedItemIds, setSharedItemIds] = useState<string[]>([]);
-  const [ownedMethodItems, setOwnedMethodItems] = useState<
-    ByokOwnedMethodItem[]
-  >([]);
+  const [shareItemIdsReplace, setShareItemIdsReplace] = useState<
+    string[] | undefined
+  >();
   const [saved, setSaved] = useState<ByokSavedSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -402,6 +429,7 @@ export function ByokSettingsCard() {
         setModel(loaded.model);
         setShareMode(loaded.shareMode ?? "none");
         setSharedItemIds(loaded.sharedItemIds ?? []);
+        setShareItemIdsReplace(undefined);
       } catch {
         if (!cancelled) {
           toast({
@@ -411,31 +439,6 @@ export function ByokSettingsCard() {
         }
       }
     })();
-    void fetch("/api/workspace/items", { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) return;
-        const body = (await response.json()) as {
-          items?: Array<{
-            id: string;
-            kind: string;
-            methodSource?: { title?: string; id?: string };
-            templateSnapshot?: { title?: string };
-          }>;
-        };
-        setOwnedMethodItems(
-          (body.items ?? [])
-            .filter((item) => item.kind === "method")
-            .map((item) => ({
-              id: item.id,
-              title:
-                item.methodSource?.title ||
-                item.templateSnapshot?.title ||
-                item.methodSource?.id ||
-                item.id,
-            }))
-        );
-      })
-      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -448,7 +451,25 @@ export function ByokSettingsCard() {
     apiKey,
     shareMode,
     sharedItemIds,
+    shareItemIdsReplace,
   };
+
+  function handleShareModeChange(next: ByokShareMode) {
+    setShareMode(next);
+    setShareItemIdsReplace(undefined);
+    if (next !== "specific_items") {
+      setSharedItemIds([]);
+    }
+  }
+
+  function handleRevokeSharedItem(itemId: string) {
+    const next = revokeSharedItem(sharedItemIds, itemId);
+    setSharedItemIds(next.sharedItemIds);
+    setShareItemIdsReplace(next.shareItemIdsReplace);
+    // A specific scope with no assignments is not useful; make the clear
+    // operation explicit so the PUT route clears shared_item_ids as well.
+    setShareMode(next.shareMode);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -462,6 +483,7 @@ export function ByokSettingsCard() {
       setModel(next.model);
       setShareMode(next.shareMode ?? "none");
       setSharedItemIds(next.sharedItemIds ?? []);
+      setShareItemIdsReplace(undefined);
       toast({ title: "Saved" });
     } catch (err) {
       toast({
@@ -510,13 +532,12 @@ export function ByokSettingsCard() {
       testResult={testResult}
       shareMode={shareMode}
       sharedItemIds={sharedItemIds}
-      ownedMethodItems={ownedMethodItems}
       onEnabledChange={setEnabled}
       onBaseUrlChange={setBaseUrl}
       onModelChange={setModel}
       onApiKeyChange={setApiKey}
-      onShareModeChange={setShareMode}
-      onSharedItemIdsChange={setSharedItemIds}
+      onShareModeChange={handleShareModeChange}
+      onRevokeSharedItem={handleRevokeSharedItem}
       onSave={handleSave}
       onTest={handleTest}
     />
