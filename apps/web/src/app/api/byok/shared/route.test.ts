@@ -102,6 +102,23 @@ describe("GET /api/byok/shared", () => {
     expect(JSON.stringify(body)).not.toContain("private.example");
   });
 
+  it("returns the provider label when specific_items includes the method item", async () => {
+    mockSharedParticipant({
+      share_mode: "specific_items",
+      shared_item_ids: ["method-item"],
+    });
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(body).toEqual([
+      {
+        itemId: "participant-item",
+        providerLabel: "Provided by instructor — openai/gpt-4o-mini",
+      },
+    ]);
+  });
+
   it.each([
     ["share_mode none", { share_mode: "none" }],
     ["disabled sharing", { enabled: false }],
