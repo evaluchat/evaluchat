@@ -116,6 +116,7 @@ import {
   getWorkspaceItem,
   listWorkspaceItems,
   pendingInviteNamespace,
+  inviteLockId,
   resolveMethodTrackingAccess,
   submitWorkspaceForm,
   WorkspaceItemNotFoundError,
@@ -309,6 +310,10 @@ describe("workspace item lifecycle", () => {
     expect(pendingInviteNamespace("cronjev@outlook.com")).toEqual(
       pendingInviteNamespace("Cronjev@Outlook.Com")
     );
+
+    const lockId = inviteLockId("cronjevh+test1708@gmail.com");
+    expect(lockId).not.toMatch(/[.@+]/);
+    expect(lockId).toBe("invite_cronjevh_test1708_gmail_com");
   });
 });
 
@@ -354,7 +359,94 @@ describe("method run launch", () => {
     expect(stored?.kind === "method" && stored.run).toBeUndefined();
   });
 
-  it("snapshots the selected profile and ignores client lever values", async () => {
+  it.each([
+    [
+      "canonical-constrained-dialogue",
+      {
+        ai_assistance: true,
+        ai_canvas_actions: true,
+        drafting_gate: "discussion-first",
+        threshold: 4,
+        tracking: true,
+      },
+    ],
+    [
+      "gate-off",
+      {
+        ai_assistance: true,
+        ai_canvas_actions: true,
+        drafting_gate: "none",
+        threshold: 0,
+        tracking: true,
+      },
+    ],
+    [
+      "ai-off",
+      {
+        ai_assistance: false,
+        ai_canvas_actions: false,
+        drafting_gate: "none",
+        threshold: 0,
+        tracking: true,
+      },
+    ],
+    [
+      "canvas-actions-off",
+      {
+        ai_assistance: true,
+        ai_canvas_actions: false,
+        drafting_gate: "discussion-first",
+        threshold: 4,
+        tracking: true,
+      },
+    ],
+    [
+      "tracking-off",
+      {
+        ai_assistance: true,
+        ai_canvas_actions: true,
+        drafting_gate: "discussion-first",
+        threshold: 4,
+        tracking: false,
+      },
+    ],
+  ])(
+    "snapshots %s on the run and every participant item",
+    async (profileId, apparatusConfiguration) => {
+      const item = await createMethodWorkspaceItem(
+        "user-1",
+        "ai-assisted-essay"
+      );
+      harness.findUserByEmail.mockResolvedValue({
+        id: "user-2",
+        email: "a@example.com",
+      });
+
+      const result = await submitWorkspaceForm(
+        "user-1",
+        item.id,
+        { ...assignmentBrief, participants: "a@example.com" },
+        { profileId }
+      );
+
+      expect(result.item.kind).toBe("method");
+      if (result.item.kind !== "method" || !result.item.run) {
+        throw new Error("expected method run item from submitWorkspaceForm");
+      }
+      expect(result.item.run.profileId).toBe(profileId);
+      expect(result.item.run.apparatusConfiguration).toEqual(
+        apparatusConfiguration
+      );
+
+      const participantId = result.item.run.participants[0].itemId!;
+      const participantManifest = manifestFor("user-2");
+      expect(
+        participantManifest.items[participantId].apparatusConfiguration
+      ).toEqual(apparatusConfiguration);
+    }
+  );
+
+  it("falls back to the canonical profile for an unknown profile id", async () => {
     const item = await createMethodWorkspaceItem("user-1", "ai-assisted-essay");
     harness.findUserByEmail.mockResolvedValue({
       id: "user-2",
@@ -365,20 +457,20 @@ describe("method run launch", () => {
       "user-1",
       item.id,
       { ...assignmentBrief, participants: "a@example.com" },
-      {
-        profileId: "canonical-constrained-dialogue",
-      }
+      { profileId: "not-a-profile" }
     );
 
     expect(result.item.kind).toBe("method");
-    if (result.item.kind !== "method") return;
-    expect(result.item.id).toBe(item.id);
-    expect(result.item.run?.profileId).toBe("canonical-constrained-dialogue");
-    expect(result.item.run?.apparatusConfiguration).toMatchObject({
-      tracking: true,
+    if (result.item.kind !== "method" || !result.item.run) {
+      throw new Error("expected method run item from submitWorkspaceForm");
+    }
+    expect(result.item.run.profileId).toBe("canonical-constrained-dialogue");
+    expect(result.item.run.apparatusConfiguration).toEqual({
       ai_assistance: true,
+      ai_canvas_actions: true,
       drafting_gate: "discussion-first",
       threshold: 4,
+      tracking: true,
     });
   });
 

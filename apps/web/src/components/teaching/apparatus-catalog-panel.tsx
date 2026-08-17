@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useUserContext } from "@/contexts/UserContext";
-import { isOrgAdmin } from "@/lib/teaching/teacher-utils";
 
 type ApparatusProfile = {
   id: string;
@@ -25,30 +23,32 @@ type Apparatus = {
 };
 
 type CatalogResponse = {
-  apparatuses?: Apparatus[];
+  methods?: Apparatus[];
   enabled?: string[];
 };
 
 export function ApparatusCatalogPanel() {
-  const { user } = useUserContext();
-  const orgAdmin = isOrgAdmin(user);
   const [apparatuses, setApparatuses] = useState<Apparatus[]>([]);
   const [enabled, setEnabled] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toggling, setToggling] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/teacher/org/apparatuses", {
+      const response = await fetch("/api/methods", {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(`Request failed (${response.status})`);
       const data = (await response.json()) as CatalogResponse;
-      setApparatuses(Array.isArray(data.apparatuses) ? data.apparatuses : []);
-      setEnabled(Array.isArray(data.enabled) ? data.enabled : []);
+      const apparatuses = Array.isArray(data.methods) ? data.methods : [];
+      setApparatuses(apparatuses);
+      setEnabled(
+        Array.isArray(data.enabled)
+          ? data.enabled
+          : apparatuses.map((apparatus) => apparatus.id)
+      );
     } catch {
       setError("Could not load the apparatus catalog.");
       setApparatuses([]);
@@ -61,26 +61,6 @@ export function ApparatusCatalogPanel() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const toggle = async (apparatusId: string) => {
-    setToggling(apparatusId);
-    try {
-      const response = await fetch("/api/teacher/org/apparatuses", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apparatusId,
-          enabled: !enabled.includes(apparatusId),
-        }),
-      });
-      if (!response.ok) throw new Error(`Request failed (${response.status})`);
-      await load();
-    } catch {
-      setError("The apparatus setting could not be saved.");
-    } finally {
-      setToggling(null);
-    }
-  };
 
   return (
     <Card data-testid="apparatus-catalog-panel">
@@ -130,17 +110,6 @@ export function ApparatusCatalogPanel() {
                         {apparatus.description}
                       </p>
                     </div>
-                    {orgAdmin ? (
-                      <button
-                        type="button"
-                        data-testid={`apparatus-toggle-${apparatus.id}`}
-                        className="rounded border px-3 py-1 text-xs hover:bg-muted disabled:opacity-50"
-                        disabled={toggling === apparatus.id}
-                        onClick={() => void toggle(apparatus.id)}
-                      >
-                        {isEnabled ? "Disable" : "Enable"}
-                      </button>
-                    ) : null}
                   </div>
                   {apparatus.profiles?.length ? (
                     <div className="mt-3">

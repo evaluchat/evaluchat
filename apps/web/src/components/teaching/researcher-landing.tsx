@@ -9,11 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useUserContext } from "@/contexts/UserContext";
-import {
-  isOrgAdmin,
-  isResearcher,
-  isTeacher,
-} from "@/lib/teaching/teacher-utils";
+import { isResearcher, isTeacher } from "@/lib/teaching/teacher-utils";
 
 type ApparatusDashboardItem = {
   id: string;
@@ -41,20 +37,27 @@ export function ResearcherLanding() {
   const [apparatuses, setApparatuses] = useState<ApparatusDashboardItem[]>([]);
   const [apparatusLoading, setApparatusLoading] = useState(true);
   const [apparatusError, setApparatusError] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchApparatuses = useCallback(async () => {
     setApparatusLoading(true);
     setApparatusError(false);
     try {
-      const res = await fetch("/api/apparatuses", { cache: "no-store" });
+      const res = await fetch("/api/methods", { cache: "no-store" });
       if (!res.ok) {
         throw new Error(`status ${res.status}`);
       }
       const data = (await res.json()) as {
-        apparatuses?: ApparatusDashboardItem[];
+        methods?: ApparatusDashboardItem[];
       };
-      setApparatuses(Array.isArray(data.apparatuses) ? data.apparatuses : []);
+      setApparatuses(
+        Array.isArray(data.methods)
+          ? data.methods.map((apparatus) => ({
+              ...apparatus,
+              enabled: apparatus.enabled ?? true,
+              enabled_source: apparatus.enabled_source ?? "default",
+            }))
+          : []
+      );
     } catch {
       setApparatusError(true);
       setApparatuses([]);
@@ -74,25 +77,6 @@ export function ResearcherLanding() {
       void fetchApparatuses();
     }
   }, [user, loading, fetchApparatuses]);
-
-  const handleToggle = async (item: ApparatusDashboardItem) => {
-    setTogglingId(item.id);
-    try {
-      const res = await fetch("/api/teacher/org/apparatuses", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apparatusId: item.id,
-          enabled: !item.enabled,
-        }),
-      });
-      if (res.ok) {
-        await fetchApparatuses();
-      }
-    } finally {
-      setTogglingId(null);
-    }
-  };
 
   if (loading || !user) {
     return (
@@ -133,8 +117,6 @@ export function ResearcherLanding() {
     "Public data",
     "Annual report",
   ];
-
-  const orgAdmin = isOrgAdmin(user);
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -221,17 +203,6 @@ export function ResearcherLanding() {
                         {item.enabled ? "Enabled" : "Disabled"}
                         {sourceLabel}
                       </span>
-                      {orgAdmin ? (
-                        <button
-                          type="button"
-                          data-testid={`apparatus-toggle-${item.id}`}
-                          className="ml-auto text-xs underline text-muted-foreground hover:text-foreground disabled:opacity-50"
-                          disabled={togglingId === item.id}
-                          onClick={() => void handleToggle(item)}
-                        >
-                          {item.enabled ? "Disable" : "Enable"}
-                        </button>
-                      ) : null}
                     </div>
                     {item.description ? (
                       <p className="mb-2 text-xs text-muted-foreground">

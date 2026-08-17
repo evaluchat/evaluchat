@@ -834,6 +834,16 @@ export function pendingInviteNamespace(email: string): string[] {
   return ["workspace_method_invites", label || "unknown"];
 }
 
+export function inviteLockId(email: string): string {
+  const label = email
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 128);
+  return `invite_${label || "unknown"}`;
+}
+
 async function readPendingInvites(
   email: string
 ): Promise<PendingMethodInvite[]> {
@@ -985,7 +995,7 @@ async function launchMethodRun(
       assignment,
       createdAt: launchedAt,
     };
-    await withUserLock(`invite:${email}`, async () => {
+    await withUserLock(inviteLockId(email), async () => {
       const invites = await readPendingInvites(email);
       invites.push(pending);
       await writePendingInvites(email, invites);
@@ -1028,7 +1038,7 @@ export async function claimPendingMethodInvites(
   const normalized = email.trim().toLowerCase();
   if (!normalized) return;
 
-  const invites = await withUserLock(`invite:${normalized}`, async () =>
+  const invites = await withUserLock(inviteLockId(normalized), async () =>
     readPendingInvites(normalized)
   );
   if (invites.length === 0) return;
@@ -1094,7 +1104,7 @@ export async function claimPendingMethodInvites(
     claimed.push(invite);
   }
 
-  await withUserLock(`invite:${normalized}`, async () => {
+  await withUserLock(inviteLockId(normalized), async () => {
     const remaining = (await readPendingInvites(normalized)).filter(
       (invite) =>
         !claimed.some(

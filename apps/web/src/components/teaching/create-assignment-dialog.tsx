@@ -188,13 +188,15 @@ export function CreateAssignmentDialog({
 
   const fetchApparatuses = async () => {
     try {
-      const response = await fetch("/api/teacher/org/apparatuses");
+      const response = await fetch("/api/methods");
       if (!response.ok) return;
       const data = await response.json();
-      const enabled = new Set<string>(data.enabled || []);
+      const enabled = Array.isArray(data.enabled)
+        ? new Set<string>(data.enabled)
+        : undefined;
       setApparatuses(
-        (data.apparatuses || []).filter((entry: { id: string }) =>
-          enabled.has(entry.id)
+        (data.methods || []).filter(
+          (entry: { id: string }) => !enabled || enabled.has(entry.id)
         )
       );
     } catch (error) {
