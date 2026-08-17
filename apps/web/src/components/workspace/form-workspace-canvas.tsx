@@ -14,6 +14,7 @@ import type { Components } from "react-markdown";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, PanelRightClose } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -360,6 +361,9 @@ export function FormWorkspaceCanvas({
       ])
     )
   );
+  const [selectedProfileId, setSelectedProfileId] = useState(
+    item.kind === "method" ? item.profileId : undefined
+  );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -567,6 +571,7 @@ export function FormWorkspaceCanvas({
           credentials: "include",
           body: JSON.stringify({
             values,
+            profileId: selectedProfileId,
           }),
         }
       );
@@ -712,6 +717,30 @@ export function FormWorkspaceCanvas({
                     register={registerField}
                   />
                 </div>
+                {currentItem.kind === "method" &&
+                  !currentItem.run &&
+                  currentItem.profiles.length > 0 && (
+                    <section className="mt-8 max-w-md space-y-2">
+                      <Label htmlFor="workspace-method-profile">
+                        Assignment profile
+                      </Label>
+                      <select
+                        id="workspace-method-profile"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={selectedProfileId}
+                        onChange={(event) =>
+                          setSelectedProfileId(event.target.value)
+                        }
+                        data-testid="workspace-method-profile"
+                      >
+                        {currentItem.profiles.map((profile) => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.label}
+                          </option>
+                        ))}
+                      </select>
+                    </section>
+                  )}
                 {submitted && currentItem.submission && (
                   <section
                     className="mt-10 border-t border-slate-200 pt-6"
