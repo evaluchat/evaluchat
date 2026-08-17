@@ -218,6 +218,53 @@ knobs:
     );
   });
 
+  it("rejects an evidence template with a non-string default_stage", () => {
+    const root = researchRoot();
+    writeMethod(root, "ai-assisted-essay", methodFrontmatter);
+    writeEvidenceTemplate(
+      root,
+      "ai-assisted-essay",
+      evidenceTemplateFrontmatter.replace(
+        "default_stage: documented-experience",
+        "default_stage: 1",
+      ),
+    );
+
+    expect(() => buildApparatusMirror(root)).toThrow(
+      /evidence_template default_stage must be a string/,
+    );
+  });
+
+  it("rejects an evidence template with non-string assistant guidance", () => {
+    const root = researchRoot();
+    writeMethod(root, "ai-assisted-essay", methodFrontmatter);
+    writeEvidenceTemplate(
+      root,
+      "ai-assisted-essay",
+      evidenceTemplateFrontmatter.replace(
+        "guidance: Keep observations factual.",
+        "guidance: [Keep observations factual.]",
+      ),
+    );
+
+    expect(() => buildApparatusMirror(root)).toThrow(
+      /evidence_template assistant\.guidance must be a string/,
+    );
+  });
+
+  it("rejects a builtin method whose source id differs from its directory id", () => {
+    const root = researchRoot();
+    writeMethod(
+      root,
+      "ai-assisted-essay",
+      methodFrontmatter.replace("id: ai-assisted-essay", "id: another-method"),
+    );
+
+    expect(() => buildApparatusMirror(root)).toThrow(
+      /must declare id ai-assisted-essay/,
+    );
+  });
+
   it("rejects a builtin method whose run brief is not a platform Form template", () => {
     expect(() =>
       assertMethodRunBriefsBound(

@@ -136,17 +136,32 @@ function parseEvidenceTemplate(
     }
   }
 
-  const assistant = isRecord(frontmatter.assistant)
-    ? frontmatter.assistant
-    : {};
   const defaultStage = frontmatter.default_stage;
+  if (defaultStage !== undefined && typeof defaultStage !== "string") {
+    contractError("default_stage", "must be a string");
+  }
+
+  let assistant: Record<string, unknown> = {};
+  if (frontmatter.assistant !== undefined) {
+    if (!isRecord(frontmatter.assistant)) {
+      contractError("assistant", "must be a map");
+    }
+    assistant = frontmatter.assistant;
+  }
+  if (
+    assistant.guidance !== undefined &&
+    typeof assistant.guidance !== "string"
+  ) {
+    contractError("assistant.guidance", "must be a string");
+  }
+
   return {
     id: templateId,
     version: templateVersion,
-    ...(typeof defaultStage === "string" ? { defaultStage } : {}),
+    ...(defaultStage !== undefined ? { defaultStage } : {}),
     fields: frontmatter.fields,
     layoutMarkdown: source.slice(match[0].length),
-    guidance: typeof assistant.guidance === "string" ? assistant.guidance : "",
+    guidance: assistant.guidance ?? "",
     sourcePath: path.posix.join("methods", methodId, "evidence-template.en.md"),
   };
 }
@@ -206,7 +221,12 @@ export function buildApparatusMirror(researchRoot: string): {
     }
     const source = fs.readFileSync(sourcePath, "utf8");
     const frontmatter = parseFrontmatter(source, sourcePath);
-    const methodId = String(frontmatter.id || id);
+    if (String(frontmatter.id) !== id) {
+      throw new Error(
+        `Builtin method source ${sourcePath} must declare id ${id}`,
+      );
+    }
+    const methodId = id;
     const methodVersion = String(frontmatter.version || "");
     const evidenceTemplateRef = String(frontmatter.evidence_template || "");
     if (!evidenceTemplateRef) {

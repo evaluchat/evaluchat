@@ -124,6 +124,53 @@ type ApparatusArtifact = {
   apparatuses: ApparatusCatalogEntry[];
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateEvidenceTemplate(entryId: string, template: unknown): void {
+  const contractError = (field: string, message: string): never => {
+    throw new Error(
+      `Apparatus ${entryId} evidence_template${field ? ` ${field}` : ""} ${message}`
+    );
+  };
+
+  const evidenceTemplate = isRecord(template)
+    ? template
+    : contractError("", "must be an object");
+
+  if (typeof evidenceTemplate.id !== "string") {
+    contractError("id", "must be a string");
+  }
+  if (evidenceTemplate.id !== "evidence-template") {
+    contractError("id", "must be evidence-template");
+  }
+  if (
+    typeof evidenceTemplate.version !== "string" ||
+    !evidenceTemplate.version
+  ) {
+    contractError("version", "must be a non-empty string");
+  }
+  if (
+    evidenceTemplate.defaultStage !== undefined &&
+    typeof evidenceTemplate.defaultStage !== "string"
+  ) {
+    contractError("defaultStage", "must be a string");
+  }
+  if (!isRecord(evidenceTemplate.fields)) {
+    contractError("fields", "must be an object");
+  }
+  if (typeof evidenceTemplate.layoutMarkdown !== "string") {
+    contractError("layoutMarkdown", "must be a string");
+  }
+  if (typeof evidenceTemplate.guidance !== "string") {
+    contractError("guidance", "must be a string");
+  }
+  if (typeof evidenceTemplate.sourcePath !== "string") {
+    contractError("sourcePath", "must be a string");
+  }
+}
+
 function loadCatalog(): ApparatusCatalogEntry[] {
   const artifactPath = join(
     process.cwd(),
@@ -166,6 +213,9 @@ export function validateApparatusCatalog(
     known.add(entry.id);
     if (!entry.version || !entry.min_canvas_version) {
       throw new Error(`Apparatus ${entry.id} is missing version metadata`);
+    }
+    if (entry.evidence_template !== undefined) {
+      validateEvidenceTemplate(entry.id, entry.evidence_template);
     }
     for (const capability of entry.required_capabilities) {
       if (!(APPARATUS_CAPABILITIES as readonly string[]).includes(capability)) {

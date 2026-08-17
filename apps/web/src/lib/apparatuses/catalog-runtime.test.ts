@@ -89,6 +89,36 @@ describe("generated apparatus catalog", () => {
     ).toThrow(/threshold must be zero/);
   });
 
+  it("rejects malformed embedded evidence templates", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    for (const evidence_template of [
+      null,
+      {
+        ...essays.evidence_template,
+        fields: [],
+      },
+      {
+        ...essays.evidence_template,
+        layoutMarkdown: false,
+      },
+      {
+        ...essays.evidence_template,
+        guidance: [],
+      },
+      {
+        ...essays.evidence_template,
+        sourcePath: {},
+      },
+    ]) {
+      expect(() =>
+        validateApparatusCatalog([{ ...essays, evidence_template } as never])
+      ).toThrow(/evidence_template/);
+    }
+  });
+
   it("accepts every supported optional-capability combination with a viable workflow", () => {
     const essays = APPARATUS_CATALOG.find(
       (entry) => entry.id === "ai-assisted-essay"
