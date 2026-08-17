@@ -379,6 +379,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     isStreaming,
     updateRenderedArtifactRequired,
     workspaceItem?.item?.kind,
+    workspaceItem?.item?.run,
   ]);
 
   const lastLoadedThreadIdFromQuery = useRef<string | null>(null);
