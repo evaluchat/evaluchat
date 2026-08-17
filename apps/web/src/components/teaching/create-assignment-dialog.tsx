@@ -188,14 +188,14 @@ export function CreateAssignmentDialog({
 
   const fetchApparatuses = async () => {
     try {
-      const response = await fetch("/api/apparatuses");
+      const response = await fetch("/api/methods");
       if (!response.ok) return;
       const data = await response.json();
       const enabled = Array.isArray(data.enabled)
         ? new Set<string>(data.enabled)
         : undefined;
       setApparatuses(
-        (data.apparatuses || []).filter(
+        (data.methods || []).filter(
           (entry: { id: string }) => !enabled || enabled.has(entry.id)
         )
       );

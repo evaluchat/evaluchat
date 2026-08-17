@@ -23,7 +23,7 @@ type Apparatus = {
 };
 
 type CatalogResponse = {
-  apparatuses?: Apparatus[];
+  methods?: Apparatus[];
   enabled?: string[];
 };
 
@@ -37,14 +37,12 @@ export function ApparatusCatalogPanel() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/apparatuses", {
+      const response = await fetch("/api/methods", {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(`Request failed (${response.status})`);
       const data = (await response.json()) as CatalogResponse;
-      const apparatuses = Array.isArray(data.apparatuses)
-        ? data.apparatuses
-        : [];
+      const apparatuses = Array.isArray(data.methods) ? data.methods : [];
       setApparatuses(apparatuses);
       setEnabled(
         Array.isArray(data.enabled)

@@ -42,16 +42,16 @@ export function ResearcherLanding() {
     setApparatusLoading(true);
     setApparatusError(false);
     try {
-      const res = await fetch("/api/apparatuses", { cache: "no-store" });
+      const res = await fetch("/api/methods", { cache: "no-store" });
       if (!res.ok) {
         throw new Error(`status ${res.status}`);
       }
       const data = (await res.json()) as {
-        apparatuses?: ApparatusDashboardItem[];
+        methods?: ApparatusDashboardItem[];
       };
       setApparatuses(
-        Array.isArray(data.apparatuses)
-          ? data.apparatuses.map((apparatus) => ({
+        Array.isArray(data.methods)
+          ? data.methods.map((apparatus) => ({
               ...apparatus,
               enabled: apparatus.enabled ?? true,
               enabled_source: apparatus.enabled_source ?? "default",
