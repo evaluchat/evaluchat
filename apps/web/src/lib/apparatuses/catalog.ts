@@ -29,6 +29,16 @@ export interface ApparatusPlatform {
   review_surface?: string;
 }
 
+export interface ApparatusEvidenceTemplate {
+  id: "evidence-template";
+  version: string;
+  defaultStage?: string;
+  fields: Record<string, Record<string, unknown>>;
+  layoutMarkdown: string;
+  guidance: string;
+  sourcePath: string;
+}
+
 export interface ApparatusCatalogEntry {
   id: string;
   name: string;
@@ -46,6 +56,7 @@ export interface ApparatusCatalogEntry {
   profiles: ApparatusProfile[];
   catalog_urls?: ApparatusCatalogUrls;
   run_brief_template?: string;
+  evidence_template?: ApparatusEvidenceTemplate;
   platform?: ApparatusPlatform;
 }
 

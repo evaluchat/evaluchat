@@ -17,6 +17,10 @@ describe("generated apparatus catalog", () => {
       "tracking-off",
     ]);
     expect(essays?.run_brief_template).toBe("evaluchat-assignment-brief@1.0.0");
+    expect(essays?.evidence_template).toMatchObject({
+      id: "evidence-template",
+      version: "1.0.0",
+    });
     const brief = getTemplateById("evaluchat-assignment-brief");
     expect(brief?.templateKind).toBe("form");
     expect(brief?.version).toBe("1.0.0");
