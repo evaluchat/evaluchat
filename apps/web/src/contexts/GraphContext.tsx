@@ -334,12 +334,12 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     };
   }, [debouncedAPIUpdate]);
 
+  const isFormWorkspace =
+    workspaceItem?.item?.kind === "form_template" ||
+    (workspaceItem?.item?.kind === "method" && !workspaceItem?.item?.run);
   useEffect(() => {
     if (!threadData.threadId) return;
     if (!artifact) return;
-    const isFormWorkspace =
-      workspaceItem?.item?.kind === "form_template" ||
-      (workspaceItem?.item?.kind === "method" && !workspaceItem?.item?.run);
     if (
       (updateRenderedArtifactRequired && !isFormWorkspace) ||
       threadSwitched ||
@@ -378,8 +378,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     threadSwitched,
     isStreaming,
     updateRenderedArtifactRequired,
-    workspaceItem?.item?.kind,
-    workspaceItem?.item?.run,
+    isFormWorkspace,
   ]);
 
   const lastLoadedThreadIdFromQuery = useRef<string | null>(null);
