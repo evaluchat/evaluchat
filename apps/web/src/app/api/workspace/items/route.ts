@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyUserAuthenticated } from "@/lib/supabase/verify_user_server";
-import { createClient } from "@/lib/supabase/server";
 import {
   createMethodWorkspaceItem,
   createWorkspaceItem,
@@ -13,27 +12,6 @@ import {
 async function authenticatedUser() {
   const auth = await verifyUserAuthenticated();
   return auth?.user;
-}
-
-async function recordByokShare(userId: string, itemId: string): Promise<void> {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase.rpc("byok_append_share", {
-      p_user_id: userId,
-      p_item_id: itemId,
-    });
-
-    if (error) {
-      console.error(
-        "[workspace] failed to record BYOK assignment share",
-        error
-      );
-    }
-  } catch (error) {
-    // The item has already been created; sharing should not turn that into a
-    // failed request when BYOK settings are unavailable.
-    console.error("[workspace] failed to record BYOK assignment share", error);
-  }
 }
 
 export async function GET() {
@@ -82,7 +60,6 @@ export async function POST(request: NextRequest) {
     typeof parsedBody.templateId === "string" && parsedBody.templateId
       ? parsedBody.templateId
       : undefined;
-  const shareByok = parsedBody.shareByok === true;
   const hasMethodId = methodId !== undefined;
   if (!hasMethodId && templateId === undefined) {
     return NextResponse.json(
@@ -95,9 +72,6 @@ export async function POST(request: NextRequest) {
     const item = hasMethodId
       ? await createMethodWorkspaceItem(user.id, methodId)
       : await createWorkspaceItem(user.id, templateId!);
-    if (hasMethodId && shareByok) {
-      await recordByokShare(user.id, item.id);
-    }
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
     if (error instanceof UnsupportedMethodError) {

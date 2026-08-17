@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { WorkspaceItem } from "@/lib/workspace/types";
-import type { ByokShareMode } from "@opencanvas/shared/byok/types";
 
 export type CatalogResult = {
   id: string;
@@ -26,78 +25,13 @@ export type CatalogResult = {
   status?: string;
 };
 
-export type ByokDialogSettings = {
-  enabled: boolean;
-  shareMode: ByokShareMode;
-};
-
 export function buildWorkspaceItemCreateBody(
-  result: Pick<CatalogResult, "id" | "kind">,
-  shareByok: boolean
+  result: Pick<CatalogResult, "id" | "kind">
 ): Record<string, unknown> {
   if (result.kind === "method") {
-    return {
-      kind: "method",
-      methodId: result.id,
-      ...(shareByok ? { shareByok: true } : {}),
-    };
+    return { kind: "method", methodId: result.id };
   }
   return { kind: "template", templateId: result.id };
-}
-
-export function MethodByokShareControl({
-  settings,
-  loading,
-  checked,
-  onCheckedChange,
-}: {
-  settings: ByokDialogSettings | null;
-  loading: boolean;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-}) {
-  if (loading) {
-    return (
-      <p
-        className="text-xs text-muted-foreground"
-        data-testid="byok-share-loading"
-      >
-        Loading provider settings…
-      </p>
-    );
-  }
-
-  if (settings?.enabled && settings.shareMode === "all_assignments") {
-    return (
-      <p
-        className="text-xs text-muted-foreground"
-        data-testid="byok-share-all-note"
-      >
-        Your provider is shared with all assignments — participants will use it.
-      </p>
-    );
-  }
-
-  const disabled = !settings?.enabled;
-  return (
-    <div className="space-y-1 rounded-md border bg-muted/20 p-3">
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={(event) => onCheckedChange(event.target.checked)}
-          data-testid="share-byok"
-        />
-        <span>Share my BYOK provider with participants</span>
-      </label>
-      <p className="pl-6 text-xs text-muted-foreground">
-        {disabled
-          ? "Configure a provider in workspace settings first"
-          : "Levels the playing field — all participants use your provider for this assignment"}
-      </p>
-    </div>
-  );
 }
 
 export function CreateWorkspaceItemDialog({
@@ -111,12 +45,6 @@ export function CreateWorkspaceItemDialog({
   const [results, setResults] = useState<CatalogResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [shareByok, setShareByok] = useState(false);
-  const [byokSettings, setByokSettings] = useState<ByokDialogSettings | null>(
-    null
-  );
-  const [byokLoading, setByokLoading] = useState(false);
-  const [byokLoadedForMethod, setByokLoadedForMethod] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -152,42 +80,6 @@ export function CreateWorkspaceItemDialog({
     };
   }, [open, kind, query]);
 
-  useEffect(() => {
-    if (!open || kind !== "method" || byokLoadedForMethod) return;
-    let cancelled = false;
-    setByokLoading(true);
-    fetch("/api/byok", { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Could not load provider settings");
-        return (await response.json()) as {
-          settings?: { enabled: boolean; share_mode?: ByokShareMode } | null;
-        };
-      })
-      .then((body) => {
-        if (cancelled) return;
-        setByokSettings(
-          body.settings
-            ? {
-                enabled: body.settings.enabled,
-                shareMode: body.settings.share_mode ?? "none",
-              }
-            : null
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setByokSettings(null);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setByokLoading(false);
-          setByokLoadedForMethod(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, kind, byokLoadedForMethod]);
-
   async function create(result: CatalogResult) {
     setCreating(true);
     try {
@@ -195,7 +87,7 @@ export function CreateWorkspaceItemDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(buildWorkspaceItemCreateBody(result, shareByok)),
+        body: JSON.stringify(buildWorkspaceItemCreateBody(result)),
       });
       if (!response.ok) throw new Error("Could not create workspace item");
       const body = (await response.json()) as { item: WorkspaceItem };
@@ -217,10 +109,6 @@ export function CreateWorkspaceItemDialog({
     if (!nextOpen) {
       setKind("template");
       setQuery("");
-      setShareByok(false);
-      setByokSettings(null);
-      setByokLoading(false);
-      setByokLoadedForMethod(false);
     }
   }
 
@@ -259,25 +147,12 @@ export function CreateWorkspaceItemDialog({
               size="sm"
               onClick={() => {
                 setKind(option);
-                setShareByok(false);
-                if (option === "template") {
-                  setByokSettings(null);
-                  setByokLoadedForMethod(false);
-                }
               }}
             >
               {option === "template" ? "Templates" : "Methods"}
             </Button>
           ))}
         </div>
-        {kind === "method" ? (
-          <MethodByokShareControl
-            settings={byokSettings}
-            loading={byokLoading}
-            checked={shareByok}
-            onCheckedChange={setShareByok}
-          />
-        ) : null}
         <div className="max-h-72 space-y-2 overflow-y-auto">
           {loading && (
             <p className="py-6 text-center text-sm text-muted-foreground">
