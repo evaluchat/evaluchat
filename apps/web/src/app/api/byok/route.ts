@@ -8,8 +8,12 @@ import {
   assertPublicHost,
   assertPublicHttpsUrl,
 } from "@opencanvas/shared/byok/url";
-import type { UserByokSettingsRow } from "@opencanvas/shared/byok/types";
+import type {
+  ByokShareMode,
+  UserByokSettingsRow,
+} from "@opencanvas/shared/byok/types";
 import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceItem } from "@/lib/workspace/store";
 
 function getEncryptionKey(): string | null {
   const key = process.env.BYOK_ENCRYPTION_KEY?.trim();
@@ -31,6 +35,8 @@ function maskedSettingsResponse(row: UserByokSettingsRow) {
     base_url: row.base_url,
     model: row.model,
     api_key_masked: masked,
+    share_mode: row.share_mode ?? "none",
+    shared_item_ids: row.shared_item_ids ?? [],
   };
 }
 
@@ -87,6 +93,9 @@ export async function PUT(req: NextRequest) {
     base_url?: string;
     model?: string;
     api_key?: string;
+    share_mode?: ByokShareMode;
+    shared_item_ids?: string[];
+    shareItemIdsReplace?: string[];
   };
   try {
     body = await req.json();
@@ -101,6 +110,82 @@ export async function PUT(req: NextRequest) {
     .maybeSingle();
 
   const existingRow = (existing as UserByokSettingsRow | null) ?? null;
+
+  const shareModeRaw = body.share_mode ?? existingRow?.share_mode ?? "none";
+  const shareModes: ByokShareMode[] = [
+    "none",
+    "all_assignments",
+    "specific_items",
+  ];
+  if (!shareModes.includes(shareModeRaw)) {
+    return NextResponse.json(
+      { error: "share_mode must be none, all_assignments, or specific_items" },
+      { status: 400 }
+    );
+  }
+
+  const hasShareItemIdsReplace = Object.prototype.hasOwnProperty.call(
+    body,
+    "shareItemIdsReplace"
+  );
+  const sharedItemIdsRaw = hasShareItemIdsReplace
+    ? body.shareItemIdsReplace
+    : (body.shared_item_ids ?? existingRow?.shared_item_ids ?? []);
+  if (
+    !Array.isArray(sharedItemIdsRaw) ||
+    !sharedItemIdsRaw.every(
+      (itemId): itemId is string =>
+        typeof itemId === "string" && itemId.trim().length > 0
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error: hasShareItemIdsReplace
+          ? "shareItemIdsReplace must be an array of item ids"
+          : "shared_item_ids must be an array of item ids",
+      },
+      { status: 400 }
+    );
+  }
+
+  const sharedItemIds = [
+    ...new Set(sharedItemIdsRaw.map((itemId) => itemId.trim())),
+  ];
+  if (shareModeRaw === "specific_items" && sharedItemIds.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "shared_item_ids must contain at least one owned method item for specific_items",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (
+    shareModeRaw === "specific_items" ||
+    (hasShareItemIdsReplace && sharedItemIds.length > 0)
+  ) {
+    try {
+      const ownedItems = await Promise.all(
+        sharedItemIds.map((itemId) => getWorkspaceItem(user.id, itemId))
+      );
+      if (
+        ownedItems.some(
+          (item) => !item || item.kind !== "method" || item.ownerId !== user.id
+        )
+      ) {
+        return NextResponse.json(
+          { error: "shared_item_ids must contain only owned method items" },
+          { status: 400 }
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "Could not validate shared method items" },
+        { status: 400 }
+      );
+    }
+  }
 
   const baseUrlRaw =
     typeof body.base_url === "string"
@@ -166,6 +251,8 @@ export async function PUT(req: NextRequest) {
     model,
     api_key_enc: apiKeyEnc,
     enabled,
+    share_mode: shareModeRaw,
+    shared_item_ids: shareModeRaw === "specific_items" ? sharedItemIds : [],
     updated_at: new Date().toISOString(),
   };
 

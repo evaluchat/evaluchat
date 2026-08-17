@@ -20,6 +20,7 @@ import {
   shouldRejectCachedThread,
   type ThreadLike,
 } from "@/lib/teaching/select-active-thread";
+import { useSharedProviderLabel } from "@/lib/workspace/shared-provider";
 
 type ThreadContentType = {
   threadId: string | null;
@@ -28,6 +29,7 @@ type ThreadContentType = {
   modelName: ALL_MODEL_NAMES;
   modelConfig: CustomModelConfig;
   modelConfigs: Record<ALL_MODEL_NAMES, CustomModelConfig>;
+  sharedProviderLabel?: string;
   createThreadLoading: boolean;
   getThread: (id: string) => Promise<Thread | undefined>;
   createThread: (
@@ -66,6 +68,7 @@ export function ThreadProvider({
       ? OPENROUTER_DEFAULT_MODEL_NAME
       : DEFAULT_MODEL_NAME;
   const [modelName, setModelName] = useState<ALL_MODEL_NAMES>(defaultModelName);
+  const sharedProviderLabel = useSharedProviderLabel(workspaceItemId);
   const [createThreadLoading, setCreateThreadLoading] = useState(false);
 
   const [modelConfigs, setModelConfigs] = useState<
@@ -547,6 +550,7 @@ export function ThreadProvider({
     modelName,
     modelConfig,
     modelConfigs,
+    sharedProviderLabel,
     createThreadLoading,
     getThread,
     createThread,

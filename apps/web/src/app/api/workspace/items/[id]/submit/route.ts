@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyUserAuthenticated } from "@/lib/supabase/verify_user_server";
+import { createClient } from "@/lib/supabase/server";
 import {
   submitWorkspaceForm,
   WorkspaceFormAlreadySubmittedError,
@@ -8,6 +9,27 @@ import {
 import { FormValidationError } from "@/lib/workspace/form-validation";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+async function recordByokShare(userId: string, itemId: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("byok_append_share", {
+      p_user_id: userId,
+      p_item_id: itemId,
+    });
+
+    if (error) {
+      console.error(
+        "[workspace] failed to record BYOK assignment share",
+        error
+      );
+    }
+  } catch (error) {
+    // The assignment has already been submitted; sharing should not turn that
+    // into a failed request when BYOK settings are unavailable.
+    console.error("[workspace] failed to record BYOK assignment share", error);
+  }
+}
 
 export async function POST(request: NextRequest, context: RouteContext) {
   const auth = await verifyUserAuthenticated();
@@ -46,6 +68,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
             : undefined,
       }
     );
+    if (parsedBody.shareByok === true) {
+      await recordByokShare(auth.user.id, id);
+    }
     return NextResponse.json(
       { item: result.item, idempotent: result.idempotent },
       { status: result.idempotent ? 200 : 201 }

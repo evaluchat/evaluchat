@@ -6,6 +6,7 @@ import {
   buildByokPutBody,
   isByokFormDirty,
   loadByokSettings,
+  revokeSharedItem,
   saveByokSettings,
   testByokConnection,
 } from "./byok-settings-card";
@@ -140,6 +141,34 @@ describe("ByokSettingsCard helpers", () => {
     });
   });
 
+  it("sends the selected scope and an authoritative replacement list", () => {
+    expect(
+      buildByokPutBody({
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        shareMode: "all_assignments",
+      })
+    ).toMatchObject({
+      share_mode: "all_assignments",
+    });
+    expect(
+      buildByokPutBody({
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        shareMode: "specific_items",
+        sharedItemIds: ["method-1", "method-2"],
+        shareItemIdsReplace: ["method-2"],
+      })
+    ).toMatchObject({
+      share_mode: "specific_items",
+      shareItemIdsReplace: ["method-2"],
+    });
+  });
+
   it("detects dirty form vs saved snapshot", () => {
     const saved = {
       enabled: true,
@@ -169,6 +198,61 @@ describe("ByokSettingsCard helpers", () => {
         saved
       )
     ).toBe(true);
+  });
+
+  it("resets the sharing scope when the last specific assignment is revoked", () => {
+    expect(revokeSharedItem(["method-1"], "method-1")).toEqual({
+      shareMode: "none",
+      sharedItemIds: [],
+      shareItemIdsReplace: [],
+    });
+  });
+
+  it("clears persisted ids when leaving specific sharing before a later new-item share", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        settings: {
+          enabled: true,
+          base_url: "https://provider.example/v1",
+          model: "provider/model",
+          api_key_masked: "sk-…abcd",
+        },
+      }),
+    });
+
+    await saveByokSettings(
+      {
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        shareMode: "none",
+        sharedItemIds: [],
+        shareItemIdsReplace: [],
+      },
+      fetchMock as unknown as typeof fetch
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      share_mode: "none",
+      shareItemIdsReplace: [],
+    });
+
+    await saveByokSettings(
+      {
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        shareMode: "specific_items",
+        sharedItemIds: ["method-new"],
+        shareItemIdsReplace: ["method-new"],
+      },
+      fetchMock as unknown as typeof fetch
+    );
+    expect(
+      JSON.parse(fetchMock.mock.calls[1][1].body).shareItemIdsReplace
+    ).toEqual(["method-new"]);
   });
 });
 
@@ -272,5 +356,38 @@ describe("ByokSettingsCardView", () => {
     );
     expect(errMarkup).toContain("HTTP 401 Unauthorized");
     expect(errMarkup).toContain("text-red-700");
+  });
+
+  it("renders owner sharing controls without exposing provider secrets", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ByokSettingsCardView, {
+        enabled: true,
+        baseUrl: "https://provider.example/v1",
+        model: "provider/model",
+        apiKey: "",
+        savedMaskedKey: "sk-…abcd",
+        saving: false,
+        testing: false,
+        testResult: null,
+        shareMode: "specific_items",
+        sharedItemIds: ["method-1"],
+        onEnabledChange: () => undefined,
+        onBaseUrlChange: () => undefined,
+        onModelChange: () => undefined,
+        onApiKeyChange: () => undefined,
+        onShareModeChange: () => undefined,
+        onRevokeSharedItem: () => undefined,
+        onSave: () => undefined,
+        onTest: () => undefined,
+      })
+    );
+
+    expect(markup).toContain('data-testid="byok-share-control"');
+    expect(markup).not.toContain("Specific assignments");
+    expect(markup).toContain("method-1");
+    expect(markup).toContain('data-testid="byok-share-revoke-method-1"');
+    expect(markup).not.toContain("<select");
+    expect(markup).toContain("Provided by instructor");
+    expect(markup).not.toContain("sk-owner-secret");
   });
 });

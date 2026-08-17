@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { WorkspaceItem } from "@/lib/workspace/types";
 
-type CatalogResult = {
+export type CatalogResult = {
   id: string;
   title: string;
   description: string;
@@ -24,6 +24,15 @@ type CatalogResult = {
   disabled?: boolean;
   status?: string;
 };
+
+export function buildWorkspaceItemCreateBody(
+  result: Pick<CatalogResult, "id" | "kind">
+): Record<string, unknown> {
+  if (result.kind === "method") {
+    return { kind: "method", methodId: result.id };
+  }
+  return { kind: "template", templateId: result.id };
+}
 
 export function CreateWorkspaceItemDialog({
   onCreated,
@@ -78,17 +87,12 @@ export function CreateWorkspaceItemDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(
-          result.kind === "method"
-            ? { methodId: result.id }
-            : { templateId: result.id }
-        ),
+        body: JSON.stringify(buildWorkspaceItemCreateBody(result)),
       });
       if (!response.ok) throw new Error("Could not create workspace item");
       const body = (await response.json()) as { item: WorkspaceItem };
       onCreated(body.item);
-      setOpen(false);
-      setQuery("");
+      handleOpenChange(false);
     } catch (error) {
       console.error(error);
       toast({
@@ -100,8 +104,16 @@ export function CreateWorkspaceItemDialog({
     }
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setKind("template");
+      setQuery("");
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
@@ -133,7 +145,9 @@ export function CreateWorkspaceItemDialog({
               key={option}
               variant={kind === option ? "default" : "outline"}
               size="sm"
-              onClick={() => setKind(option)}
+              onClick={() => {
+                setKind(option);
+              }}
             >
               {option === "template" ? "Templates" : "Methods"}
             </Button>
