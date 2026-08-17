@@ -153,6 +153,19 @@ const GraphContext = createContext<GraphContentType | undefined>(undefined);
 
 const WORKSPACE_DRAFT_AUTOSAVE_MS = 5_000;
 
+/**
+ * A submitted assignment thread is locked: the artifact is frozen for review.
+ * Post-submit drafts (debounced autosave / canvas onChange with a stale or
+ * not-yet-hydrated editor) must never overwrite the drafted content in the
+ * thread state (issue #75).
+ */
+export function isSubmittedThreadLock(opts: {
+  phaseState?: string;
+  submitted?: boolean;
+}): boolean {
+  return opts.phaseState === "submitted" || opts.submitted === true;
+}
+
 // Shim for recent LangGraph bugfix
 function extractStreamDataChunk(chunk: any) {
   if (Array.isArray(chunk)) {
@@ -223,6 +236,10 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [phaseState, setPhaseState] = useState<string | undefined>(undefined);
   const phaseStateRef = useRef<string | undefined>(undefined);
+  // Authoritative "submitted" lock from the workspace item (method_participant
+  // submissions), mirrored to a ref so the once-created debounced autosave
+  // closure always reads the current value (issue #75).
+  const workspaceItemSubmittedRef = useRef(false);
   const editorTextContentRef = useRef<string>("");
   const [pendingEdit, setPendingEdit] = useState<PendingEditState | null>(null);
 
@@ -241,6 +258,11 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     phaseStateRef.current = phaseState;
   }, [phaseState]);
+  useEffect(() => {
+    workspaceItemSubmittedRef.current =
+      workspaceItem?.item?.kind === "method_participant" &&
+      workspaceItem.item.submission?.status === "submitted";
+  });
 
   // A gate-off profile starts in drafting. The canonical Essays profile keeps
   // the Socratic phase and its four-message escape hatch.
@@ -340,6 +362,16 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!threadData.threadId) return;
     if (!artifact) return;
+    // Never autosave an artifact for a submitted thread (issue #75): the
+    // canvas read-only transition can fire onChange with an empty editor and
+    // clobber the drafted content.
+    if (
+      isSubmittedThreadLock({
+        phaseState: phaseStateRef.current,
+        submitted: workspaceItemSubmittedRef.current,
+      })
+    )
+      return;
     if (
       (updateRenderedArtifactRequired && !isFormWorkspace) ||
       threadSwitched ||
@@ -596,6 +628,13 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   ) => {
     setArtifactUpdateFailed(false);
     if (isStreaming) return;
+    if (
+      isSubmittedThreadLock({
+        phaseState: phaseStateRef.current,
+        submitted: workspaceItemSubmittedRef.current,
+      })
+    )
+      return;
 
     try {
       const client = createClient();
