@@ -433,6 +433,15 @@ describe("method run launch", () => {
     );
     expect(participantItem.runId).toBe(result.item.run.id);
     expect(participantItem.operatorItemId).toBe(item.id);
+    // The live shared-provider resolver uses these immutable relationship
+    // fields; provider settings are deliberately not copied into the item.
+    expect(participantItem).toMatchObject({
+      ownerId: "user-2",
+      operatorId: "user-1",
+      operatorItemId: item.id,
+    });
+    expect(participantItem).not.toHaveProperty("apiKey");
+    expect(participantItem).not.toHaveProperty("baseUrl");
   });
 
   it("does not deadlock a participant submit against a concurrent operator launch", async () => {

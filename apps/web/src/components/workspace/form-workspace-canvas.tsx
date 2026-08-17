@@ -39,6 +39,7 @@ import {
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { convertToOpenAIFormat } from "@/lib/convert_messages";
 import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
+import type { ByokShareMode } from "@opencanvas/shared/byok/types";
 import type { ArtifactV3, FormAgentContext } from "@opencanvas/shared/types";
 import type {
   FormBackedWorkspaceItem,
@@ -50,6 +51,68 @@ import { WorkspaceItemBanner } from "./workspace-item-banner";
 import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
 
 type FieldErrors = Record<string, string>;
+
+type ByokDialogSettings = {
+  enabled: boolean;
+  model: string;
+  shareMode: ByokShareMode;
+  sharedItemIds: string[];
+};
+
+function MethodByokShareControl({
+  settings,
+  loading,
+  checked,
+  onCheckedChange,
+}: {
+  settings: ByokDialogSettings | null;
+  loading: boolean;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  if (loading) {
+    return (
+      <p
+        className="text-xs text-muted-foreground"
+        data-testid="byok-share-loading"
+      >
+        Loading provider settings…
+      </p>
+    );
+  }
+
+  if (settings?.enabled && settings.shareMode === "all_assignments") {
+    return (
+      <p
+        className="text-xs text-muted-foreground"
+        data-testid="byok-share-all-note"
+      >
+        Your provider is shared with all assignments — participants will use it.
+      </p>
+    );
+  }
+
+  const disabled = !settings?.enabled;
+  return (
+    <div className="space-y-1 rounded-md border bg-muted/20 p-3">
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onCheckedChange(event.target.checked)}
+          data-testid="share-byok"
+        />
+        <span>Share my BYOK provider with participants</span>
+      </label>
+      <p className="pl-6 text-xs text-muted-foreground">
+        {disabled
+          ? "Configure a provider in workspace settings first"
+          : `Participants see “Provided by instructor — ${settings.model}”, never your key.`}
+      </p>
+    </div>
+  );
+}
 
 function buildFormAgentContext(
   item: FormBackedWorkspaceItem,
@@ -363,6 +426,14 @@ export function FormWorkspaceCanvas({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [shareByok, setShareByok] = useState(false);
+  const [byokSettings, setByokSettings] = useState<ByokDialogSettings | null>(
+    null
+  );
+  const [byokLoading, setByokLoading] = useState(false);
+  const [byokLoadedForItem, setByokLoadedForItem] = useState<string | null>(
+    null
+  );
   const [abandonOpen, setAbandonOpen] = useState(false);
   const [isAbandoning, setIsAbandoning] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
@@ -379,6 +450,69 @@ export function FormWorkspaceCanvas({
     >
   >({});
   const submitted = currentItem.submission?.status === "submitted";
+
+  useEffect(() => {
+    if (
+      !confirmOpen ||
+      currentItem.kind !== "method" ||
+      submitted ||
+      byokLoadedForItem === currentItem.id
+    ) {
+      return;
+    }
+
+    const itemId = currentItem.id;
+    let cancelled = false;
+    setByokLoading(true);
+    fetch("/api/byok", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load provider settings");
+        return (await response.json()) as {
+          settings?: {
+            enabled: boolean;
+            model?: string;
+            share_mode?: ByokShareMode;
+            shared_item_ids?: string[];
+          } | null;
+        };
+      })
+      .then((body) => {
+        if (cancelled) return;
+        if (!body.settings) {
+          setByokSettings(null);
+          setShareByok(false);
+          return;
+        }
+        const settings: ByokDialogSettings = {
+          enabled: body.settings.enabled,
+          model: body.settings.model ?? "",
+          shareMode: body.settings.share_mode ?? "none",
+          sharedItemIds: body.settings.shared_item_ids ?? [],
+        };
+        setByokSettings(settings);
+        setShareByok(
+          settings.shareMode === "all_assignments" ||
+            (settings.shareMode === "specific_items" &&
+              settings.sharedItemIds.includes(itemId))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setByokSettings(null);
+          setShareByok(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setByokLoading(false);
+          setByokLoadedForItem(itemId);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [byokLoadedForItem, confirmOpen, currentItem, submitted]);
 
   const getStreamInput = useCallback(
     () => ({
@@ -556,9 +690,44 @@ export function FormWorkspaceCanvas({
     []
   );
 
+  async function revokeByokShare(itemId: string, sharedItemIds: string[]) {
+    const remainingItemIds = [
+      ...new Set(
+        sharedItemIds
+          .map((sharedItemId) => sharedItemId.trim())
+          .filter((sharedItemId) => sharedItemId && sharedItemId !== itemId)
+      ),
+    ];
+    const shareMode = remainingItemIds.length > 0 ? "specific_items" : "none";
+    try {
+      const response = await fetch("/api/byok", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          share_mode: shareMode,
+          shareItemIdsReplace: remainingItemIds,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Could not revoke BYOK assignment share");
+      }
+    } catch (error) {
+      console.error(
+        "[workspace] failed to revoke BYOK assignment share",
+        error
+      );
+    }
+  }
+
   async function submit() {
     setIsSubmitting(true);
     try {
+      const shouldRevokeByok =
+        currentItem.kind === "method" &&
+        !shareByok &&
+        byokSettings?.shareMode === "specific_items" &&
+        byokSettings.sharedItemIds.includes(currentItem.id);
       const response = await fetch(
         `/api/workspace/items/${encodeURIComponent(item.id)}/submit`,
         {
@@ -567,6 +736,7 @@ export function FormWorkspaceCanvas({
           credentials: "include",
           body: JSON.stringify({
             values,
+            ...(currentItem.kind === "method" ? { shareByok } : {}),
           }),
         }
       );
@@ -596,6 +766,9 @@ export function FormWorkspaceCanvas({
       setValues(body.item.submission?.values || values);
       setErrors({});
       setConfirmOpen(false);
+      if (shouldRevokeByok && byokSettings) {
+        void revokeByokShare(currentItem.id, byokSettings.sharedItemIds);
+      }
       await refresh();
     } catch (error) {
       toast({
@@ -732,7 +905,18 @@ export function FormWorkspaceCanvas({
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(nextOpen) => {
+          setConfirmOpen(nextOpen);
+          if (!nextOpen) {
+            setShareByok(false);
+            setByokSettings(null);
+            setByokLoading(false);
+            setByokLoadedForItem(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -762,6 +946,12 @@ export function FormWorkspaceCanvas({
                   Read the method
                 </a>
               </p>
+              <MethodByokShareControl
+                settings={byokSettings}
+                loading={byokLoading}
+                checked={shareByok}
+                onCheckedChange={setShareByok}
+              />
               <p className="font-medium">Recipients</p>
               <ul className="list-disc pl-5 text-muted-foreground">
                 {Array.from(
