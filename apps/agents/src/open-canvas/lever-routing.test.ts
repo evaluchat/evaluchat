@@ -85,6 +85,21 @@ describe("apparatus lever routing", () => {
     expect(mockDetermineTeachingIntent).not.toHaveBeenCalled();
   });
 
+  it("routes canvas actions to noAiAssignment when canvas actions are disabled", async () => {
+    const result = await generatePath(
+      makeState({
+        highlightedCode: "const value = 1;",
+        apparatusConfiguration: {
+          ...canonicalConfiguration,
+          ai_canvas_actions: false,
+        },
+      }),
+      {} as any
+    );
+
+    expect(result.next).toBe("noAiAssignment");
+  });
+
   it("cleans state after a general reply when AI assistance is disabled", () => {
     expect(
       routeAfterGeneralReply(
