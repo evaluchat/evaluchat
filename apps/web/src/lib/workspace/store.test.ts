@@ -116,6 +116,7 @@ import {
   getWorkspaceItem,
   listWorkspaceItems,
   pendingInviteNamespace,
+  inviteLockId,
   resolveMethodTrackingAccess,
   submitWorkspaceForm,
   WorkspaceItemNotFoundError,
@@ -309,6 +310,10 @@ describe("workspace item lifecycle", () => {
     expect(pendingInviteNamespace("cronjev@outlook.com")).toEqual(
       pendingInviteNamespace("Cronjev@Outlook.Com")
     );
+
+    const lockId = inviteLockId("cronjevh+test1708@gmail.com");
+    expect(lockId).not.toMatch(/[.@+]/);
+    expect(lockId).toBe("invite_cronjevh_test1708_gmail_com");
   });
 });
 
