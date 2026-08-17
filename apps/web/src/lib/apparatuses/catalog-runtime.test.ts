@@ -119,6 +119,71 @@ describe("generated apparatus catalog", () => {
     }
   });
 
+  it("rejects evidence template fields with non-object definitions", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    expect(() =>
+      validateApparatusCatalog([
+        {
+          ...essays,
+          evidence_template: {
+            ...essays.evidence_template!,
+            fields: {
+              ...essays.evidence_template!.fields,
+              claim: null,
+            },
+          },
+        },
+      ])
+    ).toThrow(/fields\.claim must be an object/);
+  });
+
+  it("rejects evidence template fields with unsupported types", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    expect(() =>
+      validateApparatusCatalog([
+        {
+          ...essays,
+          evidence_template: {
+            ...essays.evidence_template!,
+            fields: {
+              ...essays.evidence_template!.fields,
+              claim: { type: "checkbox" },
+            },
+          },
+        },
+      ])
+    ).toThrow(
+      /fields\.claim\.type must be one of text, textarea, select, number, date/
+    );
+  });
+
+  it("rejects select evidence template fields without options", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    expect(() =>
+      validateApparatusCatalog([
+        {
+          ...essays,
+          evidence_template: {
+            ...essays.evidence_template!,
+            fields: {
+              ...essays.evidence_template!.fields,
+              claim: { type: "select" },
+            },
+          },
+        },
+      ])
+    ).toThrow(/fields\.claim\.options must be present for select/);
+  });
+
   it("accepts every supported optional-capability combination with a viable workflow", () => {
     const essays = APPARATUS_CATALOG.find(
       (entry) => entry.id === "ai-assisted-essay"

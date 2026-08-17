@@ -128,6 +128,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const EVIDENCE_FIELD_TYPES = new Set([
+  "text",
+  "textarea",
+  "select",
+  "number",
+  "date",
+]);
+
 function validateEvidenceTemplate(entryId: string, template: unknown): void {
   const contractError = (field: string, message: string): never => {
     throw new Error(
@@ -159,6 +167,26 @@ function validateEvidenceTemplate(entryId: string, template: unknown): void {
   }
   if (!isRecord(evidenceTemplate.fields)) {
     contractError("fields", "must be an object");
+  }
+  const fields = evidenceTemplate.fields as Record<string, unknown>;
+  for (const [fieldName, definition] of Object.entries(fields)) {
+    if (!isRecord(definition)) {
+      contractError(`fields.${fieldName}`, "must be an object");
+    }
+    const fieldDefinition = definition as Record<string, unknown>;
+    const fieldType = fieldDefinition.type;
+    if (typeof fieldType !== "string" || !EVIDENCE_FIELD_TYPES.has(fieldType)) {
+      contractError(
+        `fields.${fieldName}.type`,
+        "must be one of text, textarea, select, number, date"
+      );
+    }
+    if (fieldType === "select" && !Array.isArray(fieldDefinition.options)) {
+      contractError(
+        `fields.${fieldName}.options`,
+        "must be present for select"
+      );
+    }
   }
   if (typeof evidenceTemplate.layoutMarkdown !== "string") {
     contractError("layoutMarkdown", "must be a string");
