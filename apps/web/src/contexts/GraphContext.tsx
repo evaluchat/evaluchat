@@ -153,6 +153,19 @@ const GraphContext = createContext<GraphContentType | undefined>(undefined);
 
 const WORKSPACE_DRAFT_AUTOSAVE_MS = 5_000;
 
+/**
+ * A submitted assignment thread is locked: the artifact is frozen for review.
+ * Post-submit drafts (debounced autosave / canvas onChange with a stale or
+ * not-yet-hydrated editor) must never overwrite the drafted content in the
+ * thread state (issue #75).
+ */
+export function isSubmittedThreadLock(opts: {
+  phaseState?: string;
+  submitted?: boolean;
+}): boolean {
+  return opts.phaseState === "submitted" || opts.submitted === true;
+}
+
 // Shim for recent LangGraph bugfix
 function extractStreamDataChunk(chunk: any) {
   if (Array.isArray(chunk)) {
@@ -340,6 +353,10 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!threadData.threadId) return;
     if (!artifact) return;
+    // Never autosave an artifact for a submitted thread (issue #75): the
+    // canvas read-only transition can fire onChange with an empty editor and
+    // clobber the drafted content.
+    if (isSubmittedThreadLock({ phaseState: phaseStateRef.current })) return;
     if (
       (updateRenderedArtifactRequired && !isFormWorkspace) ||
       threadSwitched ||
@@ -596,6 +613,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   ) => {
     setArtifactUpdateFailed(false);
     if (isStreaming) return;
+    if (isSubmittedThreadLock({ phaseState: phaseStateRef.current })) return;
 
     try {
       const client = createClient();
