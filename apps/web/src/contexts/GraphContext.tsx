@@ -337,7 +337,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!threadData.threadId) return;
     if (!artifact) return;
-    const isFormWorkspace = workspaceItem?.item?.kind === "form_template";
+    const isFormWorkspace =
+      workspaceItem?.item?.kind === "form_template" ||
+      (workspaceItem?.item?.kind === "method" && !workspaceItem?.item?.run);
     if (
       (updateRenderedArtifactRequired && !isFormWorkspace) ||
       threadSwitched ||
