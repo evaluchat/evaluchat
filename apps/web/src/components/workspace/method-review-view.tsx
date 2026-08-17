@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrackingMetrics } from "@/components/teaching/tracking-metrics";
 import { ReadonlyMarkdownRendererSuspense } from "@/components/artifacts/readonly-markdown-renderer-lazy";
+import { selectReviewCanvasMarkdown } from "@/lib/workspace/review-canvas";
 import { WorkspaceSiteHeader } from "@/components/teaching/workspace-site-header";
 
 type ReviewPayload = {
@@ -74,10 +75,7 @@ export function MethodReviewView() {
     };
   }, [params.id, params.participantItemId]);
 
-  const canvasContent =
-    payload?.thread?.artifact?.contents?.find(
-      (content) => content.type === "text"
-    )?.fullMarkdown || "";
+  const canvasContent = selectReviewCanvasMarkdown(payload?.thread?.artifact);
   const messages = (payload?.thread?.messages || []).map((message) => ({
     role:
       message.type === "human" || message.role === "human"
