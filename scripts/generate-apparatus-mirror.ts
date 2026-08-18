@@ -254,7 +254,7 @@ export function buildApparatusMirror(researchRoot: string): {
     apparatuses.push(entry);
   }
 
-  const canvasVersion = String(apparatuses[0]?.min_canvas_version || "0.5.9");
+  const canvasVersion = String(apparatuses[0]?.min_canvas_version || "0.6.0");
   return {
     version: 2,
     canvas_version: canvasVersion,
