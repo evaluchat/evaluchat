@@ -212,6 +212,23 @@ describe("Evidence runtime", () => {
       type: "select",
       options: ["one", "two"],
     });
+    const ledgerTemplate = template();
+    const normalizedLedger = normalizeEvidenceTemplate({
+      ...ledgerTemplate,
+      fields: {
+        ...ledgerTemplate.fields,
+        mode: {
+          ...ledgerTemplate.fields.mode,
+          options: ["one", "two", "unknown"],
+          missing_semantics: "unknown",
+          ledger_dimension: { role: "context", control: "multi-select" },
+        },
+      },
+    });
+    expect(normalizedLedger.fields.mode).toMatchObject({
+      ledgerDimension: { role: "context", control: "multi-select" },
+      missingSemantics: "unknown",
+    });
     expect(normalized.fields.started).toMatchObject({ type: "date" });
     expect(() =>
       normalizeEvidenceTemplate(

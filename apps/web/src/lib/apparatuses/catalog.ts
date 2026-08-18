@@ -17,6 +17,10 @@ import {
   type ApparatusProvenance,
   type ApparatusRole,
 } from "@opencanvas/shared";
+import {
+  ledgerDimensionValidationError,
+  type ApparatusEvidenceFieldDefinition,
+} from "./evidence-template-contract";
 
 export interface ApparatusCatalogUrls {
   spec: string;
@@ -33,7 +37,7 @@ export interface ApparatusEvidenceTemplate {
   id: "evidence-template";
   version: string;
   defaultStage?: string;
-  fields: Record<string, Record<string, unknown>>;
+  fields: Record<string, ApparatusEvidenceFieldDefinition>;
   layoutMarkdown: string;
   guidance: string;
   sourcePath: string;
@@ -185,6 +189,13 @@ function validateEvidenceTemplate(entryId: string, template: unknown): void {
       contractError(
         `fields.${fieldName}.options`,
         "must be present for select"
+      );
+    }
+    const ledgerError = ledgerDimensionValidationError(fieldDefinition);
+    if (ledgerError) {
+      contractError(
+        `fields.${fieldName}.${ledgerError.field}`,
+        ledgerError.message
       );
     }
   }

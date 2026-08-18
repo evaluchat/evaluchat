@@ -12,7 +12,7 @@ const temporaryDirectories: string[] = [];
 
 function researchRoot(): string {
   const directory = fs.mkdtempSync(
-    path.join(os.tmpdir(), "evaluchat-research-"),
+    path.join(os.tmpdir(), "evaluchat-research-")
   );
   temporaryDirectories.push(directory);
   return directory;
@@ -29,7 +29,7 @@ ${frontmatter}
 ---
 
 # ${id}
-`,
+`
   );
   return file;
 }
@@ -38,7 +38,7 @@ function writeEvidenceTemplate(
   root: string,
   id: string,
   frontmatter = evidenceTemplateFrontmatter,
-  body = "# Concluded-run evidence\n\n{{observations}}\n",
+  body = "# Concluded-run evidence\n\n{{observations}}\n"
 ): string {
   const file = path.join(root, "methods", id, "evidence-template.en.md");
   fs.writeFileSync(file, `---\n${frontmatter}\n---\n\n${body}`);
@@ -122,11 +122,40 @@ describe("apparatus mirror generator", () => {
       sourcePath: "methods/ai-assisted-essay/evidence-template.en.md",
     });
     expect(() =>
-      assertMethodEvidenceTemplatesBound(artifact.apparatuses),
+      assertMethodEvidenceTemplatesBound(artifact.apparatuses)
     ).not.toThrow();
     expect(entry.platform).toEqual({
       participant_invitations: "required",
       review_surface: "essay-process-review",
+    });
+  });
+
+  it("mirrors declared ledger dimensions and missing semantics", () => {
+    const root = researchRoot();
+    writeMethod(root, "ai-assisted-essay", methodFrontmatter);
+    writeEvidenceTemplate(
+      root,
+      "ai-assisted-essay",
+      evidenceTemplateFrontmatter.replace(
+        "    options: [about-right]",
+        `    options: [about-right, unknown]
+    missing_semantics: unknown
+    ledger_dimension:
+      role: context
+      control: multi-select`
+      )
+    );
+
+    const artifact = buildApparatusMirror(root);
+    expect(artifact.apparatuses[0].evidence_template).toMatchObject({
+      fields: {
+        threshold_fit: {
+          type: "select",
+          options: ["about-right", "unknown"],
+          missing_semantics: "unknown",
+          ledger_dimension: { role: "context", control: "multi-select" },
+        },
+      },
     });
   });
 
@@ -136,7 +165,7 @@ describe("apparatus mirror generator", () => {
       root,
       "apparatus",
       "ai-assisted-essay",
-      "ai-assisted-essay.en.md",
+      "ai-assisted-essay.en.md"
     );
     fs.mkdirSync(path.dirname(retired), { recursive: true });
     fs.writeFileSync(
@@ -151,7 +180,7 @@ knobs:
     type: boolean
     default: true
 ---
-`,
+`
     );
 
     expect(() => buildApparatusMirror(root)).toThrow(/methods/);
@@ -162,7 +191,7 @@ knobs:
     writeMethod(root, "ai-assisted-essay", methodFrontmatter);
 
     expect(() => buildApparatusMirror(root)).toThrow(
-      /evidence_template file not found/,
+      /evidence_template file not found/
     );
   });
 
@@ -173,19 +202,19 @@ knobs:
       "ai-assisted-essay",
       methodFrontmatter.replace(
         "evidence_template: evidence-template@1.0.0\n",
-        "",
-      ),
+        ""
+      )
     );
     writeEvidenceTemplate(root, "ai-assisted-essay");
 
     expect(() => buildApparatusMirror(root)).toThrow(
-      /missing evidence_template/,
+      /missing evidence_template/
     );
   });
 
   it("rejects generated entries without an evidence template", () => {
     expect(() =>
-      assertMethodEvidenceTemplatesBound([{ id: "ai-assisted-essay" }]),
+      assertMethodEvidenceTemplatesBound([{ id: "ai-assisted-essay" }])
     ).toThrow(/missing evidence_template/);
   });
 
@@ -197,12 +226,12 @@ knobs:
       "ai-assisted-essay",
       evidenceTemplateFrontmatter.replace(
         "applies_to_method: ai-assisted-essay@0.1.0",
-        "applies_to_method: another-method@0.1.0",
-      ),
+        "applies_to_method: another-method@0.1.0"
+      )
     );
 
     expect(() => buildApparatusMirror(root)).toThrow(
-      /evidence_template applies_to_method/,
+      /evidence_template applies_to_method/
     );
 
     const invalidFieldTypeRoot = researchRoot();
@@ -210,12 +239,66 @@ knobs:
     writeEvidenceTemplate(
       invalidFieldTypeRoot,
       "ai-assisted-essay",
-      evidenceTemplateFrontmatter.replace("type: textarea", "type: checkbox"),
+      evidenceTemplateFrontmatter.replace("type: textarea", "type: checkbox")
     );
 
     expect(() => buildApparatusMirror(invalidFieldTypeRoot)).toThrow(
-      /evidence_template fields\.observations\.type/,
+      /evidence_template fields\.observations\.type/
     );
+  });
+
+  it("rejects invalid ledger dimension declarations", () => {
+    const cases = [
+      {
+        replacement: `type: textarea
+    ledger_dimension:
+      role: context
+      control: multi-select`,
+        expected:
+          /ledger_dimension is only allowed on select, date, and number/,
+      },
+      {
+        replacement: `type: select
+    options: [about-right]
+    ledger_dimension:
+      role: outcome
+      control: multi-select`,
+        expected:
+          /ledger_dimension\.role must be one of context, method, collection/,
+      },
+      {
+        replacement: `type: select
+    options: [about-right]
+    ledger_dimension:
+      role: context
+      control: range`,
+        expected:
+          /ledger_dimension\.control must be multi-select for select fields/,
+      },
+      {
+        replacement: `type: number
+    options: [1, 2]
+    ledger_dimension:
+      role: collection
+      control: range`,
+        expected: /options must not be present for range controls/,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const root = researchRoot();
+      writeMethod(root, "ai-assisted-essay", methodFrontmatter);
+      writeEvidenceTemplate(
+        root,
+        "ai-assisted-essay",
+        evidenceTemplateFrontmatter.replace(
+          "type: textarea",
+          testCase.replacement
+        )
+      );
+
+      expect(() => buildApparatusMirror(root)).toThrow(testCase.expected);
+    }
   });
 
   it("rejects an evidence template with a non-string default_stage", () => {
@@ -226,12 +309,12 @@ knobs:
       "ai-assisted-essay",
       evidenceTemplateFrontmatter.replace(
         "default_stage: documented-experience",
-        "default_stage: 1",
-      ),
+        "default_stage: 1"
+      )
     );
 
     expect(() => buildApparatusMirror(root)).toThrow(
-      /evidence_template default_stage must be a string/,
+      /evidence_template default_stage must be a string/
     );
   });
 
@@ -243,12 +326,12 @@ knobs:
       "ai-assisted-essay",
       evidenceTemplateFrontmatter.replace(
         "guidance: Keep observations factual.",
-        "guidance: [Keep observations factual.]",
-      ),
+        "guidance: [Keep observations factual.]"
+      )
     );
 
     expect(() => buildApparatusMirror(root)).toThrow(
-      /evidence_template assistant\.guidance must be a string/,
+      /evidence_template assistant\.guidance must be a string/
     );
   });
 
@@ -257,11 +340,11 @@ knobs:
     writeMethod(
       root,
       "ai-assisted-essay",
-      methodFrontmatter.replace("id: ai-assisted-essay", "id: another-method"),
+      methodFrontmatter.replace("id: ai-assisted-essay", "id: another-method")
     );
 
     expect(() => buildApparatusMirror(root)).toThrow(
-      /must declare id ai-assisted-essay/,
+      /must declare id ai-assisted-essay/
     );
   });
 
@@ -280,8 +363,8 @@ knobs:
             version: "1.0.0",
             templateKind: "form",
           },
-        ],
-      ),
+        ]
+      )
     ).toThrow(/not a platform Form template/);
 
     expect(() =>
@@ -298,8 +381,8 @@ knobs:
             version: "1.0.0",
             templateKind: "form",
           },
-        ],
-      ),
+        ]
+      )
     ).toThrow(/does not match platform version/);
   });
 });

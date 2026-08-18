@@ -184,6 +184,63 @@ describe("generated apparatus catalog", () => {
     ).toThrow(/fields\.claim\.options must be present for select/);
   });
 
+  it("validates ledger dimensions at runtime", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+    const template = essays.evidence_template!;
+    const valid = {
+      ...template,
+      fields: {
+        ...template.fields,
+        collection_date: {
+          type: "date" as const,
+          missing_semantics: "unknown",
+          ledger_dimension: { role: "collection", control: "range" },
+        },
+      },
+    };
+
+    expect(() =>
+      validateApparatusCatalog([{ ...essays, evidence_template: valid }])
+    ).not.toThrow();
+
+    const invalid = [
+      {
+        type: "text",
+        ledger_dimension: { role: "context", control: "multi-select" },
+      },
+      {
+        type: "select",
+        options: ["known"],
+        ledger_dimension: { role: "unknown-role", control: "multi-select" },
+      },
+      {
+        type: "number",
+        ledger_dimension: { role: "method", control: "multi-select" },
+      },
+      {
+        type: "date",
+        options: ["2026-01-01"],
+        ledger_dimension: { role: "collection", control: "range" },
+      },
+    ];
+
+    for (const field of invalid) {
+      expect(() =>
+        validateApparatusCatalog([
+          {
+            ...essays,
+            evidence_template: {
+              ...template,
+              fields: { ...template.fields, field },
+            },
+          } as never,
+        ])
+      ).toThrow(/ledger_dimension|range controls/);
+    }
+  });
+
   it("accepts every supported optional-capability combination with a viable workflow", () => {
     const essays = APPARATUS_CATALOG.find(
       (entry) => entry.id === "ai-assisted-essay"
