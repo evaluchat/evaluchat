@@ -28,6 +28,7 @@ web_service="${OSS_DEV_WEB_SERVICE:-evaluchat-oss-web.service}"
 agents_service="${OSS_DEV_AGENTS_SERVICE:-evaluchat-oss-agents.service}"
 dev_url="${OSS_DEV_URL:-https://dev.evaluchat.org}"
 agent_url="${OSS_DEV_AGENT_URL:-http://127.0.0.1:54367}"
+web_port="${OSS_DEV_WEB_PORT:-3000}"
 
 work_dir=""
 package_file=""
@@ -220,12 +221,13 @@ restart_and_verify() {
   local expected_build="${1:-}"
   local expected_catalog="${2:-}"
 
-  ssh_remote bash -s -- "$remote_app_dir" "$agent_url" "$web_service" "$agents_service" <<'REMOTE_RESTART'
+  ssh_remote bash -s -- "$remote_app_dir" "$agent_url" "$web_service" "$agents_service" "$web_port" <<'REMOTE_RESTART'
 set -Eeuo pipefail
 app_dir="$1"
 agent_base="$2"
 web_unit="$3"
 agents_unit="$4"
+web_port="$5"
 if [[ -r "$app_dir/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
@@ -254,7 +256,7 @@ done
 systemctl restart "$web_unit"
 web_ok=0
 for attempt in $(seq 1 60); do
-  if curl -fsS --max-time 5 -o /dev/null "http://127.0.0.1:3000/workspace"; then
+  if curl -fsS --max-time 5 -o /dev/null "http://127.0.0.1:${web_port}/workspace"; then
     web_ok=1
     break
   fi
