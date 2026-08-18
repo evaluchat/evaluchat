@@ -44,10 +44,12 @@ vi.mock("@/lib/teaching/invitation-helpers", () => ({
 }));
 
 import {
+  claimEvidenceSubmission,
   createEvidenceThread,
   createMethodWorkspaceItem,
   createWorkspaceItem,
   WorkspaceItemNotFoundError,
+  WorkspaceEvidenceAlreadySubmittedError,
 } from "./store";
 
 function manifestFor(userId: string): any {
@@ -143,9 +145,9 @@ describe("Evidence workspace threads", () => {
     await expect(
       createEvidenceThread("user-2", item.id)
     ).rejects.toBeInstanceOf(WorkspaceItemNotFoundError);
-    await expect(
-      createEvidenceThread("user-1", item.id)
-    ).rejects.toBeInstanceOf(WorkspaceItemNotFoundError);
+    await expect(createEvidenceThread("user-1", item.id)).rejects.toThrow(
+      "Evidence requires a concluded method run"
+    );
 
     const nonMethod = await createWorkspaceItem(
       "user-1",
@@ -154,5 +156,32 @@ describe("Evidence workspace threads", () => {
     await expect(
       createEvidenceThread("user-1", nonMethod.id)
     ).rejects.toBeInstanceOf(WorkspaceItemNotFoundError);
+  });
+
+  it("claims an evidence submission under the user lock and rejects duplicates", async () => {
+    const item = await createMethodWorkspaceItem("user-1", "ai-assisted-essay");
+    conclude(item.id);
+    const result = await createEvidenceThread("user-1", item.id);
+    const claimed = await claimEvidenceSubmission(
+      "user-1",
+      item.id,
+      result.threadId,
+      "submission-key"
+    );
+    expect(claimed).toMatchObject({
+      status: "submitting",
+      submissionKey: "submission-key",
+    });
+    expect(
+      manifestFor("user-1").items[item.id].evidenceThreads[0]
+    ).toMatchObject({
+      status: "submitting",
+      submissionKey: "submission-key",
+    });
+    manifestFor("user-1").items[item.id].evidenceThreads[0].status =
+      "submitted";
+    await expect(
+      claimEvidenceSubmission("user-1", item.id, result.threadId, "other-key")
+    ).rejects.toBeInstanceOf(WorkspaceEvidenceAlreadySubmittedError);
   });
 });

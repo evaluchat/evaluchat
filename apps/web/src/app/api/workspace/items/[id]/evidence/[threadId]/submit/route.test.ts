@@ -11,11 +11,13 @@ const harness = vi.hoisted(() => {
     verifyUserAuthenticated: vi.fn(),
     getEvidenceSnapshot: vi.fn(),
     updateEvidenceThreadReference: vi.fn(),
+    claimEvidenceSubmission: vi.fn(),
     validateEvidenceSubmission: vi.fn(),
     assembleEvidenceMarkdown: vi.fn(),
     evidenceFilePath: vi.fn(),
     evidenceTimestampSlug: vi.fn(),
     openEvidencePullRequest: vi.fn(),
+    findExistingEvidencePullRequest: vi.fn(),
     FormValidationError,
     WorkspaceItemNotFoundError,
     WorkspaceThreadOwnershipError,
@@ -36,12 +38,16 @@ vi.mock("@/lib/workspace/evidence", () => ({
 }));
 vi.mock("@/lib/workspace/evidence-github", () => ({
   openEvidencePullRequest: harness.openEvidencePullRequest,
+  findExistingEvidencePullRequest: harness.findExistingEvidencePullRequest,
 }));
 vi.mock("@/lib/workspace/store", () => ({
+  claimEvidenceSubmission: harness.claimEvidenceSubmission,
   getEvidenceSnapshot: harness.getEvidenceSnapshot,
   updateEvidenceThreadReference: harness.updateEvidenceThreadReference,
   WorkspaceItemNotFoundError: harness.WorkspaceItemNotFoundError,
   WorkspaceThreadOwnershipError: harness.WorkspaceThreadOwnershipError,
+  WorkspaceEvidenceAlreadySubmittedError: class WorkspaceEvidenceAlreadySubmittedError extends Error {},
+  WorkspaceEvidenceThreadMissingError: class WorkspaceEvidenceThreadMissingError extends Error {},
 }));
 
 import { POST } from "./route";
@@ -64,6 +70,7 @@ describe("POST /api/workspace/items/[id]/evidence/[threadId]/submit", () => {
     harness.verifyUserAuthenticated.mockReset();
     harness.getEvidenceSnapshot.mockReset();
     harness.updateEvidenceThreadReference.mockReset();
+    harness.claimEvidenceSubmission.mockReset();
     harness.validateEvidenceSubmission.mockReset();
     harness.assembleEvidenceMarkdown.mockReset();
     harness.evidenceFilePath.mockReset();
@@ -71,6 +78,13 @@ describe("POST /api/workspace/items/[id]/evidence/[threadId]/submit", () => {
       .mockReset()
       .mockReturnValue("2026-08-18T12-34-56Z");
     harness.openEvidencePullRequest.mockReset();
+    harness.findExistingEvidencePullRequest
+      .mockReset()
+      .mockResolvedValue(undefined);
+    harness.claimEvidenceSubmission.mockResolvedValue({
+      status: "submitting",
+      submissionKey: "2026-08-18T12-34-56Z",
+    });
   });
 
   it("validates, assembles, opens the PR, and stores its status", async () => {

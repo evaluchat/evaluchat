@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { verifyUserAuthenticated } from "@/lib/supabase/verify_user_server";
 import {
   createEvidenceThread,
+  EvidenceRunNotConcludedError,
+  EvidenceUnavailableError,
   WorkspaceItemNotFoundError,
   WorkspaceThreadOwnershipError,
 } from "@/lib/workspace/store";
@@ -28,6 +30,18 @@ export async function POST(_request: Request, context: RouteContext) {
     if (error instanceof WorkspaceItemNotFoundError) {
       return NextResponse.json(
         { error: "Evidence is not available for this workspace item" },
+        { status: 404 }
+      );
+    }
+    if (error instanceof EvidenceRunNotConcludedError) {
+      return NextResponse.json(
+        { error: "Evidence requires a concluded method run" },
+        { status: 409 }
+      );
+    }
+    if (error instanceof EvidenceUnavailableError) {
+      return NextResponse.json(
+        { error: "Evidence is not available for this method" },
         { status: 404 }
       );
     }

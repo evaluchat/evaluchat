@@ -17,7 +17,11 @@ import {
   enforceWorkspaceThreadPolicy,
   supportsWorkspaceThreads,
 } from "../../../lib/workspace/thread-policy";
-import { buildEvidenceSnapshot } from "../../../lib/workspace/evidence";
+import {
+  buildEvidenceSnapshotFromMarker,
+  EvidenceRunNotConcludedError,
+  EvidenceUnavailableError,
+} from "../../../lib/workspace/evidence";
 import {
   recordPlatformProviderRun,
   type ProviderTokenUsage,
@@ -311,6 +315,14 @@ async function handleRequest(req: NextRequest, method: string) {
           supabase_session: session,
           supabase_user_id: user.id,
         };
+        if (
+          (classification.kind === "thread_by_id" ||
+            isThreadCreate(method, classification)) &&
+          parsedBody.metadata &&
+          typeof parsedBody.metadata === "object"
+        ) {
+          delete parsedBody.metadata.evidence;
+        }
 
         // Apparatus treatment is server-authoritative. Resolve the immutable
         // snapshot from the assignment recorded on the owned thread and
@@ -420,6 +432,9 @@ async function handleRequest(req: NextRequest, method: string) {
           // Evidence is server-stamped at creation. Reuse only that marker on
           // subsequent runs; client metadata cannot select a different
           // template, layout, guidance, or frozen snapshot.
+          if (parsedBody.metadata && typeof parsedBody.metadata === "object") {
+            delete parsedBody.metadata.evidence;
+          }
           if (ownedThreadMetadata?.evidence) {
             parsedBody.metadata = {
               ...(parsedBody.metadata && typeof parsedBody.metadata === "object"
@@ -430,7 +445,7 @@ async function handleRequest(req: NextRequest, method: string) {
           }
 
           let evidenceSnapshot:
-            | ReturnType<typeof buildEvidenceSnapshot>
+            | ReturnType<typeof buildEvidenceSnapshotFromMarker>
             | undefined;
           if (
             workspaceItem.kind === "method" &&
@@ -438,7 +453,23 @@ async function handleRequest(req: NextRequest, method: string) {
             typeof ownedThreadMetadata === "object" &&
             (ownedThreadMetadata as Record<string, unknown>).evidence
           ) {
-            evidenceSnapshot = buildEvidenceSnapshot(workspaceItem);
+            try {
+              evidenceSnapshot = buildEvidenceSnapshotFromMarker(
+                workspaceItem,
+                (ownedThreadMetadata as Record<string, unknown>).evidence
+              );
+            } catch (error) {
+              if (
+                error instanceof EvidenceRunNotConcludedError ||
+                error instanceof EvidenceUnavailableError
+              ) {
+                return NextResponse.json(
+                  { error: "Evidence snapshot is no longer available" },
+                  { status: 409 }
+                );
+              }
+              throw error;
+            }
           }
 
           Object.assign(

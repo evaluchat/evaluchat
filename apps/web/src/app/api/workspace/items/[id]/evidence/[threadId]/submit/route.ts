@@ -7,9 +7,15 @@ import {
   evidenceTimestampSlug,
   validateEvidenceSubmission,
 } from "@/lib/workspace/evidence";
-import { openEvidencePullRequest } from "@/lib/workspace/evidence-github";
 import {
+  findExistingEvidencePullRequest,
+  openEvidencePullRequest,
+} from "@/lib/workspace/evidence-github";
+import {
+  claimEvidenceSubmission,
   getEvidenceSnapshot,
+  WorkspaceEvidenceAlreadySubmittedError,
+  WorkspaceEvidenceThreadMissingError,
   updateEvidenceThreadReference,
   WorkspaceItemNotFoundError,
   WorkspaceThreadOwnershipError,
@@ -40,28 +46,43 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   try {
     const loaded = await getEvidenceSnapshot(auth.user.id, id, threadId);
-    if (loaded.reference.status === "filed") {
+    if (
+      loaded.reference.status === "filed" ||
+      loaded.reference.status === "submitted"
+    ) {
       return NextResponse.json(
-        { error: "Evidence has already been filed" },
+        { error: "Evidence has already been submitted" },
         { status: 409 }
       );
     }
     const validated = validateEvidenceSubmission(loaded.snapshot, rawValues);
     const generatedAt = new Date().toISOString();
-    const timestampSlug = evidenceTimestampSlug(generatedAt);
+    const requestedSubmissionKey = evidenceTimestampSlug(generatedAt);
+    const claimed = await claimEvidenceSubmission(
+      auth.user.id,
+      id,
+      threadId,
+      requestedSubmissionKey
+    );
+    const submissionKey = claimed.submissionKey || requestedSubmissionKey;
     const markdown = assembleEvidenceMarkdown({
       snapshot: loaded.snapshot,
       values: validated.values,
       stage: validated.stage,
       generatedAt,
     });
-    const filePath = evidenceFilePath(loaded.snapshot.methodId, timestampSlug);
+    const filePath = evidenceFilePath(loaded.snapshot.methodId, submissionKey);
+    const existingPullRequest = await findExistingEvidencePullRequest(
+      loaded.snapshot.methodId,
+      submissionKey
+    );
     const pullRequest = await openEvidencePullRequest({
       methodId: loaded.snapshot.methodId,
       stage: validated.stage,
-      timestampSlug,
+      timestampSlug: submissionKey,
       filePath,
       markdown,
+      existingPullRequest,
     });
     await updateEvidenceThreadReference(auth.user.id, id, threadId, {
       status: pullRequest.status,
@@ -74,7 +95,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       pullRequestUrl: pullRequest.url,
       pullRequestNumber: pullRequest.number,
       filePath,
-      id: timestampSlug,
+      id: submissionKey,
       stage: validated.stage,
     });
   } catch (error) {
@@ -86,6 +107,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
     if (error instanceof WorkspaceThreadOwnershipError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (error instanceof WorkspaceEvidenceAlreadySubmittedError) {
+      return NextResponse.json(
+        { error: "Evidence has already been submitted" },
+        { status: 409 }
+      );
+    }
+    if (error instanceof WorkspaceEvidenceThreadMissingError) {
+      return NextResponse.json(
+        {
+          error:
+            "Evidence thread no longer exists; create a new evidence contribution",
+        },
+        { status: 410 }
+      );
     }
     if (error instanceof FormValidationError) {
       return NextResponse.json(

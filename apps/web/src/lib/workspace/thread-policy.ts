@@ -48,18 +48,7 @@ export function enforceWorkspaceThreadPolicy(
   assistantId: string,
   evidenceSnapshot?: EvidenceSnapshot
 ): Record<string, any> {
-  const evidenceMarker =
-    body.metadata && typeof body.metadata === "object"
-      ? (body.metadata as Record<string, unknown>).evidence
-      : undefined;
-  const isEvidenceThread =
-    item.kind === "method" &&
-    evidenceMarker &&
-    typeof evidenceMarker === "object" &&
-    !Array.isArray(evidenceMarker);
-  const activeEvidenceSnapshot = isEvidenceThread
-    ? evidenceSnapshot
-    : undefined;
+  const activeEvidenceSnapshot = evidenceSnapshot ?? undefined;
 
   return {
     ...body,

@@ -15,6 +15,7 @@ import {
 import { useGraphContext } from "@/contexts/GraphContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 import type { ArtifactV3, FormAgentContext } from "@opencanvas/shared/types";
 import type {
   FormFieldDefinition,
@@ -25,7 +26,7 @@ import { WorkspaceItemBanner } from "./workspace-item-banner";
 import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
 import { workspaceItemTitle } from "@/lib/workspace/display";
 
-type EvidenceStatus = "draft" | "submitted" | "filed";
+type EvidenceStatus = "draft" | "submitting" | "submitted" | "filed";
 type EvidenceValue = string | number | null;
 
 type EvidencePayload = {
@@ -46,12 +47,24 @@ type EvidencePayload = {
   layoutMarkdown: string;
   guidance: string;
   frozenValues: Record<string, EvidenceValue>;
+  values?: Record<string, string>;
   method: { id: string; version: string };
 };
 
 function displayValue(value: EvidenceValue | FormValue | undefined): string {
   if (Array.isArray(value)) return value.join(", ");
   return value === null || value === undefined ? "" : String(value);
+}
+
+export function evidenceEditableValues(
+  fields: Record<string, FormFieldDefinition>,
+  values: Record<string, EvidenceValue | FormValue>
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(fields)
+      .filter(([, field]) => field.readOnly !== true)
+      .map(([fieldId]) => [fieldId, displayValue(values[fieldId])])
+  );
 }
 
 function markEvidencePlaceholders(markdown: string): string {
@@ -287,6 +300,7 @@ export function EvidenceCanvas({
   const { graphData } = useGraphContext();
   const { setThreadId } = useThreadContext();
   const { toast } = useToast();
+  const router = useRouter();
   // Stable setters only — the context value object itself is recreated on
   // every provider render, so depending on `graphData` would re-run this
   // effect every render and loop (React error #185).
@@ -297,7 +311,10 @@ export function EvidenceCanvas({
   >({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string>();
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [isAbandoning, setIsAbandoning] = useState(false);
   const [abandonOpen, setAbandonOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
 
@@ -307,6 +324,8 @@ export function EvidenceCanvas({
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setLoadError(undefined);
     void fetch(
       `/api/workspace/items/${encodeURIComponent(item.id)}/evidence/${encodeURIComponent(threadId)}`,
       { credentials: "include" }
@@ -322,13 +341,18 @@ export function EvidenceCanvas({
         const initial = Object.fromEntries(
           Object.entries(body.fields).map(([fieldId, field]) => [
             fieldId,
-            field.readOnly ? (body.frozenValues[fieldId] ?? "") : "",
+            field.readOnly
+              ? (body.frozenValues[fieldId] ?? "")
+              : (body.values?.[fieldId] ?? ""),
           ])
         );
         setValues(initial);
       })
       .catch((error) => {
         if (!cancelled) {
+          setLoadError(
+            error instanceof Error ? error.message : "Please try again."
+          );
           toast({
             title: "Could not load evidence",
             description:
@@ -343,7 +367,34 @@ export function EvidenceCanvas({
     return () => {
       cancelled = true;
     };
-  }, [item.id, threadId, toast]);
+  }, [item.id, threadId, toast, loadAttempt]);
+
+  const editableValues = useMemo(() => {
+    if (!payload) return {};
+    return evidenceEditableValues(payload.fields, values);
+  }, [payload, values]);
+
+  useEffect(() => {
+    if (!payload) return;
+    const timer = window.setTimeout(() => {
+      void fetch(
+        `/api/workspace/items/${encodeURIComponent(item.id)}/evidence/${encodeURIComponent(threadId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ values: editableValues }),
+        }
+      )
+        .then((response) => {
+          if (!response.ok) console.warn("Could not persist evidence values");
+        })
+        .catch((error) => {
+          console.warn("Could not persist evidence values", error);
+        });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [editableValues, item.id, payload, threadId]);
 
   useEffect(() => {
     if (!payload) return;
@@ -445,13 +496,47 @@ export function EvidenceCanvas({
     }
   }
 
-  if (loading || !payload) {
+  async function abandonItem() {
+    setIsAbandoning(true);
+    try {
+      const response = await fetch(
+        `/api/workspace/items/${encodeURIComponent(item.id)}`,
+        { method: "DELETE", credentials: "include" }
+      );
+      if (!response.ok) throw new Error("Could not abandon workspace item");
+      router.push("/workspace");
+    } catch (error) {
+      toast({
+        title: "Could not abandon item",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAbandoning(false);
+    }
+  }
+
+  if (loading) {
     return (
       <div className="p-8 text-sm text-muted-foreground">
         Loading evidence canvas…
       </div>
     );
   }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col gap-3 p-8 text-sm text-muted-foreground">
+        <p>Could not load the evidence canvas: {loadError}</p>
+        <Button onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (!payload) return null;
 
   const locked = payload.status !== "draft";
   return (
@@ -549,10 +634,10 @@ export function EvidenceCanvas({
       <WorkspaceItemDeleteDialog
         open={abandonOpen}
         onOpenChange={setAbandonOpen}
-        onConfirm={() => setAbandonOpen(false)}
+        onConfirm={() => void abandonItem()}
         itemTitle={workspaceItemTitle(item)}
-        isDeleting={false}
-        confirmLabel="Close"
+        isDeleting={isAbandoning}
+        confirmLabel="Abandon"
       />
     </div>
   );

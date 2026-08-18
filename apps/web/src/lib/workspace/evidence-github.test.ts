@@ -59,11 +59,17 @@ describe("openEvidencePullRequest", () => {
     expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       headers: expect.objectContaining({ Authorization: "Bearer test-token" }),
+      signal: expect.any(AbortSignal),
     });
     expect(fetchMock.mock.calls[1]?.[0]).toContain("/git/refs");
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: "PUT" });
     expect(fetchMock.mock.calls[4]?.[0]).toContain("check-runs");
     expect(fetchMock.mock.calls[5]?.[0]).toContain("/pulls/42/merge");
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))
+    ).toMatchObject({
+      sha: "head-sha",
+    });
   });
 
   it("routes higher stages to human review without checking or merging", async () => {

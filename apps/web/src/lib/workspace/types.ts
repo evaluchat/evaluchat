@@ -59,12 +59,18 @@ export type SubmittedForm = {
   submittedAt: string;
 };
 
-export type EvidenceThreadStatus = "draft" | "submitted" | "filed";
+export type EvidenceThreadStatus =
+  | "draft"
+  | "submitting"
+  | "submitted"
+  | "filed";
 
 export type EvidenceThreadReference = {
   threadId: string;
   status: EvidenceThreadStatus;
   templateVersion: string;
+  submissionKey?: string;
+  values?: Record<string, string>;
   submittedAt?: string;
   pullRequestUrl?: string;
   pullRequestNumber?: number;

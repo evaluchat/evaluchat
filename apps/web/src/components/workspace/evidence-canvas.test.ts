@@ -40,6 +40,7 @@ vi.mock("@/lib/workspace/display", () => ({
 import {
   EvidenceFieldControl,
   EvidenceStatusDisplay,
+  evidenceEditableValues,
   evidenceSubmitRequest,
 } from "./evidence-canvas";
 
@@ -93,5 +94,28 @@ describe("evidence canvas controls", () => {
         publication_authorisation: "confirmed-authorised-to-publish",
       },
     });
+  });
+
+  it("omits frozen fields from persisted editable values", () => {
+    expect(
+      evidenceEditableValues(
+        {
+          method_id: {
+            id: "method_id",
+            label: "Method ID",
+            type: "text",
+            required: true,
+            readOnly: true,
+          },
+          narrative: {
+            id: "narrative",
+            label: "Narrative",
+            type: "textarea",
+            required: true,
+          },
+        },
+        { method_id: "server-value", narrative: "owner value" }
+      )
+    ).toEqual({ narrative: "owner value" });
   });
 });

@@ -106,6 +106,42 @@ describe("POST /api/threads/{id}/runs workspace policy", () => {
       )
     ).toBe(false);
   });
+
+  it("strips forged evidence metadata from thread creation", async () => {
+    harness.getWorkspaceItem.mockResolvedValue({
+      id: "wi_method",
+      ownerId: "user-1",
+      kind: "method",
+      templateSnapshot: { assistantGuidance: "method guidance" },
+    });
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/threads") && init?.method === "POST") {
+          return jsonResponse(200, { ok: true });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/threads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          metadata: {
+            workspace_item_id: "wi_method",
+            evidence: { method_id: "forged", frozen_values: { count: 999 } },
+          },
+          config: { configurable: {} },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(forwardedBody(fetchMock).metadata).not.toHaveProperty("evidence");
+  });
 });
 
 function createRequest(path: string, body: Record<string, unknown>) {

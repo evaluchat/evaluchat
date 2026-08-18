@@ -28,6 +28,20 @@ export type EvidenceSnapshot = {
   runId: string;
 };
 
+export class EvidenceUnavailableError extends Error {
+  constructor() {
+    super("Evidence is unavailable for this method");
+    this.name = "EvidenceUnavailableError";
+  }
+}
+
+export class EvidenceRunNotConcludedError extends Error {
+  constructor() {
+    super("Evidence requires a concluded method run");
+    this.name = "EvidenceRunNotConcludedError";
+  }
+}
+
 type FrozenRunSnapshot = {
   frozen_run: {
     method: { id: string; version: string };
@@ -219,12 +233,12 @@ export function buildEvidenceSnapshot(
   item: MethodWorkspaceItem
 ): EvidenceSnapshot {
   if (!item.run || item.submission?.status !== "submitted") {
-    throw new Error("Evidence requires a concluded method run");
+    throw new EvidenceRunNotConcludedError();
   }
   const catalogEntry = getApparatusById(item.methodSource.id);
   const template = catalogEntry?.evidence_template;
   if (!template) {
-    throw new Error("This method has no evidence template");
+    throw new EvidenceUnavailableError();
   }
   const normalized = normalizeEvidenceTemplate(template);
   const frozenRun = resolveFrozenRunValues(item);
@@ -235,6 +249,59 @@ export function buildEvidenceSnapshot(
     methodVersion: frozenRun.frozen_run.method.version,
     workspaceItemId: item.id,
     runId: item.run.id,
+  };
+}
+
+export type EvidenceThreadMarker = {
+  method_id: string;
+  template_version: string;
+  frozen_values: Record<string, EvidenceValue>;
+};
+
+/** Rebuild the catalog layout while retaining the values stamped at creation. */
+export function buildEvidenceSnapshotFromMarker(
+  item: MethodWorkspaceItem,
+  marker: unknown
+): EvidenceSnapshot {
+  if (
+    !isRecord(marker) ||
+    typeof marker.method_id !== "string" ||
+    typeof marker.template_version !== "string" ||
+    !isRecord(marker.frozen_values)
+  ) {
+    throw new EvidenceUnavailableError();
+  }
+  const catalogEntry = getApparatusById(item.methodSource.id);
+  const template = catalogEntry?.evidence_template;
+  if (!template) throw new EvidenceUnavailableError();
+  const frozenValues: Record<string, EvidenceValue> = {};
+  for (const [fieldId, value] of Object.entries(marker.frozen_values)) {
+    if (
+      typeof value !== "string" &&
+      typeof value !== "number" &&
+      value !== null
+    ) {
+      throw new EvidenceUnavailableError();
+    }
+    frozenValues[fieldId] = value;
+  }
+  const normalized = normalizeEvidenceTemplate(template);
+  const frozenRun = marker.frozen_values.frozen_run;
+  const frozenMethod =
+    isRecord(frozenRun) && isRecord(frozenRun.method)
+      ? frozenRun.method
+      : undefined;
+  return {
+    ...normalized,
+    templateVersion: marker.template_version,
+    frozenValues,
+    methodId: marker.method_id,
+    methodVersion:
+      typeof frozenMethod?.version === "string"
+        ? frozenMethod.version
+        : item.methodSource.version,
+    workspaceItemId: item.id,
+    runId: item.run?.id ?? "unknown",
   };
 }
 

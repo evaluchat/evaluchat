@@ -4,6 +4,7 @@ import { FormValidationError } from "./form-validation";
 import {
   NOT_RECORDED,
   assembleEvidenceMarkdown,
+  buildEvidenceSnapshotFromMarker,
   evidenceFilePath,
   evidenceTimestampSlug,
   isAutoMergeEligibleStage,
@@ -180,6 +181,22 @@ function methodItem(
 }
 
 describe("Evidence runtime", () => {
+  it("uses stamped frozen values when rebuilding a thread snapshot", () => {
+    const item = methodItem();
+    const snapshot = buildEvidenceSnapshotFromMarker(item, {
+      method_id: "ai-assisted-essay",
+      template_version: "1.2.3",
+      frozen_values: { method_id: "stamped-method", participant_count: 99 },
+    });
+    expect(snapshot.frozenValues).toEqual({
+      method_id: "stamped-method",
+      participant_count: 99,
+    });
+    expect(snapshot.frozenValues).not.toEqual(
+      expect.objectContaining({ participant_count: 3 })
+    );
+  });
+
   it("normalizes snake_case fields, carries controls, and rejects invalid types", () => {
     const normalized = normalizeEvidenceTemplate(template());
     expect(normalized.fields.method_id).toMatchObject({
