@@ -284,6 +284,46 @@ describe("assessThesis", () => {
     expect(mockModel.invoke).not.toHaveBeenCalled();
   });
 
+  it("does not auto-pass a placeholder through the escape hatch", async () => {
+    const { optionallyGetSystemPromptFromConfig } = vi.mocked(
+      await import("../../../utils.js")
+    );
+    optionallyGetSystemPromptFromConfig.mockReturnValue(
+      "Write an essay about Hamlet"
+    );
+
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [
+        new HumanMessage({
+          content: "I think Hamlet delays because he overthinks everything",
+          id: "1",
+        }),
+        new HumanMessage({
+          content: "The ghost makes him question what action is right",
+          id: "2",
+        }),
+        new HumanMessage({
+          content: "His soliloquies show his fear of making the wrong choice",
+          id: "3",
+        }),
+        new HumanMessage({ content: "Participant reply 4", id: "4" }),
+      ],
+    });
+    const config = createMockConfig();
+
+    const result = await assessThesis(state, config);
+
+    expect(result).toEqual({
+      thesis: {
+        passed: false,
+        feedback:
+          "Placeholder detected — ask the student to elaborate before unlocking drafting.",
+      },
+    });
+    expect(mockModel.invoke).not.toHaveBeenCalled();
+  });
+
   it("should include recent student messages in the prompt", async () => {
     const state = createMockState({
       phase_state: "socratic",

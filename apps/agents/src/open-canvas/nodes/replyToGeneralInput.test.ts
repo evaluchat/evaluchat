@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { replyToGeneralInput } from "./replyToGeneralInput.js";
+import { detectHollowInput } from "./hollow-input.js";
 import {
   createMockConfig,
   createMockState,
@@ -7,6 +8,7 @@ import {
   createMockStore,
 } from "../__test-helpers__/mock-config.js";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
+import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
 
 // Mock pdf-parse to prevent file system access during testing
 vi.mock("pdf-parse", () => ({
@@ -23,6 +25,37 @@ vi.mock("../../utils.js", () => ({
   optionallyGetSystemPromptFromConfig: vi.fn(),
   createContextDocumentMessages: vi.fn().mockResolvedValue([]),
 }));
+
+describe("detectHollowInput", () => {
+  it.each([
+    "Participant reply 1",
+    "participant REPLY2",
+    "reply 5",
+    "ok",
+    "yes",
+    "hi",
+    "asdf qwerty 12345",
+    "2",
+    "",
+    "   ",
+  ])("flags %j as hollow", (input) => {
+    expect(detectHollowInput(input)).toBe(true);
+  });
+
+  it.each([
+    "Set the title",
+    "I think the ending is ironic because...",
+    "Can you help me write my intro?",
+    "My reply 1 is that Hamlet delays because he overthinks everything.",
+    "reply 1 to your question is that I agree",
+    "أعتقد أن العنوان ساخر",
+    "タイトルは皮肉だ",
+    "Creo que el final es irónico",
+    "我认为这个标题具有讽刺意味",
+  ])("keeps %j as substantive", (input) => {
+    expect(detectHollowInput(input)).toBe(false);
+  });
+});
 
 describe("replyToGeneralInput", () => {
   let mockModel: MockModel;
@@ -194,6 +227,69 @@ describe("replyToGeneralInput", () => {
       messages: [mockResponse],
       _messages: [mockResponse],
     });
+  });
+
+  it("asks for elaboration without invoking the model for hollow input", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [
+        {
+          type: "human",
+          content: "Participant reply 1",
+          id: "1",
+        } as any,
+      ],
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    const result = await replyToGeneralInput(state, config);
+    const response = result.messages?.[0];
+    const responseText = String(response?.content);
+
+    expect(mockModel.invoke).not.toHaveBeenCalled();
+    expect(response).toBeInstanceOf(AIMessage);
+    expect(responseText).toContain("mind elaborating");
+    expect(responseText).not.toMatch(/great choice|started somewhere/i);
+  });
+
+  it("asks for elaboration without invoking the model for a human message without content", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [{ type: "human", id: "1" } as any],
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    const result = await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).not.toHaveBeenCalled();
+    expect(String(result.messages?.[0]?.content)).toContain("mind elaborating");
+    expect(result._messages).toHaveLength(1);
+    expect(String(result._messages?.[0]?.content)).toContain(
+      "mind elaborating"
+    );
+  });
+
+  it("uses the latest visible human message for the hollow-input guard", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [
+        new HumanMessage({
+          content: "I think Hamlet delays because he overthinks everything.",
+          id: "visible-student-message",
+        }),
+        {
+          type: "human",
+          content: "Participant reply 2",
+          id: "hidden-workspace-message",
+          additional_kwargs: { [OC_HIDE_FROM_UI_KEY]: true },
+        } as any,
+      ],
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledOnce();
   });
 
   it("should retrieve reflections from store", async () => {
