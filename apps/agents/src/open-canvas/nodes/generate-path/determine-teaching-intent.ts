@@ -12,6 +12,7 @@ import { CURRENT_ARTIFACT_PROMPT, NO_ARTIFACT_PROMPT } from "../../prompts.js";
 import { OpenCanvasGraphAnnotation } from "../../state.js";
 import { getStringFromContent } from "../../../utils.js";
 import {
+  isCanvasWriteRequest,
   isTargetedEditRequest,
   isWholeDocumentRewriteRequest,
 } from "./canvas-direction.js";
@@ -112,10 +113,14 @@ async function determineTeachingIntentFunc({
 }: DetermineTeachingIntentParams): Promise<TeachingIntentResult> {
   const phase =
     state.phase_state ||
-    (state.apparatusConfiguration?.drafting_gate === "none"
-      ? "drafting"
-      : "socratic");
+    (state.apparatusConfiguration &&
+    state.apparatusConfiguration.drafting_gate !== "none"
+      ? "socratic"
+      : "drafting");
   const phaseRules = PHASE_ROUTING_RULES[phase] || PHASE_ROUTING_RULES.socratic;
+  const lastMessageContent = getStringFromContent(
+    state._messages[state._messages.length - 1]?.content
+  );
 
   const currentArtifactContent = state.artifact
     ? getArtifactContent(state.artifact)
@@ -197,7 +202,16 @@ async function determineTeachingIntentFunc({
     route = "replyToGeneralInput";
     reasoning = "Submitted phase — coaching chat only.";
   }
-  if (hasContent && route === "generateArtifact") {
+  if (
+    phase === "drafting" &&
+    state.apparatusConfiguration?.ai_canvas_actions !== false &&
+    isCanvasWriteRequest(lastMessageContent)
+  ) {
+    route = "generateArtifact";
+    reasoning =
+      "Explicit canvas-write request in drafting phase — generateArtifact.";
+  }
+  if (phase === "socratic" && hasContent && route === "generateArtifact") {
     route = "replyToGeneralInput";
     reasoning = `The canvas has content — ${reasoning} → coaching chat.`;
   }
@@ -210,9 +224,6 @@ async function determineTeachingIntentFunc({
   // explicit whole-document rewrite. Targeted/structural edits ("remove 4.5 and the
   // corresponding reference", "rewrite the conclusion", "fix section 3") routed to
   // rewriteArtifact wiped everything after the target section in production. Re-route.
-  const lastMessageContent = getStringFromContent(
-    state._messages[state._messages.length - 1]?.content
-  );
   if (
     route === "rewriteArtifact" &&
     !isWholeDocumentRewriteRequest(lastMessageContent)

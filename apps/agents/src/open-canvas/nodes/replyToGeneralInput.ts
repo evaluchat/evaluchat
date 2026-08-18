@@ -142,7 +142,12 @@ export const replyToGeneralInput = async (
   state: typeof OpenCanvasGraphAnnotation.State,
   config: LangGraphRunnableConfig
 ): Promise<OpenCanvasGraphReturnType> => {
-  const phase = state.phase_state || "socratic";
+  const phase =
+    state.phase_state ||
+    (state.apparatusConfiguration &&
+    state.apparatusConfiguration.drafting_gate !== "none"
+      ? "socratic"
+      : "drafting");
   const latestStudentMessage = getLatestHumanMessageContent(state._messages);
   const isCoachingPhase = phase === "socratic" || phase === "drafting";
 

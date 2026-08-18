@@ -252,7 +252,12 @@ export async function generatePath(
 
   // Teaching mode: LLM intent classification with full conversation context.
   // Defaults to coaching chat; canvas edits only when the model judges clear intent.
-  const phase = state.phase_state || "socratic";
+  const phase =
+    state.phase_state ||
+    (state.apparatusConfiguration &&
+    state.apparatusConfiguration.drafting_gate !== "none"
+      ? "socratic"
+      : "drafting");
   if (phase === "socratic" || phase === "drafting" || phase === "submitted") {
     const intent = await determineTeachingIntent({
       state: {

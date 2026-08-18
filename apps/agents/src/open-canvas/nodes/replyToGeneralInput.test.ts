@@ -161,20 +161,20 @@ describe("replyToGeneralInput", () => {
     ]);
   });
 
-  it("should default to socratic phase when phase_state is undefined", async () => {
+  it("should default to drafting phase in an open workspace", async () => {
     const state = createMockState({
-      phase_state: undefined, // No phase set
+      phase_state: undefined,
+      apparatusConfiguration: undefined,
       _messages: [new HumanMessage({ content: "General question", id: "1" })],
     });
     const config = createMockConfig({ assistant_id: "test-123" });
 
     await replyToGeneralInput(state, config);
 
-    // Should default to socratic behavior
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
         role: "system",
-        content: expect.stringContaining("Current phase: Socratic"),
+        content: expect.stringContaining("Current phase: Drafting"),
       }),
       ...state._messages,
     ]);
