@@ -2,7 +2,7 @@
 #
 # pre-deploy-guard.sh — assert the pre-deploy invariants before ANY dev or prod
 # deploy of evaluchat/evaluchat. Hard-fails with a remediation hint when any
-# invariant is violated. Run it inside the working clone.
+# invariant is violated. Run it inside the working clone or a git worktree.
 #
 # Usage:
 #   bash scripts/pre-deploy-guard.sh --env prod [--expect-branch main]
@@ -22,8 +22,29 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 
 env_surface=""
 expect_branch=""
-[[ "${1:-}" == "--env" && -n "${2:-}" ]] && { env_surface="$2"; shift 2 || true; }
-[[ "${1:-}" == "--expect-branch" && -n "${2:-}" ]] && { expect_branch="$2"; shift 2 || true; }
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env)
+      [[ -n "${2:-}" ]] || { echo "FATAL: --env must be 'dev' or 'prod'"; exit 1; }
+      env_surface="$2"
+      shift 2
+      ;;
+    --expect-branch)
+      [[ -n "${2:-}" ]] || { echo "FATAL: --expect-branch requires a branch name"; exit 1; }
+      expect_branch="$2"
+      shift 2
+      ;;
+    *)
+      echo "FATAL: unknown argument '$1'"
+      exit 1
+      ;;
+  esac
+done
+
+case "$env_surface" in
+  dev|prod) ;;
+  *) echo "FATAL: --env must be 'dev' or 'prod'"; exit 1 ;;
+esac
 
 fail=0
 failed() { printf 'FAIL  %-44s %s\n' "$1" "$2"; fail=1; }
@@ -31,7 +52,10 @@ ok()    { printf 'PASS  %-44s %s\n' "$1" "$2"; }
 warn()  { printf 'WARN  %-44s %s\n' "$1" "$2"; }
 
 ## --- shared clone present? ---
-[[ -d .git ]] || { echo "FATAL: not inside a git worktree (run from the clone)"; exit 1; }
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+  echo "FATAL: not inside a git worktree (run from the clone)"
+  exit 1
+}
 
 ## --- B1 branch + HEAD are what you intend to ship ---
 cur_branch="$(git rev-parse --abbrev-ref HEAD)"
@@ -90,7 +114,8 @@ if [[ -r "$dev_env" && -n "$prod_env" && -r "$prod_env" ]]; then
   if [[ -z "$diff_flags" ]]; then
     ok "B3 flag parity" "dev and prod env NEXT_PUBLIC_* sets are identical"
   else
-    warn "B3 flag parity" "NEXT_PUBLIC_* differs between dev and prod env files — a rebuild flips whichever the file holds:\n$(echo "$diff_flags" | sed 's/^/         /')"
+    warn "B3 flag parity" "NEXT_PUBLIC_* differs between dev and prod env files — a rebuild flips whichever the file holds:"
+    printf '%s\n' "$diff_flags"
   fi
 else
   warn "B3 flag parity" "skipped — set EVALUCHAT_PROD_ENV_FILE to diff baked NEXT_PUBLIC_* flags (dev=${dev_env:-<unset>})"
@@ -110,8 +135,9 @@ else
 fi
 
 ## --- B5 shared clone not on a foreign branch (parallel-session hijack) ---
-if [[ -f .git/worktrees/*/gitdir ]]; then
-  warn "B5 worktree" "clone has detached worktrees registered — confirm no parallel session owns a branch being deployed."
+git_common_dir="$(git rev-parse --git-common-dir)"
+if compgen -G "$git_common_dir/worktrees/*/gitdir" >/dev/null; then
+  warn "B5 worktree" "clone has registered worktrees — confirm no parallel session owns a branch being deployed."
 fi
 if [[ "$cur_branch" == "$expect_branch" ]]; then
   ok "B5 branch ownership" "clone on expected branch '$cur_branch'"

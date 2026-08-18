@@ -149,6 +149,32 @@ describe("determineTeachingIntent", () => {
     expect(result.route).toBe("generateArtifact");
   });
 
+  it("does not apply the drafting override when drafting_gate is an empty string", async () => {
+    mockModel.setToolCallResponse("classify_intent", {
+      route: "replyToGeneralInput",
+      reasoning: "Student appears to be asking for coaching.",
+    });
+
+    const result = await determineTeachingIntent({
+      state: {
+        _messages: [new HumanMessage("write some tips in the canvas")],
+        phase_state: undefined,
+        apparatusConfiguration: {
+          ai_assistance: true,
+          ai_canvas_actions: true,
+          drafting_gate: "",
+          threshold: 4,
+          tracking: true,
+        },
+        artifact: undefined,
+      } as any,
+      newMessages: [],
+      config: createMockConfig(),
+    });
+
+    expect(result.route).toBe("replyToGeneralInput");
+  });
+
   it("appends an explicit canvas-write request in an open workspace with content", async () => {
     mockModel.setToolCallResponse("classify_intent", {
       route: "replyToGeneralInput",
