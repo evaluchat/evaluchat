@@ -287,6 +287,10 @@ export function EvidenceCanvas({
   const { graphData } = useGraphContext();
   const { setThreadId } = useThreadContext();
   const { toast } = useToast();
+  // Stable setters only — the context value object itself is recreated on
+  // every provider render, so depending on `graphData` would re-run this
+  // effect every render and loop (React error #185).
+  const { setArtifact, setChatStarted, setFormContext } = graphData;
   const [payload, setPayload] = useState<EvidencePayload>();
   const [values, setValues] = useState<
     Record<string, EvidenceValue | FormValue>
@@ -344,8 +348,8 @@ export function EvidenceCanvas({
   useEffect(() => {
     if (!payload) return;
     const artifact = evidenceArtifact(payload, values);
-    graphData.setArtifact(artifact);
-    graphData.setChatStarted(true);
+    setArtifact(artifact);
+    setChatStarted(true);
     const formContext: FormAgentContext = {
       templateId: `${payload.template.id}@${payload.template.version}`,
       title: "Evidence contribution",
@@ -369,8 +373,8 @@ export function EvidenceCanvas({
         briefTemplate: payload.layoutMarkdown,
       },
     };
-    graphData.setFormContext(formContext);
-  }, [graphData, payload, values]);
+    setFormContext(formContext);
+  }, [payload, setArtifact, setChatStarted, setFormContext, values]);
 
   const getStreamInput = useCallback(() => {
     if (!payload) return {};
