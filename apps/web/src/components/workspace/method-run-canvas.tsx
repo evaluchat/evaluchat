@@ -23,6 +23,7 @@ export function MethodRunCanvas({ item }: { item: MethodWorkspaceItem }) {
   const { toast } = useToast();
   const [abandonOpen, setAbandonOpen] = useState(false);
   const [isAbandoning, setIsAbandoning] = useState(false);
+  const [isEvidenceLoading, setIsEvidenceLoading] = useState(false);
   const run = item.run;
   const assignment = run?.assignment;
   const participants = run?.participants ?? [];
@@ -41,6 +42,37 @@ export function MethodRunCanvas({ item }: { item: MethodWorkspaceItem }) {
   const methodHref = publicMethodPageUrl(item.methodSource.id);
   const methodTitle =
     item.methodSource.title || run?.methodId || item.methodSource.id;
+
+  async function openEvidence() {
+    setIsEvidenceLoading(true);
+    try {
+      const response = await fetch(
+        `/api/workspace/items/${encodeURIComponent(item.id)}/evidence`,
+        { method: "POST", credentials: "include" }
+      );
+      const body = (await response.json()) as {
+        threadId?: string;
+        error?: string;
+      };
+      if (!response.ok || !body.threadId) {
+        throw new Error(body.error || "Could not open evidence");
+      }
+      const params = new URLSearchParams({
+        evidence: body.threadId,
+        threadId: body.threadId,
+      });
+      router.push(`/workspace/items/${item.id}?${params.toString()}`);
+    } catch (error) {
+      toast({
+        title: "Could not open evidence",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEvidenceLoading(false);
+    }
+  }
 
   async function abandonItem() {
     setIsAbandoning(true);
@@ -81,6 +113,15 @@ export function MethodRunCanvas({ item }: { item: MethodWorkspaceItem }) {
               <Link href={ownAssignmentHref} data-testid="open-own-assignment">
                 Open assignment
               </Link>
+            </Button>
+          )}
+          {item.submission?.status === "submitted" && run && (
+            <Button
+              onClick={() => void openEvidence()}
+              disabled={isEvidenceLoading}
+              data-testid="open-evidence"
+            >
+              {isEvidenceLoading ? "Opening…" : "Evidence"}
             </Button>
           )}
         </div>

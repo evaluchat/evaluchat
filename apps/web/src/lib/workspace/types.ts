@@ -16,6 +16,8 @@ export type FormFieldDefinition = {
   label: string;
   type: FormFieldType;
   required: boolean;
+  readOnly?: boolean;
+  source?: string;
   maxLength?: number;
   displayChars?: number;
   displayLines?: number;
@@ -55,6 +57,29 @@ export type SubmittedForm = {
   values: Record<string, FormValue>;
   resolvedMarkdown: string;
   submittedAt: string;
+};
+
+export type EvidenceThreadStatus = "draft" | "submitted" | "filed";
+
+export type EvidenceThreadReference = {
+  threadId: string;
+  status: EvidenceThreadStatus;
+  templateVersion: string;
+  submittedAt?: string;
+  pullRequestUrl?: string;
+  pullRequestNumber?: number;
+};
+
+export type EvidenceTemplateSnapshot = {
+  kind: "evidence";
+  templateId: "evidence-template";
+  templateVersion: string;
+  defaultStage?: string;
+  sourcePath: string;
+  guidance: string;
+  layoutMarkdown: string;
+  fields: Record<string, FormFieldDefinition>;
+  frozenValues: Record<string, string | number | null>;
 };
 
 type WorkspaceItemBase = {
@@ -138,6 +163,7 @@ export type MethodWorkspaceItem = WorkspaceItemBase & {
   profiles: MethodProfileOption[];
   submission?: SubmittedForm;
   run?: MethodRun;
+  evidenceThreads?: EvidenceThreadReference[];
 };
 
 export type MethodParticipantWorkspaceItem = WorkspaceItemBase & {

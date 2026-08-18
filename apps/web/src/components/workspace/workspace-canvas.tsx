@@ -18,7 +18,8 @@ import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
 import { FormWorkspaceCanvas } from "./form-workspace-canvas";
 import { MethodParticipantCanvas } from "./method-participant-canvas";
 import { MethodRunCanvas } from "./method-run-canvas";
-import { useRouter } from "next/navigation";
+import { EvidenceCanvas } from "./evidence-canvas";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
 function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
@@ -151,6 +152,7 @@ function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
 
 export function WorkspaceCanvas() {
   const { item, loading } = useWorkspaceItem();
+  const searchParams = useSearchParams();
 
   if (loading || !item) {
     return (
@@ -158,6 +160,11 @@ export function WorkspaceCanvas() {
         Loading workspace item…
       </div>
     );
+  }
+
+  const evidenceThreadId = searchParams.get("evidence");
+  if (item.kind === "method" && evidenceThreadId) {
+    return <EvidenceCanvas item={item} threadId={evidenceThreadId} />;
   }
 
   if (item.kind === "form_template" || (item.kind === "method" && !item.run)) {

@@ -17,6 +17,7 @@ import {
   enforceWorkspaceThreadPolicy,
   supportsWorkspaceThreads,
 } from "../../../lib/workspace/thread-policy";
+import { buildEvidenceSnapshot } from "../../../lib/workspace/evidence";
 import {
   recordPlatformProviderRun,
   type ProviderTokenUsage,
@@ -369,6 +370,7 @@ async function handleRequest(req: NextRequest, method: string) {
         let workspaceItemId: unknown = isThreadCreate(method, classification)
           ? parsedBody.metadata?.workspace_item_id
           : undefined;
+        let ownedThreadMetadata: Record<string, unknown> | undefined;
         if (classification.kind === "thread_by_id") {
           const threadRes = await fetch(
             `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
@@ -385,6 +387,10 @@ async function handleRequest(req: NextRequest, method: string) {
             );
           }
           const thread = await threadRes.json();
+          ownedThreadMetadata =
+            thread?.metadata && typeof thread.metadata === "object"
+              ? (thread.metadata as Record<string, unknown>)
+              : undefined;
           workspaceItemId = thread?.metadata?.workspace_item_id;
         }
 
@@ -411,13 +417,36 @@ async function handleRequest(req: NextRequest, method: string) {
             );
           }
 
+          // Evidence is server-stamped at creation. Reuse only that marker on
+          // subsequent runs; client metadata cannot select a different
+          // template, layout, guidance, or frozen snapshot.
+          if (ownedThreadMetadata?.evidence) {
+            parsedBody.metadata = {
+              ...(parsedBody.metadata && typeof parsedBody.metadata === "object"
+                ? parsedBody.metadata
+                : {}),
+              evidence: ownedThreadMetadata.evidence,
+            };
+          }
+
+          let evidenceSnapshot: ReturnType<typeof buildEvidenceSnapshot> | undefined;
+          if (
+            workspaceItem.kind === "method" &&
+            ownedThreadMetadata &&
+            typeof ownedThreadMetadata === "object" &&
+            (ownedThreadMetadata as Record<string, unknown>).evidence
+          ) {
+            evidenceSnapshot = buildEvidenceSnapshot(workspaceItem);
+          }
+
           Object.assign(
             parsedBody,
             enforceWorkspaceThreadPolicy(
               parsedBody,
               workspaceItem,
               user.id,
-              process.env.EVALUCHAT_WORKSPACE_ASSISTANT_ID || "agent"
+              process.env.EVALUCHAT_WORKSPACE_ASSISTANT_ID || "agent",
+              evidenceSnapshot
             )
           );
           if (isThreadCreate(method, classification)) {
