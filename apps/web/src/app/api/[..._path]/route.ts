@@ -429,7 +429,9 @@ async function handleRequest(req: NextRequest, method: string) {
             };
           }
 
-          let evidenceSnapshot: ReturnType<typeof buildEvidenceSnapshot> | undefined;
+          let evidenceSnapshot:
+            | ReturnType<typeof buildEvidenceSnapshot>
+            | undefined;
           if (
             workspaceItem.kind === "method" &&
             ownedThreadMetadata &&

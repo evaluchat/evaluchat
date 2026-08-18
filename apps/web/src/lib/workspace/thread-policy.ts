@@ -57,7 +57,9 @@ export function enforceWorkspaceThreadPolicy(
     evidenceMarker &&
     typeof evidenceMarker === "object" &&
     !Array.isArray(evidenceMarker);
-  const activeEvidenceSnapshot = isEvidenceThread ? evidenceSnapshot : undefined;
+  const activeEvidenceSnapshot = isEvidenceThread
+    ? evidenceSnapshot
+    : undefined;
 
   return {
     ...body,
@@ -86,7 +88,8 @@ export function enforceWorkspaceThreadPolicy(
             })()
           : {}),
         workspace_item_id: item.id,
-        systemPrompt: activeEvidenceSnapshot?.guidance ?? assistantGuidance(item),
+        systemPrompt:
+          activeEvidenceSnapshot?.guidance ?? assistantGuidance(item),
         ...(activeEvidenceSnapshot
           ? {
               evidence_layout: activeEvidenceSnapshot.layoutMarkdown,
