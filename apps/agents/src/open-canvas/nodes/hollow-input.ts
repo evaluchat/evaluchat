@@ -1,4 +1,7 @@
+import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
+
 type MessageLike = {
+  additional_kwargs?: Record<string, unknown>;
   content?: unknown;
   getType?: () => string;
   type?: string;
@@ -34,7 +37,8 @@ function isKeyboardGibberish(word: string): boolean {
 }
 
 function messageContentToText(content: unknown): string {
-  return typeof content === "string" ? content : JSON.stringify(content);
+  if (typeof content === "string") return content;
+  return content == null ? "" : (JSON.stringify(content) ?? "");
 }
 
 /**
@@ -46,17 +50,14 @@ export function detectHollowInput(latestMessage: string): boolean {
   const content = latestMessage.trim();
   if (!content) return true;
 
-  if (
-    /participant\s+reply\s*\d+/i.test(content) ||
-    /\breply\s*\d+\b/i.test(content)
-  ) {
+  if (/^(?:participant\s+)?reply\s*\d+\s*[.!?]*$/i.test(content)) {
     return true;
   }
 
   const normalized = content.toLowerCase().replace(/^[^a-z]+|[^a-z]+$/g, "");
   if (BARE_ACKNOWLEDGMENTS.has(normalized)) return true;
 
-  const words = content.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) ?? [];
+  const words = content.toLowerCase().match(/\p{L}+(?:['’]\p{L}+)?/gu) ?? [];
   const hasSubstantiveWord = words.some(
     (word) => word.length >= 3 && !isKeyboardGibberish(word)
   );
@@ -76,7 +77,10 @@ export function getLatestHumanMessageContent(
   const latestHumanMessage = [...messages].reverse().find((message) => {
     const messageType =
       typeof message.getType === "function" ? message.getType() : message.type;
-    return messageType === "human";
+    return (
+      messageType === "human" &&
+      message.additional_kwargs?.[OC_HIDE_FROM_UI_KEY] !== true
+    );
   });
 
   return latestHumanMessage
