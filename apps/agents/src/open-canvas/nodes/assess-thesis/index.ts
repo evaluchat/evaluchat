@@ -84,8 +84,10 @@ export async function assessThesis(
 
   const apparatus = state.apparatusConfiguration;
   if (
-    apparatus?.ai_assistance === false ||
-    apparatus?.drafting_gate === "none"
+    !apparatus ||
+    apparatus.ai_assistance === false ||
+    apparatus.drafting_gate === "none" ||
+    apparatus.drafting_gate === undefined
   ) {
     return {
       thesis: {

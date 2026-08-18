@@ -40,6 +40,10 @@ const REMOVAL_VERB_PATTERN =
 const TARGET_DOC_REWRITE_PATTERN =
   /\b(?:rewrite|rephrase|reword|restructure)\s+(?:the\s+|our\s+|this\s+)*(?:document|draft|essay|paper|canvas|article)\b|\b(?:do|give|make|write)\s+(?:a\s+|the\s+)*(?:full|complete|total|fresh|brand.?new)\s+rewrite\b|\brewrite\s+(?:the\s+)?(?:whole|entire|full|entirety)\s+(?:document|draft|essay|paper|canvas|thing)\b|\bmake\s+(?:the\s+)?(?:document|draft|essay|paper|canvas)\s+(?:a\s+lot\s+|much\s+|way\s+)?(?:shorter|longer|tighter)\b|\bshorten\s+(?:the\s+)?(?:whole|entire|full)?\s*(?:document|draft|essay|paper|canvas)\b/i;
 
+/** Explicit commands to author content in the canvas or document. */
+const CANVAS_WRITE_REQUEST_PATTERN =
+  /^(?:(?:please|kindly)[,!]?\s+|(?:can|could|would|will)\s+you\s+|i\s+(?:want|need)\s+you\s+to\s+)?(?:write|put|add|give|create)\b[\s\S]{0,120}?\b(?:in|into|to|on)\s+(?:the\s+|my\s+|our\s+|this\s+)?(?:canvas|document|doc)\b/i;
+
 /**
  * True when the student is explicitly asking to rewrite the FULL document.
  * Used as a hard safety gate: rewrite `rewriteArtifact` ONLY on this.
@@ -53,6 +57,16 @@ export function isWholeDocumentRewriteRequest(message: string): boolean {
     return false;
   }
   return TARGET_DOC_REWRITE_PATTERN.test(trimmed);
+}
+
+/**
+ * True when the student explicitly directs the assistant to author content on
+ * the canvas or document, rather than asking for coaching or commentary.
+ */
+export function isCanvasWriteRequest(message: string): boolean {
+  const trimmed = message.trim();
+  if (!trimmed || SHORT_ACK_PATTERN.test(trimmed)) return false;
+  return CANVAS_WRITE_REQUEST_PATTERN.test(trimmed);
 }
 
 /**

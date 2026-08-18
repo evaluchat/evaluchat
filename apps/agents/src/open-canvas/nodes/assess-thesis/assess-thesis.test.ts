@@ -7,6 +7,21 @@ import {
 } from "../../__test-helpers__/mock-config.js";
 import { HumanMessage } from "@langchain/core/messages";
 
+const socraticApparatusConfiguration = {
+  ai_assistance: true,
+  ai_canvas_actions: true,
+  drafting_gate: "discussion-first" as const,
+  threshold: 4,
+  tracking: true,
+};
+
+function createSocraticState(overrides: Record<string, unknown> = {}) {
+  return createMockState({
+    apparatusConfiguration: socraticApparatusConfiguration,
+    ...overrides,
+  });
+}
+
 // Mock pdf-parse to prevent file system access during testing
 vi.mock("pdf-parse", () => ({
   default: vi.fn(),
@@ -68,7 +83,7 @@ describe("assessThesis", () => {
   });
 
   it("should return empty object when not in socratic phase", async () => {
-    const state = createMockState({
+    const state = createSocraticState({
       phase_state: "drafting", // Not socratic
       _messages: [new HumanMessage({ content: "Test message", id: "1" })],
     });
@@ -84,8 +99,33 @@ describe("assessThesis", () => {
     expect(result).toEqual({});
   });
 
-  it("should return empty object when no human messages", async () => {
+  it("should auto-pass an open workspace with no apparatus", async () => {
     const state = createMockState({
+      phase_state: undefined,
+      apparatusConfiguration: undefined,
+      _messages: [new HumanMessage({ content: "Test message", id: "1" })],
+    });
+    const config = createMockConfig();
+
+    const { optionallyGetSystemPromptFromConfig } = vi.mocked(
+      await import("../../../utils.js")
+    );
+    optionallyGetSystemPromptFromConfig.mockReturnValue("Assignment prompt");
+
+    const result = await assessThesis(state, config);
+
+    expect(result).toEqual({
+      thesis: {
+        passed: true,
+        feedback: "Drafting gate disabled by the apparatus profile.",
+      },
+      phase_state: "drafting",
+    });
+    expect(mockModel.invoke).not.toHaveBeenCalled();
+  });
+
+  it("should return empty object when no human messages", async () => {
+    const state = createSocraticState({
       phase_state: "socratic",
       _messages: [], // No messages
     });
@@ -102,7 +142,7 @@ describe("assessThesis", () => {
   });
 
   it("should return thesis passed and phase transition when model returns passed: true", async () => {
-    const state = createMockState({
+    const state = createSocraticState({
       phase_state: "socratic",
       _messages: [
         new HumanMessage({
@@ -141,7 +181,7 @@ describe("assessThesis", () => {
   });
 
   it("should return thesis failed without phase transition when model returns passed: false", async () => {
-    const state = createMockState({
+    const state = createSocraticState({
       phase_state: "socratic",
       _messages: [
         new HumanMessage({
@@ -179,7 +219,7 @@ describe("assessThesis", () => {
   });
 
   it("should handle model returning no tool calls", async () => {
-    const state = createMockState({
+    const state = createSocraticState({
       phase_state: "socratic",
       _messages: [new HumanMessage({ content: "Test message", id: "1" })],
     });
@@ -199,7 +239,7 @@ describe("assessThesis", () => {
   });
 
   it("should filter out non-visible human messages", async () => {
-    const state = createMockState({
+    const state = createSocraticState({
       phase_state: "socratic",
       _messages: [
         new HumanMessage({
@@ -240,7 +280,7 @@ describe("assessThesis", () => {
       "Write an essay about Hamlet"
     );
 
-    const state = createMockState({
+    const state = createSocraticState({
       phase_state: "socratic",
       _messages: [
         new HumanMessage({
@@ -292,7 +332,7 @@ describe("assessThesis", () => {
       "Write an essay about Hamlet"
     );
 
-    const state = createMockState({
+    const state = createSocraticState({
       phase_state: "socratic",
       _messages: [
         new HumanMessage({
@@ -325,7 +365,7 @@ describe("assessThesis", () => {
   });
 
   it("should include recent student messages in the prompt", async () => {
-    const state = createMockState({
+    const state = createSocraticState({
       phase_state: "socratic",
       _messages: [
         new HumanMessage({ content: "Message 1", id: "1" }),

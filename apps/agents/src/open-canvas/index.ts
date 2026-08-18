@@ -54,9 +54,11 @@ export const routeAfterGeneralReply = (
 
   const phase =
     state.phase_state ||
-    (state.apparatusConfiguration?.drafting_gate === "none"
-      ? "drafting"
-      : "socratic");
+    (state.apparatusConfiguration &&
+    state.apparatusConfiguration.drafting_gate &&
+    state.apparatusConfiguration.drafting_gate !== "none"
+      ? "socratic"
+      : "drafting");
   return phase === "socratic" && !state.thesis?.passed
     ? "assessThesis"
     : "cleanState";

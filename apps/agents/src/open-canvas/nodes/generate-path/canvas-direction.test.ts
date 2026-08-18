@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  isCanvasWriteRequest,
   isSelectionEditRequest,
   isWholeDocumentRewriteRequest,
   isTargetedEditRequest,
@@ -54,6 +55,30 @@ describe("isWholeDocumentRewriteRequest", () => {
       isWholeDocumentRewriteRequest("Can you rewrite this argument?")
     ).toBe(false);
   });
+});
+
+describe("isCanvasWriteRequest", () => {
+  it.each([
+    "write some tips about Evaluchat in the canvas",
+    "put that in the canvas",
+    "add this section to the document",
+    "give me more tips in the canvas",
+    "create a summary on the canvas",
+  ])("returns true for explicit canvas writing requests: %s", (message) => {
+    expect(isCanvasWriteRequest(message)).toBe(true);
+  });
+
+  it.each([
+    "what do you think?",
+    "how is my essay looking?",
+    "what should I write in the canvas?",
+    "thanks",
+  ])(
+    "returns false for coaching, questions, and acknowledgments: %s",
+    (message) => {
+      expect(isCanvasWriteRequest(message)).toBe(false);
+    }
+  );
 });
 
 describe("isTargetedEditRequest", () => {
