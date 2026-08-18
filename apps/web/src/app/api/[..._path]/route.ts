@@ -18,6 +18,11 @@ import {
   supportsWorkspaceThreads,
 } from "../../../lib/workspace/thread-policy";
 import {
+  buildEvidenceSnapshotFromMarker,
+  EvidenceRunNotConcludedError,
+  EvidenceUnavailableError,
+} from "../../../lib/workspace/evidence";
+import {
   recordPlatformProviderRun,
   type ProviderTokenUsage,
 } from "../../../lib/admin/provider-meter";
@@ -310,6 +315,14 @@ async function handleRequest(req: NextRequest, method: string) {
           supabase_session: session,
           supabase_user_id: user.id,
         };
+        if (
+          (classification.kind === "thread_by_id" ||
+            isThreadCreate(method, classification)) &&
+          parsedBody.metadata &&
+          typeof parsedBody.metadata === "object"
+        ) {
+          delete parsedBody.metadata.evidence;
+        }
 
         // Apparatus treatment is server-authoritative. Resolve the immutable
         // snapshot from the assignment recorded on the owned thread and
@@ -369,6 +382,7 @@ async function handleRequest(req: NextRequest, method: string) {
         let workspaceItemId: unknown = isThreadCreate(method, classification)
           ? parsedBody.metadata?.workspace_item_id
           : undefined;
+        let ownedThreadMetadata: Record<string, unknown> | undefined;
         if (classification.kind === "thread_by_id") {
           const threadRes = await fetch(
             `${LANGGRAPH_API_URL}/threads/${classification.threadId}`,
@@ -385,6 +399,10 @@ async function handleRequest(req: NextRequest, method: string) {
             );
           }
           const thread = await threadRes.json();
+          ownedThreadMetadata =
+            thread?.metadata && typeof thread.metadata === "object"
+              ? (thread.metadata as Record<string, unknown>)
+              : undefined;
           workspaceItemId = thread?.metadata?.workspace_item_id;
         }
 
@@ -411,13 +429,57 @@ async function handleRequest(req: NextRequest, method: string) {
             );
           }
 
+          // Evidence is server-stamped at creation. Reuse only that marker on
+          // subsequent runs; client metadata cannot select a different
+          // template, layout, guidance, or frozen snapshot.
+          if (parsedBody.metadata && typeof parsedBody.metadata === "object") {
+            delete parsedBody.metadata.evidence;
+          }
+          if (ownedThreadMetadata?.evidence) {
+            parsedBody.metadata = {
+              ...(parsedBody.metadata && typeof parsedBody.metadata === "object"
+                ? parsedBody.metadata
+                : {}),
+              evidence: ownedThreadMetadata.evidence,
+            };
+          }
+
+          let evidenceSnapshot:
+            | ReturnType<typeof buildEvidenceSnapshotFromMarker>
+            | undefined;
+          if (
+            workspaceItem.kind === "method" &&
+            ownedThreadMetadata &&
+            typeof ownedThreadMetadata === "object" &&
+            (ownedThreadMetadata as Record<string, unknown>).evidence
+          ) {
+            try {
+              evidenceSnapshot = buildEvidenceSnapshotFromMarker(
+                workspaceItem,
+                (ownedThreadMetadata as Record<string, unknown>).evidence
+              );
+            } catch (error) {
+              if (
+                error instanceof EvidenceRunNotConcludedError ||
+                error instanceof EvidenceUnavailableError
+              ) {
+                return NextResponse.json(
+                  { error: "Evidence snapshot is no longer available" },
+                  { status: 409 }
+                );
+              }
+              throw error;
+            }
+          }
+
           Object.assign(
             parsedBody,
             enforceWorkspaceThreadPolicy(
               parsedBody,
               workspaceItem,
               user.id,
-              process.env.EVALUCHAT_WORKSPACE_ASSISTANT_ID || "agent"
+              process.env.EVALUCHAT_WORKSPACE_ASSISTANT_ID || "agent",
+              evidenceSnapshot
             )
           );
           if (isThreadCreate(method, classification)) {

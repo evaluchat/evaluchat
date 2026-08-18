@@ -1,6 +1,7 @@
 import { buildAssignmentSystemPrompt } from "@/lib/teaching/assignment-prompt";
 import type { StudentAssignment } from "@/lib/teaching/types";
 import type { MethodParticipantWorkspaceItem, WorkspaceItem } from "./types";
+import type { EvidenceSnapshot } from "./evidence";
 
 export function supportsWorkspaceThreads(item: WorkspaceItem): boolean {
   return (
@@ -44,8 +45,11 @@ export function enforceWorkspaceThreadPolicy(
   body: Record<string, any>,
   item: WorkspaceItem,
   userId: string,
-  assistantId: string
+  assistantId: string,
+  evidenceSnapshot?: EvidenceSnapshot
 ): Record<string, any> {
+  const activeEvidenceSnapshot = evidenceSnapshot ?? undefined;
+
   return {
     ...body,
     assistant_id: assistantId,
@@ -73,7 +77,16 @@ export function enforceWorkspaceThreadPolicy(
             })()
           : {}),
         workspace_item_id: item.id,
-        systemPrompt: assistantGuidance(item),
+        systemPrompt:
+          activeEvidenceSnapshot?.guidance ?? assistantGuidance(item),
+        ...(activeEvidenceSnapshot
+          ? {
+              evidence_layout: activeEvidenceSnapshot.layoutMarkdown,
+              evidence_fields: activeEvidenceSnapshot.fields,
+              evidence_frozen_values: activeEvidenceSnapshot.frozenValues,
+              evidence_template_version: activeEvidenceSnapshot.templateVersion,
+            }
+          : {}),
         ...(item.kind === "method_participant"
           ? { apparatusConfiguration: item.apparatusConfiguration }
           : {}),

@@ -28,6 +28,13 @@ import {
   isSelectableTemplate,
 } from "./template-catalog";
 import { publicMethodPageUrl } from "./method-links";
+import { withOwnedThreadMetadata } from "@/lib/thread-ownership";
+import {
+  buildEvidenceSnapshot,
+  buildEvidenceSnapshotFromMarker,
+  EvidenceRunNotConcludedError,
+  type EvidenceSnapshot,
+} from "./evidence";
 import {
   BUILTIN_APPARATUS_IDS,
   getApparatusSpecification,
@@ -92,6 +99,27 @@ export class WorkspaceFormAlreadySubmittedError extends Error {
     this.name = "WorkspaceFormAlreadySubmittedError";
   }
 }
+
+export class WorkspaceEvidenceAlreadySubmittedError extends Error {
+  constructor() {
+    super("Evidence has already been submitted");
+    this.name = "WorkspaceEvidenceAlreadySubmittedError";
+  }
+}
+
+export class WorkspaceEvidenceThreadMissingError extends Error {
+  constructor() {
+    super(
+      "Evidence thread no longer exists; create a new evidence contribution"
+    );
+    this.name = "WorkspaceEvidenceThreadMissingError";
+  }
+}
+
+export {
+  EvidenceRunNotConcludedError,
+  EvidenceUnavailableError,
+} from "./evidence";
 
 export class UnsupportedMethodError extends Error {
   constructor() {
@@ -1215,6 +1243,267 @@ export async function getMethodRun(
     throw new WorkspaceItemNotFoundError();
   }
   return { ...item, run: item.run };
+}
+
+function evidenceReference(
+  item: MethodWorkspaceItem,
+  threadId: string
+): MethodWorkspaceItem["evidenceThreads"] extends infer T
+  ? T extends Array<infer R>
+    ? R
+    : never
+  : never {
+  const reference = item.evidenceThreads?.find(
+    (candidate) => candidate.threadId === threadId
+  );
+  if (!reference) throw new WorkspaceThreadOwnershipError();
+  return reference;
+}
+
+function evidenceThreadMetadata(
+  userId: string,
+  item: MethodWorkspaceItem,
+  snapshot: EvidenceSnapshot
+): Record<string, unknown> {
+  return withOwnedThreadMetadata(
+    {
+      workspace_item_id: item.id,
+      evidence: {
+        method_id: snapshot.methodId,
+        method_version: snapshot.methodVersion,
+        template_version: snapshot.templateVersion,
+        frozen_values: snapshot.frozenValues,
+      },
+    },
+    userId
+  );
+}
+
+async function createEvidenceLangGraphThread(
+  userId: string,
+  item: MethodWorkspaceItem,
+  snapshot: EvidenceSnapshot
+): Promise<string> {
+  const metadata = evidenceThreadMetadata(userId, item, snapshot);
+  const response = await fetch(`${LANGGRAPH_API_URL}/threads`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.LANGCHAIN_API_KEY || "",
+    },
+    signal: AbortSignal.timeout(10_000),
+    body: JSON.stringify({
+      metadata,
+      config: {
+        configurable: {
+          workspace_item_id: item.id,
+          systemPrompt: snapshot.guidance,
+          evidence_layout: snapshot.layoutMarkdown,
+          evidence_fields: snapshot.fields,
+          evidence_frozen_values: snapshot.frozenValues,
+        },
+      },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Could not create evidence thread (${response.status})`);
+  }
+  const body = (await response.json()) as Record<string, unknown>;
+  const threadId =
+    typeof body.thread_id === "string"
+      ? body.thread_id
+      : typeof body.threadId === "string"
+        ? body.threadId
+        : undefined;
+  if (!threadId) throw new Error("Evidence thread response had no thread id");
+  return threadId;
+}
+
+export async function createEvidenceThread(
+  userId: string,
+  itemId: string
+): Promise<{
+  item: MethodWorkspaceItem;
+  threadId: string;
+  snapshot: EvidenceSnapshot;
+}> {
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const stored = manifest.items[itemId];
+    if (
+      !stored ||
+      stored.ownerId !== userId ||
+      stored.status !== "active" ||
+      stored.kind !== "method"
+    ) {
+      throw new WorkspaceItemNotFoundError();
+    }
+    if (!stored.run || stored.submission?.status !== "submitted") {
+      throw new EvidenceRunNotConcludedError();
+    }
+
+    const snapshot = buildEvidenceSnapshot(stored);
+    const existing = [...(stored.evidenceThreads ?? [])]
+      .reverse()
+      .find((reference) => reference.status !== "filed");
+    if (existing) {
+      const thread = await client().threads.get(existing.threadId);
+      const metadata = (thread?.metadata || {}) as Record<string, unknown>;
+      if (
+        metadata.user_id !== userId ||
+        metadata.workspace_item_id !== itemId ||
+        !metadata.evidence
+      ) {
+        throw new WorkspaceThreadOwnershipError();
+      }
+      return { item: stored, threadId: existing.threadId, snapshot };
+    }
+
+    const threadId = await createEvidenceLangGraphThread(
+      userId,
+      stored,
+      snapshot
+    );
+    const submittedAt = new Date().toISOString();
+    stored.evidenceThreads = [
+      ...(stored.evidenceThreads ?? []),
+      {
+        threadId,
+        status: "draft",
+        templateVersion: snapshot.templateVersion,
+      },
+    ];
+    stored.updatedAt = submittedAt;
+    manifest.items[stored.id] = stored;
+    await writeManifest(userId, manifest);
+    return { item: stored, threadId, snapshot };
+  });
+}
+
+export async function getEvidenceSnapshot(
+  userId: string,
+  itemId: string,
+  threadId: string
+): Promise<{
+  item: MethodWorkspaceItem;
+  snapshot: EvidenceSnapshot;
+  reference: NonNullable<MethodWorkspaceItem["evidenceThreads"]>[number];
+}> {
+  const item = await getWorkspaceItem(userId, itemId);
+  if (!item || item.kind !== "method") {
+    throw new WorkspaceItemNotFoundError();
+  }
+  const reference = evidenceReference(item, threadId);
+  let thread: Awaited<ReturnType<Client["threads"]["get"]>>;
+  try {
+    thread = await client().threads.get(threadId);
+  } catch (error) {
+    if (isMissingThreadError(error)) {
+      throw new WorkspaceEvidenceThreadMissingError();
+    }
+    throw error;
+  }
+  const metadata = (thread?.metadata || {}) as Record<string, unknown>;
+  if (
+    metadata.user_id !== userId ||
+    metadata.workspace_item_id !== itemId ||
+    !metadata.evidence
+  ) {
+    throw new WorkspaceThreadOwnershipError();
+  }
+  return {
+    item,
+    snapshot: buildEvidenceSnapshotFromMarker(item, metadata.evidence),
+    reference,
+  };
+}
+
+export async function claimEvidenceSubmission(
+  userId: string,
+  itemId: string,
+  threadId: string,
+  submissionKey: string
+): Promise<NonNullable<MethodWorkspaceItem["evidenceThreads"]>[number]> {
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const item = manifest.items[itemId];
+    if (
+      !item ||
+      item.ownerId !== userId ||
+      item.status !== "active" ||
+      item.kind !== "method"
+    ) {
+      throw new WorkspaceItemNotFoundError();
+    }
+    const reference = evidenceReference(item, threadId);
+    if (reference.status === "submitted" || reference.status === "filed") {
+      throw new WorkspaceEvidenceAlreadySubmittedError();
+    }
+    if (reference.status !== "submitting" || !reference.submissionKey) {
+      reference.status = "submitting";
+      reference.submissionKey = submissionKey;
+      item.updatedAt = new Date().toISOString();
+      manifest.items[item.id] = item;
+      await writeManifest(userId, manifest);
+    }
+    return reference;
+  });
+}
+
+export async function updateEvidenceThreadReference(
+  userId: string,
+  itemId: string,
+  threadId: string,
+  update: Partial<NonNullable<MethodWorkspaceItem["evidenceThreads"]>[number]>
+): Promise<MethodWorkspaceItem> {
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const item = manifest.items[itemId];
+    if (
+      !item ||
+      item.ownerId !== userId ||
+      item.status !== "active" ||
+      item.kind !== "method"
+    ) {
+      throw new WorkspaceItemNotFoundError();
+    }
+    const reference = evidenceReference(item, threadId);
+    let thread: Awaited<ReturnType<Client["threads"]["get"]>>;
+    try {
+      thread = await client().threads.get(threadId);
+    } catch (error) {
+      if (isMissingThreadError(error)) {
+        throw new WorkspaceEvidenceThreadMissingError();
+      }
+      throw error;
+    }
+    const metadata = (thread?.metadata || {}) as Record<string, unknown>;
+    if (
+      metadata.user_id !== userId ||
+      metadata.workspace_item_id !== itemId ||
+      !metadata.evidence
+    ) {
+      throw new WorkspaceThreadOwnershipError();
+    }
+    if (update.values) {
+      const snapshot = buildEvidenceSnapshotFromMarker(item, metadata.evidence);
+      update = {
+        ...update,
+        values: Object.fromEntries(
+          Object.entries(update.values).filter(
+            ([fieldId, value]) =>
+              snapshot.fields[fieldId]?.readOnly !== true &&
+              typeof value === "string"
+          )
+        ),
+      };
+    }
+    Object.assign(reference, update);
+    item.updatedAt = new Date().toISOString();
+    manifest.items[item.id] = item;
+    await writeManifest(userId, manifest);
+    return item;
+  });
 }
 
 export async function getMethodParticipantReview(
