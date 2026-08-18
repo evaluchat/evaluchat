@@ -263,6 +263,10 @@ describe("replyToGeneralInput", () => {
 
     expect(mockModel.invoke).not.toHaveBeenCalled();
     expect(String(result.messages?.[0]?.content)).toContain("mind elaborating");
+    expect(result._messages).toHaveLength(1);
+    expect(String(result._messages?.[0]?.content)).toContain(
+      "mind elaborating"
+    );
   });
 
   it("uses the latest visible human message for the hollow-input guard", async () => {
