@@ -90,8 +90,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id, threadId } = await context.params;
+  let body: { values?: unknown };
   try {
-    const body = (await request.json()) as { values?: unknown };
+    body = (await request.json()) as { values?: unknown };
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
+    );
+  }
+  try {
     if (
       !body.values ||
       typeof body.values !== "object" ||

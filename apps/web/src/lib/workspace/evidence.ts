@@ -254,6 +254,7 @@ export function buildEvidenceSnapshot(
 
 export type EvidenceThreadMarker = {
   method_id: string;
+  method_version: string;
   template_version: string;
   frozen_values: Record<string, EvidenceValue>;
 };
@@ -266,6 +267,7 @@ export function buildEvidenceSnapshotFromMarker(
   if (
     !isRecord(marker) ||
     typeof marker.method_id !== "string" ||
+    typeof marker.method_version !== "string" ||
     typeof marker.template_version !== "string" ||
     !isRecord(marker.frozen_values)
   ) {
@@ -286,20 +288,15 @@ export function buildEvidenceSnapshotFromMarker(
     frozenValues[fieldId] = value;
   }
   const normalized = normalizeEvidenceTemplate(template);
-  const frozenRun = marker.frozen_values.frozen_run;
-  const frozenMethod =
-    isRecord(frozenRun) && isRecord(frozenRun.method)
-      ? frozenRun.method
-      : undefined;
   return {
     ...normalized,
     templateVersion: marker.template_version,
     frozenValues,
+    // The method version is the one stamped at thread creation (resolved from
+    // the concluded run snapshot then), NOT the current methodSource.version —
+    // the latter can drift if a new method version ships after the run.
     methodId: marker.method_id,
-    methodVersion:
-      typeof frozenMethod?.version === "string"
-        ? frozenMethod.version
-        : item.methodSource.version,
+    methodVersion: marker.method_version,
     workspaceItemId: item.id,
     runId: item.run?.id ?? "unknown",
   };
@@ -434,11 +431,16 @@ export type EvidenceAssemblyInput = {
   values: Record<string, EvidenceValue | FormValue>;
   stage: string;
   generatedAt: string;
+  /** Stable slug reused across retries so the in-file `id` equals the filename. */
+  timestampSlug?: string;
 };
 
 export function assembleEvidenceMarkdown(input: EvidenceAssemblyInput): string {
   const { snapshot, values, stage, generatedAt } = input;
-  const timestampSlug = evidenceTimestampSlug(generatedAt);
+  // On a retry the submission key (and thus the filename) was fixed at the
+  // first attempt; derive the in-file id from it so the two never disagree.
+  const timestampSlug =
+    input.timestampSlug ?? evidenceTimestampSlug(generatedAt);
   const description = `Evidence contribution for ${snapshot.methodId} concluded run`;
   const levers = resolveFrozenRunValuesFromFieldValues(snapshot, values);
   const frontmatter = [

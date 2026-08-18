@@ -70,6 +70,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       values: validated.values,
       stage: validated.stage,
       generatedAt,
+      timestampSlug: submissionKey,
     });
     const filePath = evidenceFilePath(loaded.snapshot.methodId, submissionKey);
     const existingPullRequest = await findExistingEvidencePullRequest(

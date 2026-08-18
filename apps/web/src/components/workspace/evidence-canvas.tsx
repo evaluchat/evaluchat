@@ -80,6 +80,7 @@ export function EvidenceFieldControl({
   error,
   onChange,
   register,
+  disabled,
 }: {
   field: FormFieldDefinition;
   value: EvidenceValue | FormValue | undefined;
@@ -88,9 +89,10 @@ export function EvidenceFieldControl({
   register: (
     node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null
   ) => void;
+  disabled?: boolean;
 }) {
   const id = `evidence-field-${field.id}`;
-  const disabled = field.readOnly === true;
+  const locked = field.readOnly === true || disabled === true;
   const className =
     "mx-1 inline-flex min-w-[12ch] rounded-md border border-slate-300 bg-white px-2 py-1 align-middle text-sm text-slate-900 shadow-sm outline-none focus:border-[#2c3e56] focus:ring-2 focus:ring-[#2c3e56]/20 disabled:bg-slate-100";
   const common = {
@@ -102,7 +104,7 @@ export function EvidenceFieldControl({
         HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
       >
     ) => onChange(event.target.value),
-    disabled,
+    disabled: locked,
     required: field.required,
     "aria-label": field.label,
     "aria-invalid": Boolean(error),
@@ -124,7 +126,7 @@ export function EvidenceFieldControl({
     ) : (
       <input
         {...common}
-        type={disabled && field.type === "date" ? "text" : field.type}
+        type={locked && field.type === "date" ? "text" : field.type}
       />
     );
   return (
@@ -140,7 +142,7 @@ export function EvidenceFieldControl({
           </span>
         )}
       </span>
-      {disabled && (
+      {field.readOnly === true && (
         <span className="mx-1 text-[11px] text-slate-500">
           Frozen run value
         </span>
@@ -203,6 +205,7 @@ function EvidenceMarkdown({
   errors,
   onChange,
   register,
+  locked,
 }: {
   payload: EvidencePayload;
   values: Record<string, EvidenceValue | FormValue>;
@@ -212,6 +215,7 @@ function EvidenceMarkdown({
     fieldId: string,
     node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null
   ) => void;
+  locked: boolean;
 }) {
   const components = useMemo(
     () => ({
@@ -230,6 +234,7 @@ function EvidenceMarkdown({
             error={errors[fieldId]}
             onChange={(value) => onChange(fieldId, value)}
             register={(node) => register(fieldId, node)}
+            disabled={locked}
           />
         );
       },
@@ -260,7 +265,7 @@ function EvidenceMarkdown({
         </ol>
       ),
     }),
-    [errors, onChange, payload.fields, register, values]
+    [errors, locked, onChange, payload.fields, register, values]
   );
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
@@ -376,6 +381,7 @@ export function EvidenceCanvas({
 
   useEffect(() => {
     if (!payload) return;
+    if (payload.status !== "draft") return; // locked: never persist further edits
     const timer = window.setTimeout(() => {
       void fetch(
         `/api/workspace/items/${encodeURIComponent(item.id)}/evidence/${encodeURIComponent(threadId)}`,
@@ -625,6 +631,7 @@ export function EvidenceCanvas({
                     });
                   }}
                   register={register}
+                  locked={locked}
                 />
               </div>
             </main>

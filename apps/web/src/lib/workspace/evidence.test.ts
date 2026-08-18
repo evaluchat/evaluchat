@@ -185,6 +185,7 @@ describe("Evidence runtime", () => {
     const item = methodItem();
     const snapshot = buildEvidenceSnapshotFromMarker(item, {
       method_id: "ai-assisted-essay",
+      method_version: "0.1.0",
       template_version: "1.2.3",
       frozen_values: { method_id: "stamped-method", participant_count: 99 },
     });
@@ -195,6 +196,9 @@ describe("Evidence runtime", () => {
     expect(snapshot.frozenValues).not.toEqual(
       expect.objectContaining({ participant_count: 3 })
     );
+    // The method version is the one stamped at creation, not the current
+    // item's methodSource.version.
+    expect(snapshot.methodVersion).toBe("0.1.0");
   });
 
   it("normalizes snake_case fields, carries controls, and rejects invalid types", () => {

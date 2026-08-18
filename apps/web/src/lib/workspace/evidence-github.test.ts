@@ -131,4 +131,73 @@ describe("openEvidencePullRequest", () => {
       fetchMock.mock.calls.some(([url]) => String(url).endsWith("/merge"))
     ).toBe(false);
   });
+
+  it("reuses an existing pull request on retry (no duplicate branch/file/pr)", async () => {
+    const existing = {
+      branch: "evidence/ai-assisted-essay/2026-08-18T12-34-56Z",
+      number: 90,
+      url: "https://github.com/evaluchat/research/pull/90",
+      headSha: "existing-head-sha",
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      // Reuse path: no branch-create, no file-PUT, no PR-create calls.
+      // Only the okf-lint check + merge.
+      .mockResolvedValueOnce(
+        response({ check_runs: [{ name: "okf-lint", conclusion: "success" }] })
+      )
+      .mockResolvedValueOnce(response({ merged: true }));
+
+    const result = await openEvidencePullRequest({
+      ...input(),
+      existingPullRequest: existing,
+    });
+
+    expect(result).toMatchObject({
+      number: 90,
+      url: "https://github.com/evaluchat/research/pull/90",
+      status: "filed",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Must NOT have created a branch/ref, PUT the file, or POSTed a new PR.
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes("/git/refs"))
+    ).toBe(false);
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes("/contents/"))
+    ).toBe(false);
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).endsWith("/pulls"))
+    ).toBe(false);
+    // Merge bound to the reused PR's head SHA.
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))
+    ).toMatchObject({
+      sha: "existing-head-sha",
+    });
+  });
+
+  it("uses the existing pull request but routes to human review above documented-experience", async () => {
+    const existing = {
+      branch: "evidence/ai-assisted-essay/2026-08-18T12-34-56Z",
+      number: 91,
+      url: "https://github.com/evaluchat/research/pull/91",
+      headSha: "existing-head-sha",
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({})); // human-review comment only
+
+    const result = await openEvidencePullRequest({
+      ...input("structured-experiment"),
+      existingPullRequest: existing,
+    });
+
+    expect(result).toMatchObject({ number: 91, status: "submitted" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/issues/91/comments");
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes("check-runs"))
+    ).toBe(false);
+  });
 });

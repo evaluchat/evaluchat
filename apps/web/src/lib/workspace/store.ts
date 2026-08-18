@@ -1270,6 +1270,7 @@ function evidenceThreadMetadata(
       workspace_item_id: item.id,
       evidence: {
         method_id: snapshot.methodId,
+        method_version: snapshot.methodVersion,
         template_version: snapshot.templateVersion,
         frozen_values: snapshot.frozenValues,
       },
