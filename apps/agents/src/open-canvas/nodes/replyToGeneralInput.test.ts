@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { replyToGeneralInput } from "./replyToGeneralInput.js";
+import { detectHollowInput } from "./hollow-input.js";
 import {
   createMockConfig,
   createMockState,
@@ -23,6 +24,30 @@ vi.mock("../../utils.js", () => ({
   optionallyGetSystemPromptFromConfig: vi.fn(),
   createContextDocumentMessages: vi.fn().mockResolvedValue([]),
 }));
+
+describe("detectHollowInput", () => {
+  it.each([
+    "Participant reply 1",
+    "participant REPLY2",
+    "reply 5",
+    "ok",
+    "yes",
+    "hi",
+    "asdf qwerty 12345",
+    "",
+    "   ",
+  ])("flags %j as hollow", (input) => {
+    expect(detectHollowInput(input)).toBe(true);
+  });
+
+  it.each([
+    "Set the title",
+    "I think the ending is ironic because...",
+    "Can you help me write my intro?",
+  ])("keeps %j as substantive", (input) => {
+    expect(detectHollowInput(input)).toBe(false);
+  });
+});
 
 describe("replyToGeneralInput", () => {
   let mockModel: MockModel;
@@ -194,6 +219,29 @@ describe("replyToGeneralInput", () => {
       messages: [mockResponse],
       _messages: [mockResponse],
     });
+  });
+
+  it("asks for elaboration without invoking the model for hollow input", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [
+        {
+          type: "human",
+          content: "Participant reply 1",
+          id: "1",
+        } as any,
+      ],
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    const result = await replyToGeneralInput(state, config);
+    const response = result.messages?.[0];
+    const responseText = String(response?.content);
+
+    expect(mockModel.invoke).not.toHaveBeenCalled();
+    expect(response).toBeInstanceOf(AIMessage);
+    expect(responseText).toContain("mind elaborating");
+    expect(responseText).not.toMatch(/great choice|started somewhere/i);
   });
 
   it("should retrieve reflections from store", async () => {

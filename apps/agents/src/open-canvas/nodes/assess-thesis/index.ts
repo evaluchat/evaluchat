@@ -11,6 +11,7 @@ import {
   OpenCanvasGraphAnnotation,
   OpenCanvasGraphReturnType,
 } from "../../state.js";
+import { detectHollowInput } from "../hollow-input.js";
 
 /**
  * After this many visible human messages, auto-pass the thesis.
@@ -117,6 +118,16 @@ export async function assessThesis(
       typeof lastStudentMsg.content === "string"
         ? lastStudentMsg.content
         : JSON.stringify(lastStudentMsg.content);
+
+    if (detectHollowInput(lastContent)) {
+      return {
+        thesis: {
+          passed: false,
+          feedback:
+            "Placeholder detected — ask the student to elaborate before unlocking drafting.",
+        },
+      };
+    }
 
     return {
       thesis: {
