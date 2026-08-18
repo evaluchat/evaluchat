@@ -123,6 +123,32 @@ describe("determineTeachingIntent", () => {
     expect(result.reasoning).toContain("Explicit canvas-write request");
   });
 
+  it("forces an explicit canvas-write request to generateArtifact when drafting_gate is undefined", async () => {
+    mockModel.setToolCallResponse("classify_intent", {
+      route: "replyToGeneralInput",
+      reasoning: "Student appears to be asking for coaching.",
+    });
+
+    const result = await determineTeachingIntent({
+      state: {
+        _messages: [new HumanMessage("write some tips in the canvas")],
+        phase_state: undefined,
+        apparatusConfiguration: {
+          ai_assistance: true,
+          ai_canvas_actions: true,
+          drafting_gate: undefined,
+          threshold: 4,
+          tracking: true,
+        },
+        artifact: undefined,
+      } as any,
+      newMessages: [],
+      config: createMockConfig(),
+    });
+
+    expect(result.route).toBe("generateArtifact");
+  });
+
   it("appends an explicit canvas-write request in an open workspace with content", async () => {
     mockModel.setToolCallResponse("classify_intent", {
       route: "replyToGeneralInput",

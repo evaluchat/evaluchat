@@ -145,6 +145,7 @@ export const replyToGeneralInput = async (
   const phase =
     state.phase_state ||
     (state.apparatusConfiguration &&
+    state.apparatusConfiguration.drafting_gate &&
     state.apparatusConfiguration.drafting_gate !== "none"
       ? "socratic"
       : "drafting");

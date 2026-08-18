@@ -139,6 +139,20 @@ describe("apparatus lever routing", () => {
     ).toBe("cleanState");
   });
 
+  it("skips thesis assessment when drafting_gate is undefined on a persisted apparatus", () => {
+    expect(
+      routeAfterGeneralReply(
+        makeState({
+          phase_state: undefined,
+          apparatusConfiguration: {
+            ...canonicalConfiguration,
+            drafting_gate: undefined,
+          },
+        })
+      )
+    ).toBe("cleanState");
+  });
+
   it("assesses a thesis for the canonical socratic profile", () => {
     expect(
       routeAfterGeneralReply(
