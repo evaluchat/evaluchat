@@ -184,6 +184,27 @@ describe("generated apparatus catalog", () => {
     ).toThrow(/fields\.claim\.options must be present for select/);
   });
 
+  it("rejects select evidence template fields with non-string options", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    expect(() =>
+      validateApparatusCatalog([
+        {
+          ...essays,
+          evidence_template: {
+            ...essays.evidence_template!,
+            fields: {
+              ...essays.evidence_template!.fields,
+              claim: { type: "select", options: ["known", 1] },
+            },
+          },
+        },
+      ])
+    ).toThrow(/fields\.claim\.options must contain only strings/);
+  });
+
   it("validates ledger dimensions at runtime", () => {
     const essays = APPARATUS_CATALOG.find(
       (entry) => entry.id === "ai-assisted-essay"

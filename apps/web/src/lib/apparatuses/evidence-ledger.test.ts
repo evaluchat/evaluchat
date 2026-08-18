@@ -147,6 +147,118 @@ const betaFields = `  education_level:
     type: textarea`;
 
 describe("Evidence Ledger resolver", () => {
+  it("preserves unquoted dates as strings and rejects malformed date values", () => {
+    const root = researchRoot();
+    writeQuestion(root);
+    writeMethod(root, "beta-method");
+    writeTemplate(root, "beta-method", "1.0.0", betaFields);
+    writeEvidence(
+      root,
+      "beta-method",
+      "unquoted-date",
+      "1.0.0",
+      "accepted",
+      "  education_level: k12\n  collection_date: 2026-02-01"
+    );
+    writeEvidence(
+      root,
+      "beta-method",
+      "malformed-date",
+      "1.0.0",
+      "accepted",
+      "  education_level: k12\n  collection_date: 2026-99-99"
+    );
+
+    const result = resolveEvidenceLedger({
+      researchRoot: root,
+      questionId: "question-one",
+      filters: [
+        {
+          fieldId: "collection_date",
+          control: "range",
+          min: "2026-01-01",
+          max: "2026-12-31",
+        },
+      ],
+    });
+    const byId = new Map(result.contributions.map((item) => [item.id, item]));
+
+    expect(byId.get("unquoted-date")).toMatchObject({
+      bucket: "Included",
+      dimensionValues: {
+        collection_date: { status: "recorded", value: "2026-02-01" },
+      },
+      scopeValues: {
+        collection_date: { status: "recorded", value: "2026-02-01" },
+      },
+    });
+    expect(byId.get("malformed-date")).toMatchObject({
+      bucket: "Resolver exclusion",
+      exclusionReason: "invalid provenance",
+    });
+    expect(() =>
+      resolveEvidenceLedger({
+        researchRoot: root,
+        questionId: "question-one",
+        filters: [
+          {
+            fieldId: "collection_date",
+            control: "range",
+            min: "2026-02-01T::",
+          },
+        ],
+      })
+    ).toThrow(/range endpoints must be valid dates/);
+  });
+
+  it("buckets omitted declared dimensions as unknown", () => {
+    const root = researchRoot();
+    writeQuestion(root);
+    writeMethod(root, "beta-method");
+    writeTemplate(root, "beta-method", "1.0.0", betaFields);
+    writeEvidence(
+      root,
+      "beta-method",
+      "omitted-date",
+      "1.0.0",
+      "accepted",
+      "  education_level: k12"
+    );
+
+    const result = resolveEvidenceLedger({
+      researchRoot: root,
+      questionId: "question-one",
+      filters: [
+        {
+          fieldId: "collection_date",
+          control: "range",
+          min: "2026-01-01",
+        },
+      ],
+    });
+
+    expect(result.scope.baselineCount).toBe(1);
+    expect(result.contributions[0]).toMatchObject({
+      id: "omitted-date",
+      bucket: "Unknown",
+      dimensionValues: {
+        collection_date: { status: "unknown", value: "unknown" },
+      },
+      scopeValues: {
+        collection_date: { status: "unknown", value: "unknown" },
+      },
+    });
+  });
+
+  it("rejects unsafe question ids before resolving paths", () => {
+    expect(() =>
+      resolveEvidenceLedger({
+        researchRoot: researchRoot(),
+        questionId: "../../secrets",
+      })
+    ).toThrow(EvidenceLedgerResolutionError);
+  });
+
   it("returns a deterministic empty ledger for the current no-evidence state", () => {
     const root = researchRoot();
     writeQuestion(root);

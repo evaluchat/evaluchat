@@ -1,8 +1,8 @@
-import type { ApparatusConfiguration } from "@opencanvas/shared";
 import type {
+  ApparatusConfiguration,
   LedgerDimension,
   LedgerMissingSemantics,
-} from "../apparatuses/evidence-template-contract";
+} from "@opencanvas/shared";
 
 export const DEFAULT_WORKSPACE_TEMPLATE_ID = "evaluchat-getting-started";
 export const DEFAULT_METHOD_PROFILE_ID = "canonical-constrained-dialogue";

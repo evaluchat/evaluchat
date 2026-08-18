@@ -8,7 +8,7 @@ import {
   type ApparatusEvidenceFieldDefinition,
   type LedgerDimension,
   type LedgerMissingSemantics,
-} from "./evidence-template-contract";
+} from "@opencanvas/shared";
 
 export type EvidenceLedgerBucket =
   | "Included"
@@ -144,6 +144,8 @@ type ResolvedTemplate = EvidenceLedgerTemplate & {
 
 const EVIDENCE_FIELD_TYPE_SET = new Set<string>(EVIDENCE_FIELD_TYPES);
 const RESERVED_MARKDOWN_NAMES = new Set(["index.md", "log.md"]);
+const QUESTION_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/i;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export class EvidenceLedgerResolutionError extends Error {
   constructor(message: string) {
@@ -172,7 +174,7 @@ function readMarkdownDocument(absolutePath: string): MarkdownDocument {
       `Markdown document has no YAML frontmatter: ${absolutePath}`
     );
   }
-  const frontmatter = yaml.load(match[1]);
+  const frontmatter = yaml.load(match[1], { schema: yaml.JSON_SCHEMA });
   if (!isRecord(frontmatter)) {
     throw new EvidenceLedgerResolutionError(
       `Markdown frontmatter must be an object: ${absolutePath}`
@@ -207,6 +209,21 @@ function stringArray(value: unknown): string[] {
     return [];
   }
   return [...value].sort((left, right) => left.localeCompare(right));
+}
+
+function isValidDate(value: string): boolean {
+  if (!ISO_DATE_PATTERN.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const daysInMonth =
+    month === 2
+      ? year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+        ? 29
+        : 28
+      : [4, 6, 9, 11].includes(month)
+        ? 30
+        : 31;
+  return day <= daysInMonth;
 }
 
 function isAccepted(frontmatter: Frontmatter): boolean {
@@ -283,10 +300,17 @@ function validateAndResolveTemplate(
         `${sourcePath} fields.${fieldId}.type must be one of text, textarea, select, number, date`
       );
     }
-    if (definition.type === "select" && !Array.isArray(definition.options)) {
-      throw new EvidenceLedgerResolutionError(
-        `${sourcePath} fields.${fieldId}.options must be present for select`
-      );
+    if (definition.type === "select") {
+      const options = definition.options;
+      if (!Array.isArray(options)) {
+        throw new EvidenceLedgerResolutionError(
+          `${sourcePath} fields.${fieldId}.options must be present for select`
+        );
+      } else if (!options.every((option) => typeof option === "string")) {
+        throw new EvidenceLedgerResolutionError(
+          `${sourcePath} fields.${fieldId}.options must contain only strings`
+        );
+      }
     }
     const ledgerError = ledgerDimensionValidationError(definition);
     if (ledgerError) {
@@ -532,6 +556,16 @@ function validateScopeFilters(
           `Scope filter ${filter.fieldId} range endpoints must be ${expectedType}`
         );
       }
+      if (
+        dimensions[0].type === "date" &&
+        endpoint !== undefined &&
+        typeof endpoint === "string" &&
+        !isValidDate(endpoint)
+      ) {
+        throw new EvidenceLedgerResolutionError(
+          `Scope filter ${filter.fieldId} range endpoints must be valid dates in YYYY-MM-DD format`
+        );
+      }
     }
   }
 }
@@ -547,10 +581,13 @@ function dimensionValue(
   definition: ApparatusEvidenceFieldDefinition,
   rawValue: unknown
 ): LedgerDimensionValue | undefined {
+  const missingSemantics = definition.missing_semantics ?? "unknown";
+  if (rawValue === undefined) {
+    return { status: "unknown", value: missingSemantics };
+  }
   if (typeof rawValue !== "string" && typeof rawValue !== "number") {
     return undefined;
   }
-  const missingSemantics = definition.missing_semantics ?? "unknown";
   if (rawValue === missingSemantics) {
     return { status: "unknown", value: rawValue };
   }
@@ -565,8 +602,10 @@ function dimensionValue(
     if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
       return undefined;
     }
-  } else if (definition.type === "date" && typeof rawValue !== "string") {
-    return undefined;
+  } else if (definition.type === "date") {
+    if (typeof rawValue !== "string" || !isValidDate(rawValue)) {
+      return undefined;
+    }
   }
   return { status: "recorded", value: rawValue };
 }
@@ -759,6 +798,11 @@ function resolveContribution(
 export function resolveEvidenceLedger(
   options: ResolveEvidenceLedgerOptions
 ): EvidenceLedgerResolution {
+  if (!QUESTION_ID_PATTERN.test(options.questionId)) {
+    throw new EvidenceLedgerResolutionError(
+      "Research question id must contain only letters, numbers, and hyphens"
+    );
+  }
   const root = path.resolve(options.researchRoot);
   const questionPath = path.join(root, "theory", `${options.questionId}.en.md`);
   if (!fs.existsSync(questionPath)) {

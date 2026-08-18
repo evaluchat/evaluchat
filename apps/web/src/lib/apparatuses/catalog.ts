@@ -10,17 +10,16 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import {
   APPARATUS_CAPABILITIES,
+  EVIDENCE_FIELD_TYPES,
   assertValidApparatusConfiguration,
+  ledgerDimensionValidationError,
   type ApparatusCapability,
+  type ApparatusEvidenceFieldDefinition,
   type ApparatusKnobDefinition,
   type ApparatusProfile,
   type ApparatusProvenance,
   type ApparatusRole,
 } from "@opencanvas/shared";
-import {
-  ledgerDimensionValidationError,
-  type ApparatusEvidenceFieldDefinition,
-} from "./evidence-template-contract";
 
 export interface ApparatusCatalogUrls {
   spec: string;
@@ -132,13 +131,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const EVIDENCE_FIELD_TYPES = new Set([
-  "text",
-  "textarea",
-  "select",
-  "number",
-  "date",
-]);
+const EVIDENCE_FIELD_TYPE_SET = new Set<string>(EVIDENCE_FIELD_TYPES);
 
 function validateEvidenceTemplate(entryId: string, template: unknown): void {
   const contractError = (field: string, message: string): never => {
@@ -179,17 +172,28 @@ function validateEvidenceTemplate(entryId: string, template: unknown): void {
     }
     const fieldDefinition = definition as Record<string, unknown>;
     const fieldType = fieldDefinition.type;
-    if (typeof fieldType !== "string" || !EVIDENCE_FIELD_TYPES.has(fieldType)) {
+    if (
+      typeof fieldType !== "string" ||
+      !EVIDENCE_FIELD_TYPE_SET.has(fieldType)
+    ) {
       contractError(
         `fields.${fieldName}.type`,
         "must be one of text, textarea, select, number, date"
       );
     }
-    if (fieldType === "select" && !Array.isArray(fieldDefinition.options)) {
-      contractError(
-        `fields.${fieldName}.options`,
-        "must be present for select"
-      );
+    if (fieldType === "select") {
+      const options = fieldDefinition.options;
+      if (!Array.isArray(options)) {
+        contractError(
+          `fields.${fieldName}.options`,
+          "must be present for select"
+        );
+      } else if (!options.every((option) => typeof option === "string")) {
+        contractError(
+          `fields.${fieldName}.options`,
+          "must contain only strings"
+        );
+      }
     }
     const ledgerError = ledgerDimensionValidationError(fieldDefinition);
     if (ledgerError) {

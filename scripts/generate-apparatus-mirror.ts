@@ -17,13 +17,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import {
+  EVIDENCE_FIELD_TYPES,
   ledgerDimensionValidationError,
   type ApparatusEvidenceFieldDefinition,
-} from "../apps/web/src/lib/apparatuses/evidence-template-contract";
+} from "@opencanvas/shared";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  ".."
+  "..",
 );
 
 /** Executable methods the app can instantiate. Other Research methods stay catalog-only. */
@@ -42,13 +43,7 @@ type EvidenceTemplate = {
   sourcePath: string;
 };
 
-const EVIDENCE_FIELD_TYPES = new Set([
-  "text",
-  "textarea",
-  "select",
-  "number",
-  "date",
-]);
+const EVIDENCE_FIELD_TYPE_SET = new Set<string>(EVIDENCE_FIELD_TYPES);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -56,7 +51,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseFrontmatter(
   source: string,
-  sourcePath: string
+  sourcePath: string,
 ): MethodFrontmatter {
   const match = source.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
   if (!match) {
@@ -70,19 +65,19 @@ function parseEvidenceTemplate(
   sourcePath: string,
   methodId: string,
   methodVersion: string,
-  evidenceTemplateRef: string
+  evidenceTemplateRef: string,
 ): EvidenceTemplate {
   const match = source.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
   if (!match) {
     throw new Error(
-      `Method ${methodId} evidence_template has no YAML frontmatter: ${sourcePath}`
+      `Method ${methodId} evidence_template has no YAML frontmatter: ${sourcePath}`,
     );
   }
 
   const frontmatter = yaml.load(match[1]) as EvidenceTemplateFrontmatter;
   if (!isRecord(frontmatter)) {
     throw new Error(
-      `Method ${methodId} evidence_template frontmatter must be a map`
+      `Method ${methodId} evidence_template frontmatter must be a map`,
     );
   }
 
@@ -109,7 +104,7 @@ function parseEvidenceTemplate(
   if (frontmatter.applies_to_method !== `${methodId}@${methodVersion}`) {
     contractError(
       "applies_to_method",
-      `must equal ${methodId}@${methodVersion}`
+      `must equal ${methodId}@${methodVersion}`,
     );
   }
   if (referencedId !== templateId) {
@@ -118,7 +113,7 @@ function parseEvidenceTemplate(
   if (!referencedVersion || referencedVersion !== templateVersion) {
     contractError(
       "version",
-      `does not match method pointer ${evidenceTemplateRef}`
+      `does not match method pointer ${evidenceTemplateRef}`,
     );
   }
   if (!isRecord(frontmatter.fields)) {
@@ -129,20 +124,31 @@ function parseEvidenceTemplate(
       contractError(`fields.${fieldId}`, "must be a map");
     }
     const fieldType = definition.type;
-    if (typeof fieldType !== "string" || !EVIDENCE_FIELD_TYPES.has(fieldType)) {
+    if (
+      typeof fieldType !== "string" ||
+      !EVIDENCE_FIELD_TYPE_SET.has(fieldType)
+    ) {
       contractError(
         `fields.${fieldId}.type`,
-        "must be one of text, textarea, select, number, date"
+        "must be one of text, textarea, select, number, date",
       );
     }
-    if (fieldType === "select" && !Array.isArray(definition.options)) {
-      contractError(`fields.${fieldId}.options`, "must be present for select");
+    if (fieldType === "select") {
+      const options = definition.options;
+      if (!Array.isArray(options)) {
+        contractError(
+          `fields.${fieldId}.options`,
+          "must be present for select",
+        );
+      } else if (!options.every((option) => typeof option === "string")) {
+        contractError(`fields.${fieldId}.options`, "must contain only strings");
+      }
     }
     const ledgerError = ledgerDimensionValidationError(definition);
     if (ledgerError) {
       contractError(
         `fields.${fieldId}.${ledgerError.field}`,
-        ledgerError.message
+        ledgerError.message,
       );
     }
   }
@@ -182,16 +188,16 @@ function parseEvidenceTemplate(
 
 export function buildApparatusEntry(
   frontmatter: MethodFrontmatter,
-  sourcePath: string
+  sourcePath: string,
 ): Record<string, unknown> {
   const id = String(frontmatter.id || "");
   const version = String(frontmatter.version || "");
   const minCanvasVersion = String(
-    frontmatter.min_canvas_version || frontmatter.min_platform || ""
+    frontmatter.min_canvas_version || frontmatter.min_platform || "",
   );
   if (!id || !version || !minCanvasVersion) {
     throw new Error(
-      `Apparatus source must declare id, version, and min_canvas_version: ${sourcePath}`
+      `Apparatus source must declare id, version, and min_canvas_version: ${sourcePath}`,
     );
   }
 
@@ -221,7 +227,7 @@ export function buildApparatusMirror(researchRoot: string): {
   const methodsRoot = path.join(researchRoot, "methods");
   if (!fs.existsSync(methodsRoot)) {
     throw new Error(
-      `Research methods source not found at ${methodsRoot}. Set RESEARCH_OKF_ROOT to the Research OKF checkout.`
+      `Research methods source not found at ${methodsRoot}. Set RESEARCH_OKF_ROOT to the Research OKF checkout.`,
     );
   }
 
@@ -230,14 +236,14 @@ export function buildApparatusMirror(researchRoot: string): {
     const sourcePath = path.join(methodsRoot, id, `${id}.en.md`);
     if (!fs.existsSync(sourcePath)) {
       throw new Error(
-        `Research method source not found at ${sourcePath}. Set RESEARCH_OKF_ROOT to the Research OKF checkout.`
+        `Research method source not found at ${sourcePath}. Set RESEARCH_OKF_ROOT to the Research OKF checkout.`,
       );
     }
     const source = fs.readFileSync(sourcePath, "utf8");
     const frontmatter = parseFrontmatter(source, sourcePath);
     if (String(frontmatter.id) !== id) {
       throw new Error(
-        `Builtin method source ${sourcePath} must declare id ${id}`
+        `Builtin method source ${sourcePath} must declare id ${id}`,
       );
     }
     const methodId = id;
@@ -249,11 +255,11 @@ export function buildApparatusMirror(researchRoot: string): {
     const evidenceTemplatePath = path.join(
       methodsRoot,
       id,
-      "evidence-template.en.md"
+      "evidence-template.en.md",
     );
     if (!fs.existsSync(evidenceTemplatePath)) {
       throw new Error(
-        `Method ${methodId} evidence_template file not found at ${evidenceTemplatePath}`
+        `Method ${methodId} evidence_template file not found at ${evidenceTemplatePath}`,
       );
     }
     const evidenceTemplate = parseEvidenceTemplate(
@@ -261,7 +267,7 @@ export function buildApparatusMirror(researchRoot: string): {
       evidenceTemplatePath,
       methodId,
       methodVersion,
-      evidenceTemplateRef
+      evidenceTemplateRef,
     );
     const entry = buildApparatusEntry(frontmatter, sourcePath);
     entry.evidence_template = evidenceTemplate;
@@ -291,7 +297,7 @@ export function assertMethodRunBriefsBound(
     id: string;
     version: string;
     templateKind: string;
-  }>
+  }>,
 ): void {
   for (const entry of apparatuses) {
     const methodId = String(entry.id || "unknown");
@@ -303,19 +309,19 @@ export function assertMethodRunBriefsBound(
     const template = platformTemplates.find((candidate) => candidate.id === id);
     if (!template || template.templateKind !== "form") {
       throw new Error(
-        `Method ${methodId} run_brief_template ${ref} is not a platform Form template`
+        `Method ${methodId} run_brief_template ${ref} is not a platform Form template`,
       );
     }
     if (version && template.version !== version) {
       throw new Error(
-        `Method ${methodId} run_brief_template ${ref} does not match platform version ${template.version}`
+        `Method ${methodId} run_brief_template ${ref} does not match platform version ${template.version}`,
       );
     }
   }
 }
 
 export function assertMethodEvidenceTemplatesBound(
-  apparatuses: Record<string, unknown>[]
+  apparatuses: Record<string, unknown>[],
 ): void {
   for (const entry of apparatuses) {
     const methodId = String(entry.id || "unknown");
@@ -325,7 +331,7 @@ export function assertMethodEvidenceTemplatesBound(
     }
     if (evidenceTemplate.id !== "evidence-template") {
       throw new Error(
-        `Method ${methodId} evidence_template id must be evidence-template`
+        `Method ${methodId} evidence_template id must be evidence-template`,
       );
     }
     if (
@@ -333,22 +339,22 @@ export function assertMethodEvidenceTemplatesBound(
       !evidenceTemplate.version
     ) {
       throw new Error(
-        `Method ${methodId} evidence_template version must be present`
+        `Method ${methodId} evidence_template version must be present`,
       );
     }
     if (typeof evidenceTemplate.layoutMarkdown !== "string") {
       throw new Error(
-        `Method ${methodId} evidence_template layoutMarkdown must be a string`
+        `Method ${methodId} evidence_template layoutMarkdown must be a string`,
       );
     }
     if (typeof evidenceTemplate.guidance !== "string") {
       throw new Error(
-        `Method ${methodId} evidence_template guidance must be a string`
+        `Method ${methodId} evidence_template guidance must be a string`,
       );
     }
     if (typeof evidenceTemplate.sourcePath !== "string") {
       throw new Error(
-        `Method ${methodId} evidence_template sourcePath must be a string`
+        `Method ${methodId} evidence_template sourcePath must be a string`,
       );
     }
     if (
@@ -356,35 +362,42 @@ export function assertMethodEvidenceTemplatesBound(
       typeof evidenceTemplate.defaultStage !== "string"
     ) {
       throw new Error(
-        `Method ${methodId} evidence_template defaultStage must be a string`
+        `Method ${methodId} evidence_template defaultStage must be a string`,
       );
     }
     if (!isRecord(evidenceTemplate.fields)) {
       throw new Error(
-        `Method ${methodId} evidence_template fields must be a map`
+        `Method ${methodId} evidence_template fields must be a map`,
       );
     }
     for (const [fieldId, definition] of Object.entries(
-      evidenceTemplate.fields
+      evidenceTemplate.fields,
     )) {
       if (!isRecord(definition)) {
         throw new Error(
-          `Method ${methodId} evidence_template fields.${fieldId} must be a map`
+          `Method ${methodId} evidence_template fields.${fieldId} must be a map`,
         );
       }
       const fieldType = definition.type;
       if (
         typeof fieldType !== "string" ||
-        !EVIDENCE_FIELD_TYPES.has(fieldType)
+        !EVIDENCE_FIELD_TYPE_SET.has(fieldType)
       ) {
         throw new Error(
-          `Method ${methodId} evidence_template fields.${fieldId}.type must be one of text, textarea, select, number, date`
+          `Method ${methodId} evidence_template fields.${fieldId}.type must be one of text, textarea, select, number, date`,
         );
       }
-      if (fieldType === "select" && !Array.isArray(definition.options)) {
-        throw new Error(
-          `Method ${methodId} evidence_template fields.${fieldId}.options must be present for select`
-        );
+      if (fieldType === "select") {
+        const options = definition.options;
+        if (!Array.isArray(options)) {
+          throw new Error(
+            `Method ${methodId} evidence_template fields.${fieldId}.options must be present for select`,
+          );
+        } else if (!options.every((option) => typeof option === "string")) {
+          throw new Error(
+            `Method ${methodId} evidence_template fields.${fieldId}.options must contain only strings`,
+          );
+        }
       }
     }
   }
@@ -398,23 +411,23 @@ export function writeApparatusMirror(
     "apps",
     "web",
     "data",
-    "platform-template-catalog.json"
-  )
+    "platform-template-catalog.json",
+  ),
 ): void {
   const artifact = buildApparatusMirror(researchRoot);
   if (!fs.existsSync(platformCatalogPath)) {
     throw new Error(
-      `Platform template catalog not found at ${platformCatalogPath}. Run yarn generate:platform-templates first.`
+      `Platform template catalog not found at ${platformCatalogPath}. Run yarn generate:platform-templates first.`,
     );
   }
   const platformCatalog = JSON.parse(
-    fs.readFileSync(platformCatalogPath, "utf8")
+    fs.readFileSync(platformCatalogPath, "utf8"),
   ) as {
     templates?: Array<{ id: string; version: string; templateKind: string }>;
   };
   assertMethodRunBriefsBound(
     artifact.apparatuses,
-    platformCatalog.templates ?? []
+    platformCatalog.templates ?? [],
   );
   assertMethodEvidenceTemplatesBound(artifact.apparatuses);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -432,14 +445,14 @@ if (
     "apps",
     "web",
     "data",
-    "apparatuses.generated.json"
+    "apparatuses.generated.json",
   );
   const platformCatalogPath = path.resolve(
     process.env.EVALUCHAT_PLATFORM_TEMPLATE_CATALOG_OUTPUT ||
-      path.join(repoRoot, "apps/web/data/platform-template-catalog.json")
+      path.join(repoRoot, "apps/web/data/platform-template-catalog.json"),
   );
   writeApparatusMirror(researchRoot, outputPath, platformCatalogPath);
   console.log(
-    `Generated ${path.relative(repoRoot, outputPath)} from ${path.join(researchRoot, "methods")}`
+    `Generated ${path.relative(repoRoot, outputPath)} from ${path.join(researchRoot, "methods")}`,
   );
 }
