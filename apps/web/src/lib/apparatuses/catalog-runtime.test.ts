@@ -17,6 +17,10 @@ describe("generated apparatus catalog", () => {
       "tracking-off",
     ]);
     expect(essays?.run_brief_template).toBe("evaluchat-assignment-brief@1.0.0");
+    expect(essays?.evidence_template).toMatchObject({
+      id: "evidence-template",
+      version: "1.0.0",
+    });
     const brief = getTemplateById("evaluchat-assignment-brief");
     expect(brief?.templateKind).toBe("form");
     expect(brief?.version).toBe("1.0.0");
@@ -83,6 +87,101 @@ describe("generated apparatus catalog", () => {
         },
       ])
     ).toThrow(/threshold must be zero/);
+  });
+
+  it("rejects malformed embedded evidence templates", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    for (const evidence_template of [
+      null,
+      {
+        ...essays.evidence_template,
+        fields: [],
+      },
+      {
+        ...essays.evidence_template,
+        layoutMarkdown: false,
+      },
+      {
+        ...essays.evidence_template,
+        guidance: [],
+      },
+      {
+        ...essays.evidence_template,
+        sourcePath: {},
+      },
+    ]) {
+      expect(() =>
+        validateApparatusCatalog([{ ...essays, evidence_template } as never])
+      ).toThrow(/evidence_template/);
+    }
+  });
+
+  it("rejects evidence template fields with non-object definitions", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    expect(() =>
+      validateApparatusCatalog([
+        {
+          ...essays,
+          evidence_template: {
+            ...essays.evidence_template!,
+            fields: {
+              ...essays.evidence_template!.fields,
+              claim: null,
+            },
+          },
+        },
+      ])
+    ).toThrow(/fields\.claim must be an object/);
+  });
+
+  it("rejects evidence template fields with unsupported types", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    expect(() =>
+      validateApparatusCatalog([
+        {
+          ...essays,
+          evidence_template: {
+            ...essays.evidence_template!,
+            fields: {
+              ...essays.evidence_template!.fields,
+              claim: { type: "checkbox" },
+            },
+          },
+        },
+      ])
+    ).toThrow(
+      /fields\.claim\.type must be one of text, textarea, select, number, date/
+    );
+  });
+
+  it("rejects select evidence template fields without options", () => {
+    const essays = APPARATUS_CATALOG.find(
+      (entry) => entry.id === "ai-assisted-essay"
+    )!;
+
+    expect(() =>
+      validateApparatusCatalog([
+        {
+          ...essays,
+          evidence_template: {
+            ...essays.evidence_template!,
+            fields: {
+              ...essays.evidence_template!.fields,
+              claim: { type: "select" },
+            },
+          },
+        },
+      ])
+    ).toThrow(/fields\.claim\.options must be present for select/);
   });
 
   it("accepts every supported optional-capability combination with a viable workflow", () => {

@@ -26,6 +26,29 @@ const repoRoot = path.resolve(
 export const BUILTIN_METHOD_IDS = ["ai-assisted-essay"] as const;
 
 type MethodFrontmatter = Record<string, unknown>;
+type EvidenceTemplateFrontmatter = Record<string, unknown>;
+
+type EvidenceTemplate = {
+  id: string;
+  version: string;
+  defaultStage?: string;
+  fields: Record<string, unknown>;
+  layoutMarkdown: string;
+  guidance: string;
+  sourcePath: string;
+};
+
+const EVIDENCE_FIELD_TYPES = new Set([
+  "text",
+  "textarea",
+  "select",
+  "number",
+  "date",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function parseFrontmatter(
   source: string,
@@ -36,6 +59,111 @@ function parseFrontmatter(
     throw new Error(`Apparatus source has no YAML frontmatter: ${sourcePath}`);
   }
   return yaml.load(match[1]) as MethodFrontmatter;
+}
+
+function parseEvidenceTemplate(
+  source: string,
+  sourcePath: string,
+  methodId: string,
+  methodVersion: string,
+  evidenceTemplateRef: string,
+): EvidenceTemplate {
+  const match = source.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+  if (!match) {
+    throw new Error(
+      `Method ${methodId} evidence_template has no YAML frontmatter: ${sourcePath}`,
+    );
+  }
+
+  const frontmatter = yaml.load(match[1]) as EvidenceTemplateFrontmatter;
+  if (!isRecord(frontmatter)) {
+    throw new Error(
+      `Method ${methodId} evidence_template frontmatter must be a map`,
+    );
+  }
+
+  const contractError = (field: string, message: string): never => {
+    throw new Error(`Method ${methodId} evidence_template ${field} ${message}`);
+  };
+  const templateId = String(frontmatter.id || "");
+  const templateVersion = String(frontmatter.version || "");
+  const { id: referencedId, version: referencedVersion } =
+    parseRunBriefRef(evidenceTemplateRef);
+
+  if (frontmatter.type !== "Form Template") {
+    contractError("type", "must be Form Template");
+  }
+  if (templateId !== "evidence-template") {
+    contractError("id", "must be evidence-template");
+  }
+  if (!templateVersion) {
+    contractError("version", "must be present");
+  }
+  if (frontmatter.template_kind !== "form") {
+    contractError("template_kind", "must be form");
+  }
+  if (frontmatter.applies_to_method !== `${methodId}@${methodVersion}`) {
+    contractError(
+      "applies_to_method",
+      `must equal ${methodId}@${methodVersion}`,
+    );
+  }
+  if (referencedId !== templateId) {
+    contractError("id", `does not match method pointer ${evidenceTemplateRef}`);
+  }
+  if (!referencedVersion || referencedVersion !== templateVersion) {
+    contractError(
+      "version",
+      `does not match method pointer ${evidenceTemplateRef}`,
+    );
+  }
+  if (!isRecord(frontmatter.fields)) {
+    contractError("fields", "must be a map");
+  }
+  for (const [fieldId, definition] of Object.entries(frontmatter.fields)) {
+    if (!isRecord(definition)) {
+      contractError(`fields.${fieldId}`, "must be a map");
+    }
+    const fieldType = definition.type;
+    if (typeof fieldType !== "string" || !EVIDENCE_FIELD_TYPES.has(fieldType)) {
+      contractError(
+        `fields.${fieldId}.type`,
+        "must be one of text, textarea, select, number, date",
+      );
+    }
+    if (fieldType === "select" && !Array.isArray(definition.options)) {
+      contractError(`fields.${fieldId}.options`, "must be present for select");
+    }
+  }
+
+  const defaultStage = frontmatter.default_stage;
+  if (defaultStage !== undefined && typeof defaultStage !== "string") {
+    contractError("default_stage", "must be a string");
+  }
+
+  let assistant: Record<string, unknown> = {};
+  if (frontmatter.assistant !== undefined) {
+    if (!isRecord(frontmatter.assistant)) {
+      contractError("assistant", "must be a map");
+    }
+    assistant = frontmatter.assistant;
+  }
+  if (
+    assistant.guidance !== undefined &&
+    typeof assistant.guidance !== "string"
+  ) {
+    contractError("assistant.guidance", "must be a string");
+  }
+
+  return {
+    id: templateId,
+    version: templateVersion,
+    ...(defaultStage !== undefined ? { defaultStage } : {}),
+    fields: frontmatter.fields,
+    layoutMarkdown: source.slice(match[0].length),
+    guidance: assistant.guidance ?? "",
+    sourcePath: path.posix.join("methods", methodId, "evidence-template.en.md"),
+  };
 }
 
 export function buildApparatusEntry(
@@ -92,9 +220,38 @@ export function buildApparatusMirror(researchRoot: string): {
       );
     }
     const source = fs.readFileSync(sourcePath, "utf8");
-    apparatuses.push(
-      buildApparatusEntry(parseFrontmatter(source, sourcePath), sourcePath),
+    const frontmatter = parseFrontmatter(source, sourcePath);
+    if (String(frontmatter.id) !== id) {
+      throw new Error(
+        `Builtin method source ${sourcePath} must declare id ${id}`,
+      );
+    }
+    const methodId = id;
+    const methodVersion = String(frontmatter.version || "");
+    const evidenceTemplateRef = String(frontmatter.evidence_template || "");
+    if (!evidenceTemplateRef) {
+      throw new Error(`Method ${methodId} is missing evidence_template`);
+    }
+    const evidenceTemplatePath = path.join(
+      methodsRoot,
+      id,
+      "evidence-template.en.md",
     );
+    if (!fs.existsSync(evidenceTemplatePath)) {
+      throw new Error(
+        `Method ${methodId} evidence_template file not found at ${evidenceTemplatePath}`,
+      );
+    }
+    const evidenceTemplate = parseEvidenceTemplate(
+      fs.readFileSync(evidenceTemplatePath, "utf8"),
+      evidenceTemplatePath,
+      methodId,
+      methodVersion,
+      evidenceTemplateRef,
+    );
+    const entry = buildApparatusEntry(frontmatter, sourcePath);
+    entry.evidence_template = evidenceTemplate;
+    apparatuses.push(entry);
   }
 
   const canvasVersion = String(apparatuses[0]?.min_canvas_version || "0.5.9");
@@ -143,6 +300,82 @@ export function assertMethodRunBriefsBound(
   }
 }
 
+export function assertMethodEvidenceTemplatesBound(
+  apparatuses: Record<string, unknown>[],
+): void {
+  for (const entry of apparatuses) {
+    const methodId = String(entry.id || "unknown");
+    const evidenceTemplate = entry.evidence_template;
+    if (!isRecord(evidenceTemplate)) {
+      throw new Error(`Method ${methodId} is missing evidence_template`);
+    }
+    if (evidenceTemplate.id !== "evidence-template") {
+      throw new Error(
+        `Method ${methodId} evidence_template id must be evidence-template`,
+      );
+    }
+    if (
+      typeof evidenceTemplate.version !== "string" ||
+      !evidenceTemplate.version
+    ) {
+      throw new Error(
+        `Method ${methodId} evidence_template version must be present`,
+      );
+    }
+    if (typeof evidenceTemplate.layoutMarkdown !== "string") {
+      throw new Error(
+        `Method ${methodId} evidence_template layoutMarkdown must be a string`,
+      );
+    }
+    if (typeof evidenceTemplate.guidance !== "string") {
+      throw new Error(
+        `Method ${methodId} evidence_template guidance must be a string`,
+      );
+    }
+    if (typeof evidenceTemplate.sourcePath !== "string") {
+      throw new Error(
+        `Method ${methodId} evidence_template sourcePath must be a string`,
+      );
+    }
+    if (
+      "defaultStage" in evidenceTemplate &&
+      typeof evidenceTemplate.defaultStage !== "string"
+    ) {
+      throw new Error(
+        `Method ${methodId} evidence_template defaultStage must be a string`,
+      );
+    }
+    if (!isRecord(evidenceTemplate.fields)) {
+      throw new Error(
+        `Method ${methodId} evidence_template fields must be a map`,
+      );
+    }
+    for (const [fieldId, definition] of Object.entries(
+      evidenceTemplate.fields,
+    )) {
+      if (!isRecord(definition)) {
+        throw new Error(
+          `Method ${methodId} evidence_template fields.${fieldId} must be a map`,
+        );
+      }
+      const fieldType = definition.type;
+      if (
+        typeof fieldType !== "string" ||
+        !EVIDENCE_FIELD_TYPES.has(fieldType)
+      ) {
+        throw new Error(
+          `Method ${methodId} evidence_template fields.${fieldId}.type must be one of text, textarea, select, number, date`,
+        );
+      }
+      if (fieldType === "select" && !Array.isArray(definition.options)) {
+        throw new Error(
+          `Method ${methodId} evidence_template fields.${fieldId}.options must be present for select`,
+        );
+      }
+    }
+  }
+}
+
 export function writeApparatusMirror(
   researchRoot: string,
   outputPath: string,
@@ -169,6 +402,7 @@ export function writeApparatusMirror(
     artifact.apparatuses,
     platformCatalog.templates ?? [],
   );
+  assertMethodEvidenceTemplatesBound(artifact.apparatuses);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`);
 }

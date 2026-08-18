@@ -29,6 +29,16 @@ export interface ApparatusPlatform {
   review_surface?: string;
 }
 
+export interface ApparatusEvidenceTemplate {
+  id: "evidence-template";
+  version: string;
+  defaultStage?: string;
+  fields: Record<string, Record<string, unknown>>;
+  layoutMarkdown: string;
+  guidance: string;
+  sourcePath: string;
+}
+
 export interface ApparatusCatalogEntry {
   id: string;
   name: string;
@@ -46,6 +56,7 @@ export interface ApparatusCatalogEntry {
   profiles: ApparatusProfile[];
   catalog_urls?: ApparatusCatalogUrls;
   run_brief_template?: string;
+  evidence_template?: ApparatusEvidenceTemplate;
   platform?: ApparatusPlatform;
 }
 
@@ -113,6 +124,81 @@ type ApparatusArtifact = {
   apparatuses: ApparatusCatalogEntry[];
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const EVIDENCE_FIELD_TYPES = new Set([
+  "text",
+  "textarea",
+  "select",
+  "number",
+  "date",
+]);
+
+function validateEvidenceTemplate(entryId: string, template: unknown): void {
+  const contractError = (field: string, message: string): never => {
+    throw new Error(
+      `Apparatus ${entryId} evidence_template${field ? ` ${field}` : ""} ${message}`
+    );
+  };
+
+  const evidenceTemplate = isRecord(template)
+    ? template
+    : contractError("", "must be an object");
+
+  if (typeof evidenceTemplate.id !== "string") {
+    contractError("id", "must be a string");
+  }
+  if (evidenceTemplate.id !== "evidence-template") {
+    contractError("id", "must be evidence-template");
+  }
+  if (
+    typeof evidenceTemplate.version !== "string" ||
+    !evidenceTemplate.version
+  ) {
+    contractError("version", "must be a non-empty string");
+  }
+  if (
+    evidenceTemplate.defaultStage !== undefined &&
+    typeof evidenceTemplate.defaultStage !== "string"
+  ) {
+    contractError("defaultStage", "must be a string");
+  }
+  if (!isRecord(evidenceTemplate.fields)) {
+    contractError("fields", "must be an object");
+  }
+  const fields = evidenceTemplate.fields as Record<string, unknown>;
+  for (const [fieldName, definition] of Object.entries(fields)) {
+    if (!isRecord(definition)) {
+      contractError(`fields.${fieldName}`, "must be an object");
+    }
+    const fieldDefinition = definition as Record<string, unknown>;
+    const fieldType = fieldDefinition.type;
+    if (typeof fieldType !== "string" || !EVIDENCE_FIELD_TYPES.has(fieldType)) {
+      contractError(
+        `fields.${fieldName}.type`,
+        "must be one of text, textarea, select, number, date"
+      );
+    }
+    if (fieldType === "select" && !Array.isArray(fieldDefinition.options)) {
+      contractError(
+        `fields.${fieldName}.options`,
+        "must be present for select"
+      );
+    }
+  }
+  if (typeof evidenceTemplate.layoutMarkdown !== "string") {
+    contractError("layoutMarkdown", "must be a string");
+  }
+  if (typeof evidenceTemplate.guidance !== "string") {
+    contractError("guidance", "must be a string");
+  }
+  if (typeof evidenceTemplate.sourcePath !== "string") {
+    contractError("sourcePath", "must be a string");
+  }
+}
+
 function loadCatalog(): ApparatusCatalogEntry[] {
   const artifactPath = join(
     process.cwd(),
@@ -155,6 +241,9 @@ export function validateApparatusCatalog(
     known.add(entry.id);
     if (!entry.version || !entry.min_canvas_version) {
       throw new Error(`Apparatus ${entry.id} is missing version metadata`);
+    }
+    if (entry.evidence_template !== undefined) {
+      validateEvidenceTemplate(entry.id, entry.evidence_template);
     }
     for (const capability of entry.required_capabilities) {
       if (!(APPARATUS_CAPABILITIES as readonly string[]).includes(capability)) {
