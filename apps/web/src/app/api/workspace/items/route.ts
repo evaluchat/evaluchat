@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyUserAuthenticated } from "@/lib/supabase/verify_user_server";
 import {
   createMethodWorkspaceItem,
+  createLedgerWorkspaceItem,
   createWorkspaceItem,
   ensureDefaultWorkspaceItem,
   listWorkspaceItems,
   UnsupportedMethodError,
   UnsupportedTemplateError,
+  LedgerNotReadyError,
 } from "@/lib/workspace/store";
 
 async function authenticatedUser() {
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest) {
       ? parsedBody.templateId
       : undefined;
   const hasMethodId = methodId !== undefined;
+  const isLedger = parsedBody.kind === "ledger";
   if (!hasMethodId && templateId === undefined) {
     return NextResponse.json(
       { error: "Unsupported template" },
@@ -69,9 +72,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const item = hasMethodId
-      ? await createMethodWorkspaceItem(user.id, methodId)
-      : await createWorkspaceItem(user.id, templateId!);
+    const item = isLedger
+      ? await createLedgerWorkspaceItem(user.id, methodId!)
+      : hasMethodId
+        ? await createMethodWorkspaceItem(user.id, methodId)
+        : await createWorkspaceItem(user.id, templateId!);
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
     if (error instanceof UnsupportedMethodError) {
@@ -85,6 +90,9 @@ export async function POST(request: NextRequest) {
         { error: "Unsupported template" },
         { status: 400 }
       );
+    }
+    if (error instanceof LedgerNotReadyError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("[workspace] failed to create item", error);
     return NextResponse.json(

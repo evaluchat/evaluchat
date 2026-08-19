@@ -4,9 +4,11 @@ import { NextRequest } from "next/server";
 const harness = vi.hoisted(() => ({
   UnsupportedMethodError: class UnsupportedMethodError extends Error {},
   UnsupportedTemplateError: class UnsupportedTemplateError extends Error {},
+  LedgerNotReadyError: class LedgerNotReadyError extends Error {},
   verifyUserAuthenticated: vi.fn(),
   createWorkspaceItem: vi.fn(),
   createMethodWorkspaceItem: vi.fn(),
+  createLedgerWorkspaceItem: vi.fn(),
   ensureDefaultWorkspaceItem: vi.fn(),
   listWorkspaceItems: vi.fn(),
 }));
@@ -17,8 +19,10 @@ vi.mock("@/lib/supabase/verify_user_server", () => ({
 vi.mock("@/lib/workspace/store", () => ({
   UnsupportedMethodError: harness.UnsupportedMethodError,
   UnsupportedTemplateError: harness.UnsupportedTemplateError,
+  LedgerNotReadyError: harness.LedgerNotReadyError,
   createWorkspaceItem: harness.createWorkspaceItem,
   createMethodWorkspaceItem: harness.createMethodWorkspaceItem,
+  createLedgerWorkspaceItem: harness.createLedgerWorkspaceItem,
   ensureDefaultWorkspaceItem: harness.ensureDefaultWorkspaceItem,
   listWorkspaceItems: harness.listWorkspaceItems,
 }));
@@ -46,6 +50,7 @@ describe("POST /api/workspace/items", () => {
     harness.verifyUserAuthenticated.mockReset();
     harness.createWorkspaceItem.mockReset();
     harness.createMethodWorkspaceItem.mockReset();
+    harness.createLedgerWorkspaceItem.mockReset();
     harness.verifyUserAuthenticated.mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -63,6 +68,21 @@ describe("POST /api/workspace/items", () => {
       "ai-assisted-essay"
     );
     expect(harness.createWorkspaceItem).not.toHaveBeenCalled();
+  });
+
+  it("creates an Evidence Ledger item from a ledger method id", async () => {
+    harness.createLedgerWorkspaceItem.mockResolvedValue({
+      id: "wi_ledger",
+      kind: "ledger",
+    });
+    const response = await POST(
+      request({ kind: "ledger", methodId: "ledger-demo-method" })
+    );
+    expect(response.status).toBe(201);
+    expect(harness.createLedgerWorkspaceItem).toHaveBeenCalledWith(
+      "user-1",
+      "ledger-demo-method"
+    );
   });
 
   it("rejects an empty body", async () => {
