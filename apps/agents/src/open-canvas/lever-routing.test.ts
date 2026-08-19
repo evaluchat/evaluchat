@@ -128,6 +128,45 @@ describe("apparatus lever routing", () => {
     ).toBe("cleanState");
   });
 
+  it("skips thesis assessment for an open workspace with no apparatus", () => {
+    expect(
+      routeAfterGeneralReply(
+        makeState({
+          phase_state: undefined,
+          apparatusConfiguration: undefined,
+        })
+      )
+    ).toBe("cleanState");
+  });
+
+  it("skips thesis assessment when drafting_gate is undefined on a persisted apparatus", () => {
+    expect(
+      routeAfterGeneralReply(
+        makeState({
+          phase_state: undefined,
+          apparatusConfiguration: {
+            ...canonicalConfiguration,
+            drafting_gate: undefined,
+          },
+        })
+      )
+    ).toBe("cleanState");
+  });
+
+  it("assesses a thesis when drafting_gate is an empty string", () => {
+    expect(
+      routeAfterGeneralReply(
+        makeState({
+          phase_state: undefined,
+          apparatusConfiguration: {
+            ...canonicalConfiguration,
+            drafting_gate: "",
+          },
+        })
+      )
+    ).toBe("assessThesis");
+  });
+
   it("assesses a thesis for the canonical socratic profile", () => {
     expect(
       routeAfterGeneralReply(

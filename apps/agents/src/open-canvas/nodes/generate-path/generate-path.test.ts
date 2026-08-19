@@ -138,27 +138,33 @@ describe("generatePath", () => {
     expect(result.next).toBe("replyToGeneralInput");
   });
 
-  it("should route to replyToGeneralInput when phase_state is undefined (initial state)", async () => {
+  it("should use the drafting teaching path for an open workspace initial state", async () => {
+    mockDetermineTeachingIntent.mockResolvedValueOnce({
+      route: "generateArtifact",
+      reasoning: "explicit canvas-write request in drafting phase",
+    });
+
     const state = createMockState({
       phase_state: undefined,
+      apparatusConfiguration: undefined,
       _messages: [
         new HumanMessage({
-          content: "General question",
+          content: "write some tips about evaluchat in the canvas",
           id: "test-msg-1",
         }),
       ],
     });
     const config = createMockConfig();
 
-    // When phase is undefined, treat as socratic — route to chat
     const { dynamicDeterminePath } = await import(
       "./dynamic-determine-path.js"
     );
 
     const result = await generatePath(state, config);
 
+    expect(mockDetermineTeachingIntent).toHaveBeenCalled();
     expect(dynamicDeterminePath).not.toHaveBeenCalled();
-    expect(result.next).toBe("replyToGeneralInput");
+    expect(result.next).toBe("generateArtifact");
   });
 
   it("should route to generateArtifact when writing intent detected in drafting phase", async () => {

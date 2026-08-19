@@ -1,3 +1,4 @@
+import { AIMessage } from "@langchain/core/messages";
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getArtifactContent } from "@opencanvas/shared/utils/artifacts";
 import { FormAgentContext, Reflections } from "@opencanvas/shared/types";
@@ -11,6 +12,10 @@ import {
   optionallyGetSystemPromptFromConfig,
 } from "../../utils.js";
 import { CURRENT_ARTIFACT_PROMPT, NO_ARTIFACT_PROMPT } from "../prompts.js";
+import {
+  detectHollowInput,
+  getLatestHumanMessageContent,
+} from "./hollow-input.js";
 import {
   OpenCanvasGraphAnnotation,
   OpenCanvasGraphReturnType,
@@ -69,6 +74,9 @@ student frame above whenever this Method Context is present.
 const PHASE_INSTRUCTIONS: Record<string, string> = {
   socratic: `## Current phase: Socratic (Thesis Development)
 The student is in Phase 1. Your job is to help them develop a clear, arguable thesis through Socratic questioning.
+- Ground every reply in the literal latest student message: restate or directly engage what they actually said.
+- If the latest message is a content-free placeholder, off-topic, unintelligible, or under ~15 words with no substance, say you did not understand and ask the student to elaborate. Never proceed as if they made a great choice, started somewhere, or gave an answer.
+- Never invent substance the student did not provide.
 - Ask pointed questions that extract specific evidence and examples from the text, not generic follow-ups.
 - Focus on key moments, character actions, and specific details that support their argument.
 - Example approach: "Why do you think that specific visit changed him? What did [character] do that messed with his head?"
@@ -79,6 +87,9 @@ The student is in Phase 1. Your job is to help them develop a clear, arguable th
 
   drafting: `## Current phase: Drafting
 The student's thesis has been approved. You are now helping them write their essay on the canvas.
+- Ground every reply in the literal latest student message: restate or directly engage what they actually said.
+- If the latest message is a content-free placeholder, off-topic, unintelligible, or under ~15 words with no substance, say you did not understand and ask the student to elaborate. Never proceed as if they made a great choice, started somewhere, or gave an answer.
+- Never invent substance the student did not provide.
 - Document updates happen in separate graph steps — NOT in this chat-only node.
 - NEVER say you will write, draft, or update the canvas in this message. Do not promise future canvas edits.
 - If the student gave content direction, acknowledge briefly in 1-2 sentences; the canvas will be updated by the system when appropriate.
@@ -131,9 +142,33 @@ export const replyToGeneralInput = async (
   state: typeof OpenCanvasGraphAnnotation.State,
   config: LangGraphRunnableConfig
 ): Promise<OpenCanvasGraphReturnType> => {
-  const smallModel = await getModelFromConfig(config);
+  const phase =
+    state.phase_state ||
+    (state.apparatusConfiguration &&
+    state.apparatusConfiguration.drafting_gate !== undefined &&
+    state.apparatusConfiguration.drafting_gate !== "none"
+      ? "socratic"
+      : "drafting");
+  const latestStudentMessage = getLatestHumanMessageContent(state._messages);
+  const isCoachingPhase = phase === "socratic" || phase === "drafting";
 
-  const phase = state.phase_state || "socratic";
+  if (
+    isCoachingPhase &&
+    !state.formContext?.methodContext &&
+    latestStudentMessage !== undefined &&
+    detectHollowInput(latestStudentMessage)
+  ) {
+    const clarifyMsg = new AIMessage({
+      content:
+        "I didn't quite catch that — mind elaborating on what you mean so I can help? For example, what's your current take on the text, or what part would you like to work through?",
+    });
+    return {
+      messages: [clarifyMsg],
+      _messages: [clarifyMsg],
+    };
+  }
+
+  const smallModel = await getModelFromConfig(config);
   const phaseInstructions =
     PHASE_INSTRUCTIONS[phase] || PHASE_INSTRUCTIONS.socratic;
 

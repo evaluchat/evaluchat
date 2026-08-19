@@ -100,6 +100,139 @@ describe("determineTeachingIntent", () => {
     expect(result.route).toBe("generateArtifact");
   });
 
+  it("forces an explicit canvas-write request to generateArtifact in an open workspace", async () => {
+    mockModel.setToolCallResponse("classify_intent", {
+      route: "replyToGeneralInput",
+      reasoning: "Student appears to be asking for coaching.",
+    });
+
+    const result = await determineTeachingIntent({
+      state: {
+        _messages: [
+          new HumanMessage("write some tips about evaluchat in the canvas"),
+        ],
+        phase_state: undefined,
+        apparatusConfiguration: undefined,
+        artifact: undefined,
+      } as any,
+      newMessages: [],
+      config: createMockConfig(),
+    });
+
+    expect(result.route).toBe("generateArtifact");
+    expect(result.reasoning).toContain("Explicit canvas-write request");
+  });
+
+  it("forces an explicit canvas-write request to generateArtifact when drafting_gate is undefined", async () => {
+    mockModel.setToolCallResponse("classify_intent", {
+      route: "replyToGeneralInput",
+      reasoning: "Student appears to be asking for coaching.",
+    });
+
+    const result = await determineTeachingIntent({
+      state: {
+        _messages: [new HumanMessage("write some tips in the canvas")],
+        phase_state: undefined,
+        apparatusConfiguration: {
+          ai_assistance: true,
+          ai_canvas_actions: true,
+          drafting_gate: undefined,
+          threshold: 4,
+          tracking: true,
+        },
+        artifact: undefined,
+      } as any,
+      newMessages: [],
+      config: createMockConfig(),
+    });
+
+    expect(result.route).toBe("generateArtifact");
+  });
+
+  it("does not apply the drafting override when drafting_gate is an empty string", async () => {
+    mockModel.setToolCallResponse("classify_intent", {
+      route: "replyToGeneralInput",
+      reasoning: "Student appears to be asking for coaching.",
+    });
+
+    const result = await determineTeachingIntent({
+      state: {
+        _messages: [new HumanMessage("write some tips in the canvas")],
+        phase_state: undefined,
+        apparatusConfiguration: {
+          ai_assistance: true,
+          ai_canvas_actions: true,
+          drafting_gate: "",
+          threshold: 4,
+          tracking: true,
+        },
+        artifact: undefined,
+      } as any,
+      newMessages: [],
+      config: createMockConfig(),
+    });
+
+    expect(result.route).toBe("replyToGeneralInput");
+  });
+
+  it("appends an explicit canvas-write request in an open workspace with content", async () => {
+    mockModel.setToolCallResponse("classify_intent", {
+      route: "replyToGeneralInput",
+      reasoning: "Student appears to be asking for coaching.",
+    });
+
+    const result = await determineTeachingIntent({
+      state: {
+        _messages: [new HumanMessage("put that in the canvas")],
+        phase_state: undefined,
+        apparatusConfiguration: undefined,
+        artifact: {
+          currentIndex: 1,
+          contents: [
+            { index: 1, type: "text", fullMarkdown: "Existing canvas text." },
+          ],
+        },
+      } as any,
+      newMessages: [],
+      config: createMockConfig(),
+    });
+
+    expect(result.route).toBe("generateArtifact");
+  });
+
+  it("keeps generateArtifact routed to chat in socratic phase when the canvas has content", async () => {
+    mockModel.setToolCallResponse("classify_intent", {
+      route: "generateArtifact",
+      reasoning: "Student asked for a new artifact.",
+    });
+
+    const result = await determineTeachingIntent({
+      state: {
+        _messages: [
+          new HumanMessage("write some tips about evaluchat in the canvas"),
+        ],
+        phase_state: undefined,
+        apparatusConfiguration: {
+          ai_assistance: true,
+          ai_canvas_actions: true,
+          drafting_gate: "discussion-first",
+          threshold: 4,
+          tracking: true,
+        },
+        artifact: {
+          currentIndex: 1,
+          contents: [
+            { index: 1, type: "text", fullMarkdown: "Existing canvas text." },
+          ],
+        },
+      } as any,
+      newMessages: [],
+      config: createMockConfig(),
+    });
+
+    expect(result.route).toBe("replyToGeneralInput");
+  });
+
   it("overrides non-rewrite routes to chat in socratic phase", async () => {
     mockModel.setToolCallResponse("classify_intent", {
       route: "integrateCanvasDirection",

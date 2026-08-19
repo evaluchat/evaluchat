@@ -66,8 +66,8 @@ const FALLBACK_STUB_CATALOG: ApparatusCatalogEntry[] = [
     id: "ai-assisted-essay",
     name: "Essays — constrained dialogic drafting (CAMDLE)",
     version: "0.1.0",
-    min_platform: "0.5.9",
-    min_canvas_version: "0.5.9",
+    min_platform: "0.6.0",
+    min_canvas_version: "0.6.0",
     status: "stable",
     research_questions: ["threshold-calibration"],
     roles: ["student", "teacher", "org-admin"],
@@ -229,7 +229,7 @@ export const APPARATUS_CATALOG: ApparatusCatalogEntry[] = loadCatalog();
 /** Deterministic build-time validation for generated Research manifests. */
 export function validateApparatusCatalog(
   entries: ApparatusCatalogEntry[],
-  canvasVersion = "0.5.9"
+  canvasVersion = "0.6.0"
 ): void {
   const known = new Set<string>();
   for (const entry of entries) {
