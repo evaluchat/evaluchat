@@ -38,6 +38,9 @@ function assistantGuidance(item: WorkspaceItem): string {
       item.apparatusConfiguration
     );
   }
+  if (item.kind === "ledger" || item.kind === "ledger_snapshot") {
+    return "";
+  }
   return item.templateSnapshot.assistantGuidance;
 }
 
