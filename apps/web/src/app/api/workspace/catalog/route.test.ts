@@ -5,6 +5,7 @@ const harness = vi.hoisted(() => ({
   verifyUserAuthenticated: vi.fn(),
   listApparatuses: vi.fn(),
   searchTemplates: vi.fn(),
+  listResearchedMethods: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/verify_user_server", () => ({
@@ -16,6 +17,9 @@ vi.mock("@/lib/apparatuses/registry", () => ({
 vi.mock("@/lib/workspace/template-catalog", () => ({
   searchTemplates: harness.searchTemplates,
 }));
+vi.mock("@/lib/workspace/ledger-source", () => ({
+  listResearchedMethods: harness.listResearchedMethods,
+}));
 
 import { GET } from "./route";
 
@@ -24,6 +28,7 @@ describe("GET /api/workspace/catalog", () => {
     harness.verifyUserAuthenticated.mockReset();
     harness.listApparatuses.mockReset();
     harness.searchTemplates.mockReset();
+    harness.listResearchedMethods.mockReset();
     harness.verifyUserAuthenticated.mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -50,6 +55,33 @@ describe("GET /api/workspace/catalog", () => {
           title: "AI-assisted essay",
           description: "Constrained dialogic drafting",
           disabled: false,
+        },
+      ],
+    });
+  });
+
+  it("gets ledger catalog methods from the research source rather than the app mirror", async () => {
+    harness.listResearchedMethods.mockResolvedValue([
+      {
+        id: "ledger-demo-method",
+        title: "Ledger demo",
+        version: "1.0.0",
+        evidenceTemplate: { id: "evidence-template", version: "1.0.0" },
+        acceptedEvidenceCount: 12,
+      },
+    ]);
+    const response = await GET(
+      new NextRequest("http://localhost/api/workspace/catalog?kind=ledger")
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      kind: "ledger",
+      results: [
+        {
+          id: "ledger-demo-method",
+          kind: "ledger",
+          status: "Ledger ready",
+          acceptedEvidenceCount: 12,
         },
       ],
     });

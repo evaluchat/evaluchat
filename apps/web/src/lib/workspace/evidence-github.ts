@@ -1,11 +1,11 @@
 import { isAutoMergeEligibleStage, shouldAutoMergeEvidence } from "./evidence";
 
 const GITHUB_API = "https://api.github.com";
-const RESEARCH_REPOSITORY = "evaluchat/research";
+export const RESEARCH_REPOSITORY = "evaluchat/research";
 
 type GithubJson = Record<string, any>;
 
-function githubHeaders(): HeadersInit {
+export function githubHeaders(): HeadersInit {
   const token = process.env.VALERY_GITHUB_TOKEN;
   if (!token) throw new Error("VALERY_GITHUB_TOKEN is not configured");
   return {
@@ -16,7 +16,7 @@ function githubHeaders(): HeadersInit {
   };
 }
 
-async function githubRequest(
+export async function githubRequest(
   path: string,
   init: RequestInit = {}
 ): Promise<GithubJson> {

@@ -19,6 +19,8 @@ import { FormWorkspaceCanvas } from "./form-workspace-canvas";
 import { MethodParticipantCanvas } from "./method-participant-canvas";
 import { MethodRunCanvas } from "./method-run-canvas";
 import { EvidenceCanvas } from "./evidence-canvas";
+import { LedgerCanvas } from "./ledger-canvas";
+import { LedgerSnapshotCanvas } from "./ledger-snapshot-canvas";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
@@ -163,6 +165,14 @@ export function WorkspaceCanvas() {
   }
 
   const evidenceThreadId = searchParams.get("evidence");
+  if (item.kind === "ledger") {
+    return <LedgerCanvas item={item} />;
+  }
+
+  if (item.kind === "ledger_snapshot") {
+    return <LedgerSnapshotCanvas item={item} />;
+  }
+
   if (item.kind === "method" && evidenceThreadId) {
     return <EvidenceCanvas item={item} threadId={evidenceThreadId} />;
   }

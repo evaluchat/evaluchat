@@ -1,7 +1,9 @@
 import type {
   ApparatusConfiguration,
+  LedgerConfig,
   LedgerDimension,
   LedgerMissingSemantics,
+  LedgerSnapshotData,
 } from "@opencanvas/shared";
 
 export const DEFAULT_WORKSPACE_TEMPLATE_ID = "evaluchat-getting-started";
@@ -194,13 +196,40 @@ export type MethodParticipantWorkspaceItem = WorkspaceItemBase & {
   };
 };
 
+export type LedgerSource = {
+  methodId: string;
+  methodVersion: string;
+  templateId: string;
+  templateVersion: string;
+  sourceCommit: string;
+  methodTitle?: string;
+  baselineAcceptedEvidenceCount?: number;
+};
+
+export type LedgerWorkspaceItem = Omit<WorkspaceItemBase, "source"> & {
+  kind: "ledger";
+  ledgerConfig: LedgerConfig;
+  snapshotIds: string[];
+  source: LedgerSource;
+};
+
+export type LedgerSnapshotWorkspaceItem = Omit<WorkspaceItemBase, "source"> & {
+  kind: "ledger_snapshot";
+  parentLedgerItemId: string;
+  snapshot: LedgerSnapshotData;
+  config: LedgerConfig;
+  source: LedgerSource;
+};
+
 export type FormBackedWorkspaceItem = FormWorkspaceItem | MethodWorkspaceItem;
 
 export type WorkspaceItem =
   | MarkdownWorkspaceItem
   | FormWorkspaceItem
   | MethodWorkspaceItem
-  | MethodParticipantWorkspaceItem;
+  | MethodParticipantWorkspaceItem
+  | LedgerWorkspaceItem
+  | LedgerSnapshotWorkspaceItem;
 
 export type WorkspaceManifest = {
   initialized: boolean;

@@ -52,7 +52,9 @@ export function formatWorkspaceItemDate(
 
 export function workspaceItemHref(item: WorkspaceItem): string {
   const params = new URLSearchParams();
-  if (item.threadId) params.set("threadId", item.threadId);
+  if ("threadId" in item && item.threadId) {
+    params.set("threadId", item.threadId);
+  }
   if (
     item.kind === "method_participant" &&
     item.submission?.status === "submitted"
@@ -101,6 +103,9 @@ export function ownParticipantItemId(
 }
 
 export function workspaceItemTitle(item: WorkspaceItem): string {
+  if (item.kind === "ledger_snapshot") return "Ledger Snapshot";
+  if (item.kind === "ledger")
+    return item.source.methodTitle || "Evidence Ledger";
   if (item.kind === "method_participant") return item.assignment.title;
   if (item.kind === "method" && item.run) return item.run.assignment.title;
   if (item.kind === "method") {
@@ -110,6 +115,10 @@ export function workspaceItemTitle(item: WorkspaceItem): string {
 }
 
 export function workspaceItemDescription(item: WorkspaceItem): string {
+  if (item.kind === "ledger_snapshot") return item.snapshot.predicate;
+  if (item.kind === "ledger") {
+    return `${item.source.methodId}@${item.source.methodVersion}`;
+  }
   if (item.kind === "method_participant") return item.assignment.prompt;
   if (item.kind === "method" && item.run) {
     return item.methodSource.title || item.run.methodId;
@@ -121,6 +130,8 @@ export function workspaceItemDescription(item: WorkspaceItem): string {
 }
 
 export function workspaceItemKicker(item: WorkspaceItem): string | undefined {
+  if (item.kind === "ledger") return "EVIDENCE LEDGER";
+  if (item.kind === "ledger_snapshot") return "LEDGER SNAPSHOT";
   if (item.kind === "method" && !item.run) return "METHOD DRAFT";
   if (item.kind === "method" && item.run) {
     const invited = item.run.participants.length;
@@ -167,6 +178,18 @@ export function workspaceItemType(item: WorkspaceItem): WorkspaceItemType {
         label: "Assignment",
         colorClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
         iconClass: "text-emerald-600",
+      };
+    case "ledger":
+      return {
+        label: "Evidence Ledger",
+        colorClass: "border-cyan-200 bg-cyan-50 text-cyan-700",
+        iconClass: "text-cyan-600",
+      };
+    case "ledger_snapshot":
+      return {
+        label: "Ledger Snapshot",
+        colorClass: "border-indigo-200 bg-indigo-50 text-indigo-700",
+        iconClass: "text-indigo-600",
       };
     case "markdown_template":
     default:

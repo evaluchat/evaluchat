@@ -5,6 +5,9 @@ import path from "node:path";
 import {
   EvidenceLedgerResolutionError,
   resolveEvidenceLedger,
+  resolveEvidenceLedgerFromSource,
+  type EvidenceLedgerMethod,
+  type EvidenceLedgerTemplate,
   type LedgerScopeFilter,
 } from "./evidence-ledger";
 
@@ -430,5 +433,113 @@ describe("Evidence Ledger resolver", () => {
         ],
       })
     ).toThrow(/uses a value not declared by every applicable template/);
+  });
+});
+
+describe("resolveEvidenceLedgerFromSource", () => {
+  const template: EvidenceLedgerTemplate = {
+    id: "evidence-template",
+    version: "1.0.0",
+    path: "methods/alpha-method/evidence-template.en.md",
+    dimensions: [
+      {
+        id: "education_level",
+        type: "select",
+        role: "context",
+        control: "multi-select",
+        options: ["k12", "tertiary", "unknown"],
+      },
+      {
+        id: "collection_date",
+        type: "date",
+        role: "collection",
+        control: "range",
+      },
+    ],
+  };
+  const method: EvidenceLedgerMethod = {
+    id: "alpha-method",
+    version: "1.0.0",
+    path: "methods/alpha-method/alpha-method.en.md",
+    evidenceTemplate: template,
+  };
+  const base = {
+    path: "methods/alpha-method/evidence/p1.en.md",
+    sourceHash: "sha256:abc",
+    methodId: "alpha-method",
+    methodVersion: "1.0.0",
+    templateVersion: "1.0.0",
+    dimensionValues: {},
+    scopeValues: {},
+    bucket: "Included" as const,
+  };
+
+  it("excludes a packet only when a filter targets its invalid dimension", () => {
+    const resolution = resolveEvidenceLedgerFromSource({
+      method,
+      template,
+      contributions: [
+        {
+          ...base,
+          id: "p-invalid",
+          invalidDimensions: ["education_level"],
+          dimensionValues: {
+            collection_date: { status: "recorded", value: "2024-03-01" },
+          },
+        },
+        {
+          ...base,
+          id: "p-good",
+          dimensionValues: {
+            education_level: { status: "recorded", value: "k12" },
+            collection_date: { status: "recorded", value: "2024-03-01" },
+          },
+        },
+      ],
+      filters: [
+        {
+          fieldId: "education_level",
+          control: "multi-select",
+          values: ["k12"],
+        },
+      ],
+    });
+    const byId = Object.fromEntries(
+      resolution.contributions.map((contribution) => [
+        contribution.id,
+        contribution,
+      ])
+    );
+    expect(byId["p-invalid"].bucket).toBe("Resolver exclusion");
+    expect(byId["p-invalid"].exclusionReason).toBe("invalid provenance");
+    expect(byId["p-good"].bucket).toBe("Included");
+    expect(resolution.scope.baselineCount).toBe(1);
+  });
+
+  it("keeps an invalid-dimension packet when that dimension is not filtered", () => {
+    const resolution = resolveEvidenceLedgerFromSource({
+      method,
+      template,
+      contributions: [
+        {
+          ...base,
+          id: "p-invalid",
+          invalidDimensions: ["education_level"],
+          dimensionValues: {
+            collection_date: { status: "recorded", value: "2024-03-01" },
+          },
+        },
+      ],
+      filters: [
+        {
+          fieldId: "collection_date",
+          control: "range",
+          min: "2024-01-01",
+          max: "2024-12-31",
+        },
+      ],
+    });
+    expect(resolution.contributions[0].bucket).toBe("Included");
+    expect(resolution.scope.baselineCount).toBe(1);
   });
 });

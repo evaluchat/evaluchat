@@ -19,10 +19,14 @@ export type CatalogResult = {
   id: string;
   title: string;
   description: string;
-  kind: "template" | "method";
+  kind: "template" | "method" | "ledger";
   templateKind?: "markdown" | "form";
   disabled?: boolean;
   status?: string;
+  reason?: string;
+  methodVersion?: string;
+  evidenceTemplate?: { id: string; version: string };
+  acceptedEvidenceCount?: number;
 };
 
 export function buildWorkspaceItemCreateBody(
@@ -30,6 +34,9 @@ export function buildWorkspaceItemCreateBody(
 ): Record<string, unknown> {
   if (result.kind === "method") {
     return { kind: "method", methodId: result.id };
+  }
+  if (result.kind === "ledger") {
+    return { kind: "ledger", methodId: result.id };
   }
   return { kind: "template", templateId: result.id };
 }
@@ -40,7 +47,9 @@ export function CreateWorkspaceItemDialog({
   onCreated: (item: WorkspaceItem) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<"template" | "method">("template");
+  const [kind, setKind] = useState<"template" | "method" | "ledger">(
+    "template"
+  );
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CatalogResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,7 +67,10 @@ export function CreateWorkspaceItemDialog({
     )
       .then((response) => response.json())
       .then(
-        (body: { kind: "template" | "method"; results?: CatalogResult[] }) => {
+        (body: {
+          kind: "template" | "method" | "ledger";
+          results?: CatalogResult[];
+        }) => {
           if (!cancelled) {
             setResults(
               (body.results || []).map((result) => ({
@@ -124,9 +136,8 @@ export function CreateWorkspaceItemDialog({
         <DialogHeader>
           <DialogTitle>Create workspace item</DialogTitle>
           <DialogDescription>
-            Search reviewed templates and methods. Markdown templates are
-            editable. Method run briefs are not listed here; choose Methods to
-            start an assignment.
+            Search reviewed templates, methods, and published evidence-ledger
+            sources. Markdown templates are editable.
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3">
@@ -135,12 +146,12 @@ export function CreateWorkspaceItemDialog({
             className="border-0 bg-transparent shadow-none focus-visible:ring-0"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search templates or methods"
+            placeholder="Search templates, methods, or ledgers"
             autoFocus
           />
         </div>
         <div className="flex gap-2">
-          {(["template", "method"] as const).map((option) => (
+          {(["template", "ledger", "method"] as const).map((option) => (
             <Button
               key={option}
               variant={kind === option ? "default" : "outline"}
@@ -149,7 +160,11 @@ export function CreateWorkspaceItemDialog({
                 setKind(option);
               }}
             >
-              {option === "template" ? "Templates" : "Methods"}
+              {option === "template"
+                ? "Templates"
+                : option === "ledger"
+                  ? "Evidence Ledger"
+                  : "Methods"}
             </Button>
           ))}
         </div>
@@ -184,6 +199,15 @@ export function CreateWorkspaceItemDialog({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {result.description}
                 </p>
+                {result.kind === "ledger" && result.evidenceTemplate && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {result.id}@{result.methodVersion} ·{" "}
+                    {result.evidenceTemplate.id}@
+                    {result.evidenceTemplate.version} ·{" "}
+                    {result.acceptedEvidenceCount} accepted evidence
+                    {result.reason ? ` · ${result.reason}` : ""}
+                  </p>
+                )}
                 {result.kind === "template" &&
                   result.templateKind === "form" && (
                     <p className="mt-2 text-xs font-medium text-amber-700">

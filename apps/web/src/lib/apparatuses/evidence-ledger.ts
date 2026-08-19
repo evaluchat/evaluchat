@@ -8,7 +8,9 @@ import {
   type ApparatusEvidenceFieldDefinition,
   type LedgerDimension,
   type LedgerMissingSemantics,
+  type LedgerScopeFilter,
 } from "@opencanvas/shared";
+export type { LedgerScopeFilter } from "@opencanvas/shared";
 
 export type EvidenceLedgerBucket =
   | "Included"
@@ -29,19 +31,6 @@ export type LedgerDimensionValue =
   | { status: "unknown"; value: LedgerDeclaredValue };
 
 export type LedgerScopeValue = LedgerDimensionValue | { status: "unavailable" };
-
-export type LedgerScopeFilter =
-  | {
-      fieldId: string;
-      control: "multi-select";
-      values: string[];
-    }
-  | {
-      fieldId: string;
-      control: "range";
-      min?: string | number;
-      max?: string | number;
-    };
 
 export type EvidenceLedgerDimension = {
   id: string;
@@ -77,6 +66,12 @@ export type EvidenceLedgerContribution = {
   scopeValues: Record<string, LedgerScopeValue>;
   bucket: EvidenceLedgerBucket;
   exclusionReason?: EvidenceLedgerExclusionReason;
+  /** Dimensions whose recorded value is invalid (out of options / bad date /
+   * non-finite number). Mirrors the file-backed resolver: the dimension is
+   * omitted from `dimensionValues`; the packet is excluded ONLY when a filter
+   * targets such a dimension (invalid provenance), never for unfiltered dims.
+   */
+  invalidDimensions?: string[];
 };
 
 export type EvidenceLedgerManifest = {
@@ -529,6 +524,15 @@ function validateScopeFilters(
         );
       }
       if (
+        dimensions[0].type === "number" &&
+        typeof endpoint === "number" &&
+        !Number.isFinite(endpoint)
+      ) {
+        throw new EvidenceLedgerResolutionError(
+          `Scope filter ${filter.fieldId} range endpoints must be finite numbers`
+        );
+      }
+      if (
         dimensions[0].type === "date" &&
         endpoint !== undefined &&
         typeof endpoint === "string" &&
@@ -840,6 +844,175 @@ export function resolveEvidenceLedger(
     scope: {
       filters,
       baselineCount: acceptedEvidence.length,
+      bucketCounts,
+    },
+    manifest,
+    manifestHash: sha256(JSON.stringify(canonicalize(manifest))),
+  };
+}
+
+export type ResolveEvidenceLedgerSourceOptions = {
+  /** The current method and its current template selected by the ledger. */
+  method: EvidenceLedgerMethod;
+  template: EvidenceLedgerTemplate;
+  /** Normalized packets fetched by the source loader. No browser data is used. */
+  contributions: EvidenceLedgerContribution[];
+  filters?: LedgerScopeFilter[];
+};
+
+function validateSourceScopeFilters(
+  filters: LedgerScopeFilter[],
+  template: EvidenceLedgerTemplate
+): void {
+  const dimensions = new Map(
+    template.dimensions.map((dimension) => [dimension.id, dimension])
+  );
+  for (const filter of filters) {
+    const dimension = dimensions.get(filter.fieldId);
+    if (!dimension) {
+      throw new EvidenceLedgerResolutionError(
+        `Scope filter ${filter.fieldId} is not declared by the selected evidence template`
+      );
+    }
+    if (dimension.control !== filter.control) {
+      throw new EvidenceLedgerResolutionError(
+        `Scope filter ${filter.fieldId} has an incompatible control`
+      );
+    }
+    if (filter.control === "multi-select") {
+      if (
+        dimension.type !== "select" ||
+        filter.values.some((value) => !dimension.options?.includes(value))
+      ) {
+        throw new EvidenceLedgerResolutionError(
+          `Scope filter ${filter.fieldId} uses a value not declared by the selected evidence template`
+        );
+      }
+      continue;
+    }
+    const expectedType = dimension.type === "number" ? "number" : "string";
+    if (dimension.type !== "number" && dimension.type !== "date") {
+      throw new EvidenceLedgerResolutionError(
+        `Scope filter ${filter.fieldId} must use a multi-select control`
+      );
+    }
+    for (const endpoint of [filter.min, filter.max]) {
+      if (endpoint !== undefined && typeof endpoint !== expectedType) {
+        throw new EvidenceLedgerResolutionError(
+          `Scope filter ${filter.fieldId} range endpoints must be ${expectedType}`
+        );
+      }
+      if (typeof endpoint === "number" && !Number.isFinite(endpoint)) {
+        throw new EvidenceLedgerResolutionError(
+          `Scope filter ${filter.fieldId} range endpoints must be finite numbers`
+        );
+      }
+      if (
+        dimension.type === "date" &&
+        typeof endpoint === "string" &&
+        !isValidDate(endpoint)
+      ) {
+        throw new EvidenceLedgerResolutionError(
+          `Scope filter ${filter.fieldId} range endpoints must be valid dates in YYYY-MM-DD format`
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Resolve packets obtained from the public research repository. It deliberately
+ * shares filter canonicalisation and bucket semantics with the file-backed
+ * resolver above, so clients cannot evaluate or forge scope predicates.
+ */
+export function resolveEvidenceLedgerFromSource(
+  options: ResolveEvidenceLedgerSourceOptions
+): EvidenceLedgerResolution {
+  const filters = canonicalFilters(options.filters ?? []);
+  validateSourceScopeFilters(filters, options.template);
+
+  const contributions: EvidenceLedgerContribution[] = options.contributions
+    .map((source): EvidenceLedgerContribution => {
+      if (source.bucket === "Resolver exclusion") return { ...source };
+
+      const scopeValues: Record<string, LedgerScopeValue> = {};
+      let unavailable = false;
+      let unknown = false;
+      let outside = false;
+      for (const filter of filters) {
+        // A filter targeting an invalid recorded value is a resolver exclusion
+        // (same as the file-backed resolver's classifyScope invalid path).
+        if (source.invalidDimensions?.includes(filter.fieldId)) {
+          return {
+            ...source,
+            scopeValues: {
+              ...scopeValues,
+              [filter.fieldId]: { status: "unavailable" },
+            },
+            bucket: "Resolver exclusion",
+            exclusionReason: "invalid provenance",
+          };
+        }
+        const value = source.dimensionValues[filter.fieldId];
+        if (!value) {
+          scopeValues[filter.fieldId] = { status: "unavailable" };
+          unavailable = true;
+          continue;
+        }
+        scopeValues[filter.fieldId] = value;
+        if (value.status === "unknown") {
+          unknown = true;
+          continue;
+        }
+        if (filter.control === "multi-select") {
+          if (
+            typeof value.value !== "string" ||
+            !filter.values.includes(value.value)
+          ) {
+            outside = true;
+          }
+        } else if (
+          (filter.min !== undefined && value.value < filter.min) ||
+          (filter.max !== undefined && value.value > filter.max)
+        ) {
+          outside = true;
+        }
+      }
+
+      const bucket: EvidenceLedgerBucket = unavailable
+        ? "Unavailable"
+        : unknown
+          ? "Unknown"
+          : outside
+            ? "Outside declared scope"
+            : "Included";
+      return { ...source, scopeValues, bucket };
+    })
+    .sort((left, right) => byCodepoint(left.path, right.path));
+
+  const bucketCounts: Record<EvidenceLedgerBucket, number> = {
+    Included: 0,
+    "Outside declared scope": 0,
+    Unknown: 0,
+    Unavailable: 0,
+    "Resolver exclusion": 0,
+  };
+  for (const contribution of contributions)
+    bucketCounts[contribution.bucket] += 1;
+
+  const methods = [{ ...options.method, evidenceTemplate: options.template }];
+  const manifest: EvidenceLedgerManifest = { methods, filters, contributions };
+  return {
+    methods,
+    contributions,
+    acceptedEvidence: contributions.filter(
+      (contribution) => contribution.bucket !== "Resolver exclusion"
+    ),
+    scope: {
+      filters,
+      baselineCount: contributions.filter(
+        (contribution) => contribution.bucket !== "Resolver exclusion"
+      ).length,
       bucketCounts,
     },
     manifest,
