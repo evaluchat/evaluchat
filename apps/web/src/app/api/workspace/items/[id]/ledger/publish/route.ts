@@ -168,9 +168,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // The same validator used by evidence submission verifies both required
     // owner declarations before any branch, commit, or PR is created.
     validateLedgerPublicationDeclarations(item.snapshot, body.values);
+    // Reaching this point means both declarations were confirmed by the
+    // server-side validator; pass that fact to the GitHub publication client.
+    const consentConfirmed = true;
 
     const computedHash = ledgerRenderHash(item.snapshot, item.config);
-    if (item.snapshot.renderHash !== computedHash) {
+    // Preserve whether the sealed snapshot already matched its rendered body.
+    // A repaired stored hash may still be published for human review, but it
+    // must not qualify that publication for automatic approval and merging.
+    const renderHashMatches = item.snapshot.renderHash === computedHash;
+    if (!renderHashMatches) {
       item = await updateLedgerSnapshotPublication(auth.user.id, id, {
         renderHash: computedHash,
       });
@@ -182,12 +189,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
       filePath: filePath(item.snapshot.ledgerId, item.snapshot.methodId),
       markdown,
       body: publicationBody(item.snapshot),
+      renderHashMatches,
+      consentConfirmed,
+      sourceCommit: item.snapshot.sourceCommit,
       ...(retry ? { retry } : {}),
     });
     const publication = {
-      status: "draft" as const,
+      status: pullRequest.status,
       pullRequestUrl: pullRequest.url,
       pullRequestNumber: pullRequest.number,
+      ...(pullRequest.status === "merged" && pullRequest.mergedAt
+        ? { mergedAt: pullRequest.mergedAt }
+        : {}),
     };
     await updateLedgerSnapshotPublication(auth.user.id, id, { publication });
     return NextResponse.json({
@@ -195,6 +208,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       pullRequestUrl: pullRequest.url,
       filePath: filePath(item.snapshot.ledgerId, item.snapshot.methodId),
       lintConclusion: pullRequest.lintConclusion,
+      ...(pullRequest.autoMergeError
+        ? { autoMergeError: pullRequest.autoMergeError }
+        : {}),
     });
   } catch (error) {
     if (error instanceof WorkspaceItemNotFoundError) {
