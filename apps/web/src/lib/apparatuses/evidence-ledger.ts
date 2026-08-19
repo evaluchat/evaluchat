@@ -80,15 +80,7 @@ export type EvidenceLedgerContribution = {
   exclusionReason?: EvidenceLedgerExclusionReason;
 };
 
-export type EvidenceLedgerQuestion = {
-  id: string;
-  title: string;
-  path: string;
-  version?: string;
-};
-
 export type EvidenceLedgerManifest = {
-  question: EvidenceLedgerQuestion;
   methods: Array<{
     id: string;
     version: string;
@@ -100,7 +92,6 @@ export type EvidenceLedgerManifest = {
 };
 
 export type EvidenceLedgerResolution = {
-  question: EvidenceLedgerQuestion;
   methods: EvidenceLedgerMethod[];
   /** Every packet encountered under methods/, including resolver exclusions. */
   contributions: EvidenceLedgerContribution[];
@@ -779,11 +770,10 @@ function resolveContribution(
 }
 
 /**
- * Generate a canonical source-linked scope manifest for all methods.
- * It is intentionally file-backed and pure: no
- * ranking, inference, prose parsing, or mutation is performed.
- * 
- * @deprecated Use method-bound evidence ledger generation instead
+ * Generate a canonical, source-linked scope manifest for all methods.
+ * It is intentionally file-backed and pure: no ranking, inference,
+ * prose parsing, or mutation is performed.
+ *
  * @param options Configuration for evidence ledger resolution
  * @returns EvidenceLedgerResolution containing all methods and their evidence
  */
@@ -791,22 +781,11 @@ export function resolveEvidenceLedger(
   options: ResolveEvidenceLedgerOptions
 ): EvidenceLedgerResolution {
   const root = path.resolve(options.researchRoot);
-  
-  // Generate a placeholder question object for API compatibility
-  const question: EvidenceLedgerQuestion = {
-    id: "method-bound",
-    title: "Method-bound evidence ledger",
-    path: "method-bound/placeholder",
-    version: "1.0.0"
-  };
 
   const allMethods = readMethods(root);
-  
-  // For method-bound evidence, we consider ALL methods, not just question-linked ones
-  const linkedMethods = allMethods; // Now all methods are considered
-  
+
   const templatesByMethod = new Map<string, Map<string, ResolvedTemplate>>();
-  for (const method of linkedMethods) {
+  for (const method of allMethods) {
     const templates = resolveTemplates(root, method);
     const currentTemplatePath = path.join(
       root,
@@ -840,13 +819,7 @@ export function resolveEvidenceLedger(
     const templates = templatesByMethod.get(method.id) ?? new Map();
     for (const absolutePath of markdownFiles(evidenceRoot)) {
       contributions.push(
-        resolveContribution(
-          root,
-          filters,
-          method,
-          templates,
-          absolutePath
-        )
+        resolveContribution(root, filters, method, templates, absolutePath)
       );
     }
   }
@@ -865,21 +838,19 @@ export function resolveEvidenceLedger(
   for (const contribution of contributions) {
     bucketCounts[contribution.bucket] += 1;
   }
-  const methods = linkedMethods.map((method) => ({
+  const methods = allMethods.map((method) => ({
     id: method.id,
     version: method.version,
     path: method.path,
     evidenceTemplate: publicTemplate(method.template!),
   }));
   const manifest: EvidenceLedgerManifest = {
-    question,
     methods,
     filters,
     contributions,
   };
 
   return {
-    question,
     methods,
     contributions,
     acceptedEvidence,

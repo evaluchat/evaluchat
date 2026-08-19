@@ -227,51 +227,6 @@ describe("Evidence Ledger resolver", () => {
     });
   });
 
-  it("returns a method-bound question placeholder for API compatibility", () => {
-    const root = researchRoot();
-    writeMethod(root, "alpha-method");
-    writeTemplate(root, "alpha-method", "1.0.0", alphaFields);
-
-    const first = resolveEvidenceLedger({
-      researchRoot: root,
-    });
-    const second = resolveEvidenceLedger({
-      researchRoot: root,
-    });
-
-    expect(first.question).toEqual({
-      id: "method-bound",
-      title: "Method-bound evidence ledger",
-      path: "method-bound/placeholder",
-      version: "1.0.0",
-    });
-    expect(first.methods).toEqual([
-      {
-        id: "alpha-method",
-        version: "1.0.0",
-        path: "methods/alpha-method/alpha-method.en.md",
-        evidenceTemplate: {
-          id: "evidence-template",
-          version: "1.0.0",
-          path: "methods/alpha-method/evidence-template.en.md",
-          dimensions: [
-            {
-              id: "education_level",
-              type: "select",
-              role: "context",
-              control: "multi-select",
-              options: ["k12", "adult", "unknown"],
-              missingSemantics: "unknown",
-            },
-          ],
-        },
-      },
-    ]);
-    expect(first.contributions).toEqual([]);
-    expect(first.scope.baselineCount).toBe(0);
-    expect(first.manifestHash).toBe(second.manifestHash);
-  });
-
   it("merges contributing methods and keeps unknown, unavailable, and exclusions distinct", () => {
     const root = researchRoot();
     writeMethod(root, "alpha-method");
