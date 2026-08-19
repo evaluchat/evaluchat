@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ExternalLink } from "lucide-react";
 import type { EvidenceLedgerManifest } from "@/lib/apparatuses/evidence-ledger";
 import type { LedgerSnapshotWorkspaceItem } from "@/lib/workspace/types";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const VIEWS = [
   "Scope",
@@ -89,6 +99,7 @@ export function LedgerSnapshotCanvas({
           ))}
         </ul>
       </header>
+      <LedgerPublicationPanel item={item} />
       <nav aria-label="Ledger snapshot views" className="flex flex-wrap gap-2">
         {VIEWS.map((name) => (
           <button
@@ -168,6 +179,319 @@ export function LedgerSnapshotCanvas({
         )}
       </section>
     </main>
+  );
+}
+
+type Publication = NonNullable<LedgerSnapshotWorkspaceItem["publication"]>;
+
+export function publicationStatusText(publication?: Publication): string {
+  if (!publication) return "Unpublished";
+  return publication.status === "merged"
+    ? "Merged"
+    : "Draft PR — pending human merge";
+}
+
+export function publicationAccessError(reason?: string): string | undefined {
+  if (reason !== "missing_write_access") return undefined;
+  return "Your connected GitHub account needs collaborator write access to evaluchat/research. No branch or pull request was created.";
+}
+
+export function LedgerPublicationPanel({
+  item,
+}: {
+  item: LedgerSnapshotWorkspaceItem;
+}) {
+  const [publication, setPublication] = useState(item.publication);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [preview, setPreview] = useState<string>();
+  const [previewError, setPreviewError] = useState<string>();
+  const [publishError, setPublishError] = useState<string>();
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [authorised, setAuthorised] = useState(false);
+  const [anonymised, setAnonymised] = useState(false);
+  const [publicData, setPublicData] = useState(false);
+
+  useEffect(() => setPublication(item.publication), [item.publication]);
+
+  const route = `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/publish`;
+  const filePath = `evidence-ledgers/${item.snapshot.ledgerId}.en.md`;
+
+  async function openPreview() {
+    setDialogOpen(true);
+    setPreviewError(undefined);
+    setPublishError(undefined);
+    setIsLoadingPreview(true);
+    try {
+      const response = await fetch(route, { credentials: "include" });
+      const body = (await response.json()) as {
+        markdown?: string;
+        error?: string;
+      };
+      if (!response.ok || !body.markdown) {
+        throw new Error(
+          body.error || "Could not load the publication preview."
+        );
+      }
+      setPreview(body.markdown);
+    } catch (error) {
+      setPreviewError(
+        error instanceof Error
+          ? error.message
+          : "Could not load the publication preview."
+      );
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  }
+
+  async function publish() {
+    setIsPublishing(true);
+    setPublishError(undefined);
+    try {
+      const response = await fetch(route, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          values: {
+            publication_authorisation: authorised
+              ? "confirmed-authorised-to-publish"
+              : "not-confirmed-do-not-submit",
+            anonymisation_status: anonymised
+              ? "confirmed-no-student-identifiers-or-raw-student-material"
+              : "needs-human-privacy-review",
+          },
+        }),
+      });
+      const body = (await response.json()) as {
+        publication?: Publication;
+        error?: string;
+        reason?: string;
+      };
+      if (!response.ok || !body.publication) {
+        throw new Error(
+          body.error ||
+            publicationAccessError(body.reason) ||
+            "Could not publish the ledger snapshot."
+        );
+      }
+      setPublication(body.publication);
+      setDialogOpen(false);
+    } catch (error) {
+      setPublishError(
+        error instanceof Error
+          ? error.message
+          : "Could not publish the ledger snapshot."
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
+  async function refreshStatus() {
+    setIsRefreshing(true);
+    setPublishError(undefined);
+    try {
+      const response = await fetch(`${route}/status`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const body = (await response.json()) as {
+        publication?: Publication;
+        actual?: { state?: string; merged?: boolean };
+        error?: string;
+      };
+      if (!response.ok || !body.publication) {
+        throw new Error(body.error || "Could not refresh publication status.");
+      }
+      setPublication(body.publication);
+      if (!body.actual?.merged) {
+        setPublishError("The recorded pull request has not merged yet.");
+      }
+    } catch (error) {
+      setPublishError(
+        error instanceof Error
+          ? error.message
+          : "Could not refresh publication status."
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  return (
+    <section
+      className="rounded-lg border bg-card p-5"
+      aria-label="Ledger publication"
+      data-testid="ledger-publication"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">Publish snapshot</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {publicationStatusText(publication)}
+          </p>
+        </div>
+        {!publication && (
+          <Button
+            onClick={() => void openPreview()}
+            data-testid="ledger-publish"
+          >
+            Publish
+          </Button>
+        )}
+        {publication?.status === "draft" && (
+          <Button
+            variant="outline"
+            onClick={() => void refreshStatus()}
+            disabled={isRefreshing}
+            data-testid="ledger-refresh-publication"
+          >
+            {isRefreshing ? "Refreshing…" : "Refresh status"}
+          </Button>
+        )}
+      </div>
+      {publication?.pullRequestUrl && (
+        <a
+          href={publication.pullRequestUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-1 text-sm text-primary underline"
+        >
+          PR #{publication.pullRequestNumber}
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      )}
+      {publication?.status === "draft" && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Pending human merge. This sealed snapshot remains an unpublished
+          workspace artifact until its draft PR merges.
+        </p>
+      )}
+      {publication?.status === "merged" && (
+        <p className="mt-2 text-sm text-emerald-700">
+          Merged{publication.mergedAt ? ` at ${publication.mergedAt}` : ""}.
+        </p>
+      )}
+      {publishError && (
+        <p className="mt-3 text-sm text-destructive" role="alert">
+          {publishError}
+        </p>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Publish sealed Ledger Snapshot</DialogTitle>
+            <DialogDescription>
+              This creates one draft PR under your connected GitHub identity. It
+              will not merge automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Destination</dt>
+              <dd>evaluchat/research</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">File</dt>
+              <dd className="font-mono text-xs">{filePath}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Source commit</dt>
+              <dd className="break-all font-mono text-xs">
+                {item.snapshot.sourceCommit}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Input fingerprint</dt>
+              <dd className="break-all font-mono text-xs">
+                {item.snapshot.inputFingerprint}
+              </dd>
+            </div>
+          </dl>
+          <section>
+            <h3 className="text-sm font-medium">Read-only diff preview</h3>
+            {isLoadingPreview && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Rendering preview…
+              </p>
+            )}
+            {previewError && (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {previewError}
+              </p>
+            )}
+            {preview && (
+              <pre
+                className="mt-2 max-h-72 overflow-auto rounded-md border bg-muted p-3 text-xs"
+                data-testid="ledger-publish-preview"
+              >
+                {preview}
+              </pre>
+            )}
+          </section>
+          <fieldset className="space-y-3 rounded-md border p-3">
+            <legend className="px-1 text-sm font-medium">
+              Public-safety declarations
+            </legend>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={authorised}
+                onChange={(event) => setAuthorised(event.target.checked)}
+                data-testid="ledger-publication-authorisation"
+              />
+              I am authorised to publish this evidence ledger.
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={anonymised}
+                onChange={(event) => setAnonymised(event.target.checked)}
+                data-testid="ledger-anonymisation-status"
+              />
+              It contains no student identifiers or raw student material.
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={publicData}
+                onChange={(event) => setPublicData(event.target.checked)}
+                data-testid="ledger-public-data-declaration"
+              />
+              I confirm the rendered file is public data for evaluchat/research.
+            </label>
+          </fieldset>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void publish()}
+              disabled={
+                isPublishing ||
+                isLoadingPreview ||
+                !preview ||
+                !authorised ||
+                !anonymised ||
+                !publicData
+              }
+              data-testid="ledger-confirm-publish"
+            >
+              {isPublishing ? "Creating draft PR…" : "Create draft PR"}
+            </Button>
+          </DialogFooter>
+          {publishError && (
+            <p className="text-sm text-destructive" role="alert">
+              {publishError}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+    </section>
   );
 }
 
