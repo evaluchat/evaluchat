@@ -95,6 +95,7 @@ describe("ledger publish route", () => {
       number: 85,
       url: "https://github.com/evaluchat/research/pull/85",
       branch: "ledger/ledger_demo-abcdef012345",
+      status: "draft",
       lintConclusion: "success",
     });
     harness.updateLedgerSnapshotPublication.mockImplementation(
@@ -146,6 +147,9 @@ describe("ledger publish route", () => {
         ledgerId: "ledger_demo",
         inputFingerprint: "sha256:abcdef0123456789",
         filePath: "methods/demo-method/evidence/ledgers/ledger_demo.en.md",
+        renderHashMatches: true,
+        consentConfirmed: true,
+        sourceCommit: "commit123",
       })
     );
     const openInput = harness.openLedgerPullRequest.mock.calls[0][0];
@@ -163,6 +167,63 @@ describe("ledger publish route", () => {
         },
       }
     );
+  });
+
+  it("passes a failed render-integrity marker through to the draft PR fallback", async () => {
+    harness.ledgerRenderHash.mockReturnValue("sha256:recomputed");
+
+    const response = await POST(request({ values: validValues }), context());
+
+    expect(response.status).toBe(200);
+    expect(harness.openLedgerPullRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        renderHashMatches: false,
+        consentConfirmed: true,
+      })
+    );
+    expect(harness.updateLedgerSnapshotPublication).toHaveBeenNthCalledWith(
+      1,
+      "user-1",
+      "wi_snapshot",
+      { renderHash: "sha256:recomputed" }
+    );
+    expect(harness.updateLedgerSnapshotPublication).toHaveBeenLastCalledWith(
+      "user-1",
+      "wi_snapshot",
+      expect.objectContaining({
+        publication: expect.objectContaining({ status: "draft" }),
+      })
+    );
+  });
+
+  it("persists an automatically merged ledger publication returned by GitHub", async () => {
+    harness.openLedgerPullRequest.mockResolvedValueOnce({
+      number: 85,
+      url: "https://github.com/evaluchat/research/pull/85",
+      branch: "ledger/ledger_demo-abcdef012345",
+      status: "merged",
+      mergedAt: "2026-08-20T10:00:00.000Z",
+      lintConclusion: "success",
+    });
+
+    const response = await POST(request({ values: validValues }), context());
+
+    expect(response.status).toBe(200);
+    expect(harness.updateLedgerSnapshotPublication).toHaveBeenCalledWith(
+      "user-1",
+      "wi_snapshot",
+      {
+        publication: {
+          status: "merged",
+          pullRequestUrl: "https://github.com/evaluchat/research/pull/85",
+          pullRequestNumber: 85,
+          mergedAt: "2026-08-20T10:00:00.000Z",
+        },
+      }
+    );
+    expect(await response.json()).toMatchObject({
+      publication: { status: "merged", mergedAt: "2026-08-20T10:00:00.000Z" },
+    });
   });
 
   it("does not create a second PR for an already published snapshot", async () => {

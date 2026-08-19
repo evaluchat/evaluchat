@@ -173,6 +173,12 @@ export type OpenLedgerPullRequestInput = {
   filePath: string;
   markdown: string;
   body: string;
+  /** Verified by the publish route against the sealed snapshot's rendered body. */
+  renderHashMatches: boolean;
+  /** Set only after server-side publication declarations have been validated. */
+  consentConfirmed: boolean;
+  /** Immutable source revision named by the sealed snapshot. */
+  sourceCommit: string;
   /** A closed prior publication needs a distinct branch, never a force-push. */
   retry?: number;
 };
@@ -181,7 +187,11 @@ export type OpenLedgerPullRequestResult = {
   number: number;
   url: string;
   branch: string;
+  status: "draft" | "merged";
+  mergedAt?: string;
   lintConclusion?: string;
+  /** An automatic merge failure leaves the draft PR available for human merge. */
+  autoMergeError?: string;
 };
 
 export function ledgerBranch(input: OpenLedgerPullRequestInput): string {
@@ -190,7 +200,45 @@ export function ledgerBranch(input: OpenLedgerPullRequestInput): string {
   return `ledger/${safeBranchPart(input.ledgerId)}-${safeBranchPart(fingerprint.slice(0, 12))}${suffix}`;
 }
 
-/** Create exactly one immutable ledger file in a draft PR. Never merge it. */
+function isPinnedCommitSha(value: string): boolean {
+  return /^[0-9a-f]{40}$/i.test(value);
+}
+
+/**
+ * Require the pinned source revision to resolve in the main lineage, not just
+ * to look like a commit id. A comparison result of `behind` or `identical`
+ * means the source commit is an ancestor of the main revision used for this PR.
+ */
+async function sourceCommitIsOnMainLineage(
+  sourceCommit: string,
+  mainSha: string
+): Promise<boolean> {
+  if (!isPinnedCommitSha(sourceCommit)) return false;
+  try {
+    const comparison = await githubRequest(
+      `/repos/${RESEARCH_REPOSITORY}/compare/${encodeURIComponent(sourceCommit)}...${encodeURIComponent(mainSha)}`,
+      { method: "GET" }
+    );
+    return ["behind", "identical"].includes(comparison.status);
+  } catch {
+    // An absent commit, a non-comparable revision, or a GitHub read failure is
+    // not sufficient evidence for automatic publication. Leave the draft open.
+    return false;
+  }
+}
+
+function approvalBody(input: OpenLedgerPullRequestInput): string {
+  return [
+    "Auto-approved: system-generated Evidence Ledger (evaluation of evaluchat ledger service). Integrity criteria met (render_hash deterministic, source_commit pinned, consent confirmed, okf-lint pass).",
+    `Fingerprint: ${input.inputFingerprint}`,
+  ].join("\n");
+}
+
+/**
+ * Create exactly one immutable ledger file in a draft PR. Draft PRs are kept
+ * deliberately: GitHub permits their review and squash merge, while a failed
+ * integrity gate still leaves the established human-review workflow intact.
+ */
 export async function openLedgerPullRequest(
   input: OpenLedgerPullRequestInput
 ): Promise<OpenLedgerPullRequestResult> {
@@ -241,7 +289,84 @@ export async function openLedgerPullRequest(
     throw new Error("GitHub pull request response was incomplete");
   }
   const lint = await waitForOkfLint(headSha);
-  return { number, url, branch, lintConclusion: lint.conclusion };
+  const baseResult = {
+    number,
+    url,
+    branch,
+    status: "draft" as const,
+    lintConclusion: lint.conclusion,
+  };
+
+  if (!lint.passed || !input.renderHashMatches || !input.consentConfirmed) {
+    return baseResult;
+  }
+
+  const sourceCommitValid = await sourceCommitIsOnMainLineage(
+    input.sourceCommit,
+    baseSha
+  );
+  if (!sourceCommitValid) return baseResult;
+
+  try {
+    await githubRequest(`/repos/${RESEARCH_REPOSITORY}/pulls/${number}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draft: false }),
+    });
+    await githubRequest(
+      `/repos/${RESEARCH_REPOSITORY}/pulls/${number}/reviews`,
+      jsonBody({ event: "APPROVE", body: approvalBody(input) })
+    );
+    const merge = await githubRequest(
+      `/repos/${RESEARCH_REPOSITORY}/pulls/${number}/merge`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merge_method: "squash", sha: headSha }),
+      }
+    );
+    if (merge.merged !== true) {
+      throw new Error(
+        `GitHub did not merge ledger pull request: ${String(merge.message || "merge was not completed")}`
+      );
+    }
+    let mergedAt =
+      typeof merge.merged_at === "string" ? merge.merged_at : undefined;
+    if (!mergedAt) {
+      try {
+        mergedAt = (await getLedgerPullRequestStatus(number)).mergedAt;
+      } catch {
+        // The merge response is authoritative. Retain a publication timestamp
+        // even if the follow-up read is temporarily unavailable; the status
+        // refresh route will reconcile it with GitHub's merged_at value.
+      }
+    }
+    return {
+      ...baseResult,
+      status: "merged",
+      mergedAt: mergedAt || new Date().toISOString(),
+    };
+  } catch (error) {
+    try {
+      const status = await getLedgerPullRequestStatus(number);
+      if (status.merged) {
+        return {
+          ...baseResult,
+          status: "merged",
+          mergedAt: status.mergedAt,
+        };
+      }
+    } catch {
+      // Preserve the recoverable draft fallback when GitHub cannot confirm it.
+    }
+    // The PR and approval remain visible for a human to complete the merge.
+    // Return draft state so the route can persist that recoverable fallback.
+    return {
+      ...baseResult,
+      autoMergeError:
+        error instanceof Error ? error.message : "Automatic merge failed",
+    };
+  }
 }
 
 export type OpenEvidencePullRequestInput = {
