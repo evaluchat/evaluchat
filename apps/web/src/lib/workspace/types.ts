@@ -1,4 +1,8 @@
-import type { ApparatusConfiguration } from "@opencanvas/shared";
+import type {
+  ApparatusConfiguration,
+  LedgerDimension,
+  LedgerMissingSemantics,
+} from "@opencanvas/shared";
 
 export const DEFAULT_WORKSPACE_TEMPLATE_ID = "evaluchat-getting-started";
 export const DEFAULT_METHOD_PROFILE_ID = "canonical-constrained-dialogue";
@@ -26,6 +30,8 @@ export type FormFieldDefinition = {
   max?: number;
   minDate?: string;
   maxDate?: string;
+  ledgerDimension?: LedgerDimension;
+  missingSemantics?: LedgerMissingSemantics;
 };
 
 export type FormValue = string | number | string[];

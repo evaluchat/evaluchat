@@ -16,6 +16,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
+import {
+  EVIDENCE_FIELD_TYPES,
+  ledgerDimensionValidationError,
+  type ApparatusEvidenceFieldDefinition,
+} from "@opencanvas/shared";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -32,19 +37,13 @@ type EvidenceTemplate = {
   id: string;
   version: string;
   defaultStage?: string;
-  fields: Record<string, unknown>;
+  fields: Record<string, ApparatusEvidenceFieldDefinition>;
   layoutMarkdown: string;
   guidance: string;
   sourcePath: string;
 };
 
-const EVIDENCE_FIELD_TYPES = new Set([
-  "text",
-  "textarea",
-  "select",
-  "number",
-  "date",
-]);
+const EVIDENCE_FIELD_TYPE_SET = new Set<string>(EVIDENCE_FIELD_TYPES);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -125,14 +124,32 @@ function parseEvidenceTemplate(
       contractError(`fields.${fieldId}`, "must be a map");
     }
     const fieldType = definition.type;
-    if (typeof fieldType !== "string" || !EVIDENCE_FIELD_TYPES.has(fieldType)) {
+    if (
+      typeof fieldType !== "string" ||
+      !EVIDENCE_FIELD_TYPE_SET.has(fieldType)
+    ) {
       contractError(
         `fields.${fieldId}.type`,
         "must be one of text, textarea, select, number, date",
       );
     }
-    if (fieldType === "select" && !Array.isArray(definition.options)) {
-      contractError(`fields.${fieldId}.options`, "must be present for select");
+    if (fieldType === "select") {
+      const options = definition.options;
+      if (!Array.isArray(options)) {
+        contractError(
+          `fields.${fieldId}.options`,
+          "must be present for select",
+        );
+      } else if (!options.every((option) => typeof option === "string")) {
+        contractError(`fields.${fieldId}.options`, "must contain only strings");
+      }
+    }
+    const ledgerError = ledgerDimensionValidationError(definition);
+    if (ledgerError) {
+      contractError(
+        `fields.${fieldId}.${ledgerError.field}`,
+        ledgerError.message,
+      );
     }
   }
 
@@ -159,7 +176,10 @@ function parseEvidenceTemplate(
     id: templateId,
     version: templateVersion,
     ...(defaultStage !== undefined ? { defaultStage } : {}),
-    fields: frontmatter.fields,
+    fields: frontmatter.fields as Record<
+      string,
+      ApparatusEvidenceFieldDefinition
+    >,
     layoutMarkdown: source.slice(match[0].length),
     guidance: assistant.guidance ?? "",
     sourcePath: path.posix.join("methods", methodId, "evidence-template.en.md"),
@@ -361,16 +381,23 @@ export function assertMethodEvidenceTemplatesBound(
       const fieldType = definition.type;
       if (
         typeof fieldType !== "string" ||
-        !EVIDENCE_FIELD_TYPES.has(fieldType)
+        !EVIDENCE_FIELD_TYPE_SET.has(fieldType)
       ) {
         throw new Error(
           `Method ${methodId} evidence_template fields.${fieldId}.type must be one of text, textarea, select, number, date`,
         );
       }
-      if (fieldType === "select" && !Array.isArray(definition.options)) {
-        throw new Error(
-          `Method ${methodId} evidence_template fields.${fieldId}.options must be present for select`,
-        );
+      if (fieldType === "select") {
+        const options = definition.options;
+        if (!Array.isArray(options)) {
+          throw new Error(
+            `Method ${methodId} evidence_template fields.${fieldId}.options must be present for select`,
+          );
+        } else if (!options.every((option) => typeof option === "string")) {
+          throw new Error(
+            `Method ${methodId} evidence_template fields.${fieldId}.options must contain only strings`,
+          );
+        }
       }
     }
   }

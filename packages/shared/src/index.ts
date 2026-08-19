@@ -11,3 +11,19 @@ export * from "./models.js";
 export { calculateCursorPosition } from "./cursor-position.js";
 
 export * from "./apparatus.js";
+
+export {
+  EVIDENCE_FIELD_TYPES,
+  LEDGER_DIMENSION_CONTROLS,
+  LEDGER_DIMENSION_ROLES,
+  ledgerDimensionValidationError,
+} from "./evidence.js";
+export type {
+  ApparatusEvidenceFieldDefinition,
+  EvidenceFieldType,
+  LedgerDimension,
+  LedgerDimensionControl,
+  LedgerDimensionRole,
+  LedgerDimensionValidationError,
+  LedgerMissingSemantics,
+} from "./evidence.js";
