@@ -18,7 +18,6 @@ export type EvidenceLedgerBucket =
   | "Resolver exclusion";
 
 export type EvidenceLedgerExclusionReason =
-  | "unlinked question"
   | "invalid provenance"
   | "inaccessible"
   | "not accepted";
@@ -80,15 +79,7 @@ export type EvidenceLedgerContribution = {
   exclusionReason?: EvidenceLedgerExclusionReason;
 };
 
-export type EvidenceLedgerQuestion = {
-  id: string;
-  title: string;
-  path: string;
-  version?: string;
-};
-
 export type EvidenceLedgerManifest = {
-  question: EvidenceLedgerQuestion;
   methods: Array<{
     id: string;
     version: string;
@@ -100,11 +91,10 @@ export type EvidenceLedgerManifest = {
 };
 
 export type EvidenceLedgerResolution = {
-  question: EvidenceLedgerQuestion;
   methods: EvidenceLedgerMethod[];
   /** Every packet encountered under methods/, including resolver exclusions. */
   contributions: EvidenceLedgerContribution[];
-  /** Accepted and question-linked packets before scope filtering. */
+  /** Accepted packets before scope filtering. */
   acceptedEvidence: EvidenceLedgerContribution[];
   scope: {
     filters: LedgerScopeFilter[];
@@ -117,7 +107,6 @@ export type EvidenceLedgerResolution = {
 
 export type ResolveEvidenceLedgerOptions = {
   researchRoot: string;
-  questionId: string;
   filters?: LedgerScopeFilter[];
 };
 
@@ -133,18 +122,15 @@ type MethodSource = {
   version: string;
   path: string;
   absolutePath: string;
-  researchQuestions: string[];
   template?: ResolvedTemplate;
 };
 
 type ResolvedTemplate = EvidenceLedgerTemplate & {
   fields: Record<string, ApparatusEvidenceFieldDefinition>;
-  questionId?: string;
 };
 
 const EVIDENCE_FIELD_TYPE_SET = new Set<string>(EVIDENCE_FIELD_TYPES);
 const RESERVED_MARKDOWN_NAMES = new Set(["index.md", "log.md"]);
-const QUESTION_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/i;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export class EvidenceLedgerResolutionError extends Error {
@@ -203,16 +189,6 @@ function markdownFiles(root: string): string[] {
     }
   }
   return files.sort(byCodepoint);
-}
-
-function stringArray(value: unknown): string[] {
-  if (
-    !Array.isArray(value) ||
-    !value.every((item) => typeof item === "string")
-  ) {
-    return [];
-  }
-  return [...value].sort(byCodepoint);
 }
 
 function isValidDate(value: string): boolean {
@@ -350,9 +326,6 @@ function validateAndResolveTemplate(
     path: sourcePath,
     dimensions,
     fields,
-    ...(typeof frontmatter.question_id === "string"
-      ? { questionId: frontmatter.question_id }
-      : {}),
   };
 }
 
@@ -430,7 +403,6 @@ function readMethods(root: string): MethodSource[] {
       ),
       path: canonicalPath(root, absolutePath),
       absolutePath,
-      researchQuestions: stringArray(document.frontmatter.research_questions),
     });
   }
   return methods.sort((left, right) => byCodepoint(left.id, right.id));
@@ -690,7 +662,6 @@ function publicTemplate(template: ResolvedTemplate): EvidenceLedgerTemplate {
 
 function resolveContribution(
   root: string,
-  questionId: string,
   filters: LedgerScopeFilter[],
   method: MethodSource,
   templates: Map<string, ResolvedTemplate>,
@@ -715,15 +686,6 @@ function resolveContribution(
       : undefined;
   const sourceHash = sha256(document.source);
   const details = { ...(id ? { id } : {}), sourceHash };
-  if (!method.researchQuestions.includes(questionId)) {
-    return resolverExclusion(sourcePath, "unlinked question", details);
-  }
-  if (
-    typeof document.frontmatter.question_id === "string" &&
-    document.frontmatter.question_id !== questionId
-  ) {
-    return resolverExclusion(sourcePath, "unlinked question", details);
-  }
   if (!isAccepted(document.frontmatter)) {
     return resolverExclusion(sourcePath, "not accepted", details);
   }
@@ -791,59 +753,22 @@ function resolveContribution(
 }
 
 /**
- * Resolve a question to its declared evidence dimensions and a canonical,
- * source-linked scope manifest. It is intentionally file-backed and pure: no
- * ranking, inference, prose parsing, or mutation is performed.
+ * Generate a canonical, source-linked scope manifest for all methods.
+ * It is intentionally file-backed and pure: no ranking, inference,
+ * prose parsing, or mutation is performed.
+ *
+ * @param options Configuration for evidence ledger resolution
+ * @returns EvidenceLedgerResolution containing all methods and their evidence
  */
 export function resolveEvidenceLedger(
   options: ResolveEvidenceLedgerOptions
 ): EvidenceLedgerResolution {
-  if (!QUESTION_ID_PATTERN.test(options.questionId)) {
-    throw new EvidenceLedgerResolutionError(
-      "Research question id must contain only letters, numbers, and hyphens"
-    );
-  }
   const root = path.resolve(options.researchRoot);
-  const questionPath = path.join(root, "theory", `${options.questionId}.en.md`);
-  if (!fs.existsSync(questionPath)) {
-    throw new EvidenceLedgerResolutionError(
-      `Research question not found: theory/${options.questionId}.en.md`
-    );
-  }
-  const questionDocument = readMarkdownDocument(questionPath);
-  const questionId = requiredString(
-    questionDocument.frontmatter,
-    "id",
-    canonicalPath(root, questionPath)
-  );
-  if (questionId !== options.questionId) {
-    throw new EvidenceLedgerResolutionError(
-      `Research question id does not match its path: ${canonicalPath(root, questionPath)}`
-    );
-  }
-  if (
-    questionDocument.frontmatter.type !== "Theory" &&
-    questionDocument.frontmatter.type !== "Research Question"
-  ) {
-    throw new EvidenceLedgerResolutionError(
-      `${canonicalPath(root, questionPath)} is not a theory question document`
-    );
-  }
 
   const allMethods = readMethods(root);
-  const linkedMethods = allMethods.filter((method) =>
-    method.researchQuestions.includes(questionId)
-  );
-  if (
-    questionDocument.frontmatter.type === "Theory" &&
-    linkedMethods.length === 0
-  ) {
-    throw new EvidenceLedgerResolutionError(
-      `${canonicalPath(root, questionPath)} is not linked as a research question`
-    );
-  }
+
   const templatesByMethod = new Map<string, Map<string, ResolvedTemplate>>();
-  for (const method of linkedMethods) {
+  for (const method of allMethods) {
     const templates = resolveTemplates(root, method);
     const currentTemplatePath = path.join(
       root,
@@ -865,46 +790,19 @@ export function resolveEvidenceLedger(
       `${method.template.id}@${method.template.version}`,
       method.template
     );
-    if (
-      method.template.questionId !== undefined &&
-      method.template.questionId !== questionId
-    ) {
-      throw new EvidenceLedgerResolutionError(
-        `Method ${method.id} evidence template does not declare ${questionId}`
-      );
-    }
     templatesByMethod.set(method.id, templates);
   }
 
   const filters = canonicalFilters(options.filters ?? []);
   validateScopeFilters(filters, templatesByMethod);
 
-  const question: EvidenceLedgerQuestion = {
-    id: questionId,
-    title: requiredString(
-      questionDocument.frontmatter,
-      "title",
-      canonicalPath(root, questionPath)
-    ),
-    path: canonicalPath(root, questionPath),
-    ...(typeof questionDocument.frontmatter.version === "string"
-      ? { version: questionDocument.frontmatter.version }
-      : {}),
-  };
   const contributions: EvidenceLedgerContribution[] = [];
   for (const method of allMethods) {
     const evidenceRoot = path.join(root, "methods", method.id, "evidence");
     const templates = templatesByMethod.get(method.id) ?? new Map();
     for (const absolutePath of markdownFiles(evidenceRoot)) {
       contributions.push(
-        resolveContribution(
-          root,
-          questionId,
-          filters,
-          method,
-          templates,
-          absolutePath
-        )
+        resolveContribution(root, filters, method, templates, absolutePath)
       );
     }
   }
@@ -923,21 +821,19 @@ export function resolveEvidenceLedger(
   for (const contribution of contributions) {
     bucketCounts[contribution.bucket] += 1;
   }
-  const methods = linkedMethods.map((method) => ({
+  const methods = allMethods.map((method) => ({
     id: method.id,
     version: method.version,
     path: method.path,
     evidenceTemplate: publicTemplate(method.template!),
   }));
   const manifest: EvidenceLedgerManifest = {
-    question,
     methods,
     filters,
     contributions,
   };
 
   return {
-    question,
     methods,
     contributions,
     acceptedEvidence,
