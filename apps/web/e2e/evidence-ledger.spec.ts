@@ -243,6 +243,22 @@ test.describe("@regression evidence-ledger", () => {
     await expect(gapsBtn.locator('[aria-label="non-empty counterevidence"]')).toBeVisible();
     await gapsBtn.click();
     await expect(page.getByText("it does not reach a conclusion")).toBeVisible();
+
+    // Evidence view: source links are pinned to the snapshot's source commit,
+    // never `blob/main` — a later research-main change must not silently alter
+    // what a sealed snapshot links to (Wave A review fix).
+    await nav.getByRole("button", { name: /Evidence/ }).click();
+    const evidenceAnchors = page
+      .locator("[data-testid='ledger-snapshot-canvas'] a[href*='github.com/evaluchat/research/blob/']");
+    await expect(evidenceAnchors.first()).toBeVisible({ timeout: 15_000 });
+    const hrefs = await evidenceAnchors.evaluateAll((anchors) =>
+      anchors.map((a) => (a as HTMLAnchorElement).href)
+    );
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const href of hrefs) {
+      expect(href).not.toContain("/blob/main/");
+      expect(href).toMatch(/\/blob\/[0-9a-f]{7,40}\//);
+    }
   });
 
   test("4 · snapshot immutability — filters/fingerprint survive regeneration", async ({
