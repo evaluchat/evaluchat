@@ -12,12 +12,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Load git-ignored local env (optional) but never override an explicit shell var.
+# Load git-ignored local env (optional) but NEVER override an explicit shell
+# var: an exported E2E_BASE_URL (e.g. a prod release gate) must win over any
+# local .env. Sourcing with plain `set -a; . .env` would let .env clobber it,
+# so we only adopt keys that are not already set in the environment.
 if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . ./.env
-  set +a
+  # Read each KEY=VALUE line from .env; adopt only unset keys.
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      '' | '#'*) continue ;;                       # skip blanks / comments
+      *=*) ;;
+      *) continue ;;                                # skip malformed lines
+    esac
+    key="${line%%=*}"
+    if [ -z "${!key:-}" ]; then
+      # shellcheck disable=SC2163
+      export "$line"
+    fi
+  done < .env
 fi
 
 export E2E_BASE_URL="${E2E_BASE_URL:-https://dev.evaluchat.org}"

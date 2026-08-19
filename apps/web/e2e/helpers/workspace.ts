@@ -48,14 +48,10 @@ export async function setMultiSelectFilter(
 ): Promise<void> {
   const select = page.locator(`select[aria-label="${dimensionId}"]`);
   await expect(select).toBeVisible({ timeout: TIMEOUTS.pageLoad });
-  // A <select multiple> has no reliable "clear" affordance; deselect every
-  // currently-selected option first, then pick the desired ones.
-  await select.evaluate((el: HTMLSelectElement) => {
-    Array.from(el.selectedOptions).forEach((o) => (o.selected = false));
-  });
-  if (values.length) {
-    await select.selectOption(values);
-  }
+  // selectOption(values) is the source of truth: it both clears any current
+  // selection AND dispatches the input/change events React's onChange needs.
+  // Passing an empty array is the supported way to unselect all options.
+  await select.selectOption(values);
 }
 
 /** Set a range filter (date/number) min/max input for a dimension. */

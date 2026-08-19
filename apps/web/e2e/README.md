@@ -20,7 +20,7 @@ export TEST_USER_PASSWORD=...
 ## Run
 
 ```bash
-cd /home/cronjev/canvas-public
+# run from the repository root
 ./scripts/e2e-run.sh npx playwright test --grep @regression --reporter=list
 ```
 
@@ -35,7 +35,7 @@ playwright test ...` command directly with the vars exported.
 
 ## Layout
 
-```
+```text
 playwright.config.ts           # testDir ./apps/web/e2e, baseURL default dev.evaluchat.org
 apps/web/e2e/evidence-ledger.spec.ts   # Wave A Evidence Ledger coverage
 apps/web/e2e/workspace-home.spec.ts    # lean /workspace home smoke (issue #96)

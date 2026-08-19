@@ -79,7 +79,7 @@ export async function loginAsTestUser(page: Page): Promise<void> {
     "TEST_USER_EMAIL",
     "TEST_USER_PASSWORD"
   );
-  page.context().clearCookies();
+  await page.context().clearCookies();
   await loginWithCredentials(page, TEST_USER_EMAIL, TEST_USER_PASSWORD);
   // Unified workspace home is the canonical post-login destination.
   await expect(page).toHaveURL(/\/workspace/, { timeout: TIMEOUTS.pageLoad });

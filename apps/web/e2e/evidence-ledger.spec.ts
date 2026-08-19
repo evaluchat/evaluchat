@@ -28,7 +28,6 @@ import {
  */
 test.describe("@regression evidence-ledger", () => {
   const METHOD_ID = "ledger-demo-method";
-  const EXPECTED_BASELINE = 12;
   // Buckets for education_level ∈ [k12] + collection_date 2024-01-01..2024-12-31.
   //
   //   NOTE: live-verified against dev.evaluchat.org (2026-08-19). The original
@@ -81,16 +80,13 @@ test.describe("@regression evidence-ledger", () => {
       { timeout: 30_000 }
     );
     await card.click();
-    await createResponse;
+    const createResponseBody = await createResponse.then((r) => r.json()) as {
+      item: { id: string };
+    };
     await expect(
       page.getByText("Ledger demo method", { exact: false }).first()
     ).toBeVisible({ timeout: TIMEOUTS.pageLoad });
-    // Grab the created item id from the home card href.
-    const href = await page
-      .locator(`a[href^="/workspace/items/"]`)
-      .first()
-      .getAttribute("href");
-    return (href || "").replace(/^\/workspace\/items\//, "").split("?")[0];
+    return createResponseBody.item.id;
   }
 
   async function applyLedgerFilters(page: Page) {
