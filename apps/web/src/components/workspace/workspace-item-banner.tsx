@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Trash2 } from "lucide-react";
@@ -24,6 +25,7 @@ export function WorkspaceItemBanner({
   submitDisabled = false,
   submitted = false,
   submitLabel,
+  extraActions,
 }: {
   item: WorkspaceItem;
   onAbandon: () => void;
@@ -31,6 +33,7 @@ export function WorkspaceItemBanner({
   submitDisabled?: boolean;
   submitted?: boolean;
   submitLabel?: string;
+  extraActions?: ReactNode;
 }) {
   const methodHref = methodSpecHref(item);
   const methodLabel =
@@ -95,9 +98,9 @@ export function WorkspaceItemBanner({
               <span className="truncate">{methodLabel}</span>
             </a>
           )}
-          {item.kind !== "markdown_template" &&
+          {extraActions}
+          {onSubmit &&
             item.kind !== "method_participant" &&
-            onSubmit &&
             !(item.kind === "method" && item.run) && (
               <Button
                 size="sm"

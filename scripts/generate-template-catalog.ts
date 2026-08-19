@@ -310,6 +310,37 @@ export function platformTemplateRoot(): string {
   return path.join(repoRoot, "apps/web/templates/platform");
 }
 
+export function workspaceTemplateRoot(): string {
+  return path.join(repoRoot, "apps/web/templates/workspace");
+}
+
+export function mergeCatalogs(
+  base: GeneratedTemplateCatalog,
+  extra: GeneratedTemplateCatalog,
+): GeneratedTemplateCatalog {
+  const byId = new Map(base.templates.map((entry) => [entry.id, entry]));
+  for (const entry of extra.templates) byId.set(entry.id, entry);
+  const templates = [...byId.values()].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  );
+  return {
+    schemaVersion: 1,
+    catalogRevision: hash(JSON.stringify(templates)),
+    templates,
+  };
+}
+
+export function mergeWorkspaceTemplates(
+  catalog: GeneratedTemplateCatalog,
+  sourceRoot = workspaceTemplateRoot(),
+): GeneratedTemplateCatalog {
+  if (!fs.existsSync(sourceRoot)) return catalog;
+  return mergeCatalogs(
+    catalog,
+    buildCatalog(sourceRoot, { sourcePathPrefix: "templates/workspace" }),
+  );
+}
+
 export function platformTemplateIds(
   sourceRoot = platformTemplateRoot(),
 ): string[] {
@@ -382,10 +413,13 @@ if (
     process.env.EVALUCHAT_TEMPLATE_CATALOG_OUTPUT ||
       path.join(repoRoot, "apps/web/data/template-catalog.json"),
   );
-  writeCatalog(path.resolve(sourceRootValue), outputPath, {
+  const knowledge = buildCatalog(path.resolve(sourceRootValue), {
     excludeIds: platformTemplateIds(),
   });
+  const artifact = mergeWorkspaceTemplates(knowledge);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`);
   console.log(
-    `Generated ${path.relative(repoRoot, outputPath)} from ${path.resolve(sourceRootValue)}`,
+    `Generated ${path.relative(repoRoot, outputPath)} from ${path.resolve(sourceRootValue)} and ${workspaceTemplateRoot()}`,
   );
 }
