@@ -137,5 +137,10 @@ describe("LedgerSnapshotCanvas publication controls", () => {
     expect(
       canRepublishClosedPullRequest(draft, { state: "closed", merged: true })
     ).toBe(false);
+    // After a successful republish, cached GitHub actual must be cleared so
+    // the newly opened draft PR is not immediately re-enabled for republish.
+    const nextDraft = { status: "draft" as const, pullRequestNumber: 86 };
+    expect(canRepublishClosedPullRequest(nextDraft)).toBe(false);
+    expect(canRepublishClosedPullRequest(nextDraft, undefined)).toBe(false);
   });
 });

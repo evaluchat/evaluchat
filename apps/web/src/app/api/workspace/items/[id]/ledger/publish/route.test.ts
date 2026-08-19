@@ -176,6 +176,52 @@ describe("ledger publish route", () => {
     expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
   });
 
+  it("rejects republish when the recorded pull request is still open", async () => {
+    harness.getLedgerSnapshotItem.mockResolvedValue({
+      ...structuredClone(snapshot),
+      publication: { status: "draft", pullRequestNumber: 85 },
+    });
+    harness.getLedgerPullRequestStatus.mockResolvedValue({
+      state: "open",
+      merged: false,
+    });
+
+    const response = await POST(
+      request({ values: validValues, rePublish: true }),
+      context()
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: "Only a closed, unmerged ledger pull request can be republished.",
+      publication: { status: "draft", pullRequestNumber: 85 },
+    });
+    expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects republish when the recorded pull request is merged", async () => {
+    harness.getLedgerSnapshotItem.mockResolvedValue({
+      ...structuredClone(snapshot),
+      publication: { status: "draft", pullRequestNumber: 85 },
+    });
+    harness.getLedgerPullRequestStatus.mockResolvedValue({
+      state: "closed",
+      merged: true,
+    });
+
+    const response = await POST(
+      request({ values: validValues, rePublish: true }),
+      context()
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: "Only a closed, unmerged ledger pull request can be republished.",
+      publication: { status: "draft", pullRequestNumber: 85 },
+    });
+    expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
+  });
+
   it("passes a distinct retry suffix for each republish of a closed PR", async () => {
     const now = vi.spyOn(Date, "now");
     now

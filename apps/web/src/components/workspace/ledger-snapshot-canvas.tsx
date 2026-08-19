@@ -325,6 +325,7 @@ export function LedgerPublicationPanel({
         );
       }
       setPublication(body.publication);
+      setPullRequestActual(undefined);
       setDialogOpen(false);
     } catch (error) {
       setPublishError(

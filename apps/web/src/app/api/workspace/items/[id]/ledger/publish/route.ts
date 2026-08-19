@@ -152,11 +152,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       const previous = await getLedgerPullRequestStatus(
         item.publication.pullRequestNumber
       );
-      if (!previous.merged && previous.state !== "closed") {
+      if (previous.merged || previous.state !== "closed") {
         return NextResponse.json(
           {
             error:
-              "The recorded ledger pull request is still open and cannot be republished.",
+              "Only a closed, unmerged ledger pull request can be republished.",
             publication: item.publication,
           },
           { status: 409 }
