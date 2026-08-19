@@ -184,7 +184,7 @@ export type OpenLedgerPullRequestResult = {
   lintConclusion?: string;
 };
 
-function ledgerBranch(input: OpenLedgerPullRequestInput): string {
+export function ledgerBranch(input: OpenLedgerPullRequestInput): string {
   const fingerprint = input.inputFingerprint.replace(/^sha256:/, "");
   const suffix = input.retry && input.retry > 1 ? `-retry-${input.retry}` : "";
   return `ledger/${safeBranchPart(input.ledgerId)}-${safeBranchPart(fingerprint.slice(0, 12))}${suffix}`;

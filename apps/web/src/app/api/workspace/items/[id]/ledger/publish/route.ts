@@ -122,11 +122,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // It deliberately precedes every write operation in openLedgerPullRequest.
     const access = await getGithubResearchWriteAccess();
     if (!access.allowed) {
+      if (access.reason === "missing_identity") {
+        return NextResponse.json(
+          {
+            error: "The publication service is not configured",
+            reason: access.reason,
+          },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         {
           error:
             "Your connected GitHub account needs collaborator write access to evaluchat/research before a ledger can be published.",
-          reason: "missing_write_access",
+          reason: access.reason,
         },
         { status: 403 }
       );
@@ -153,7 +162,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           { status: 409 }
         );
       }
-      retry = 2;
+      retry = Date.now();
     }
 
     // The same validator used by evidence submission verifies both required

@@ -191,6 +191,46 @@ export function publicationStatusText(publication?: Publication): string {
     : "Draft PR — pending human merge";
 }
 
+export function canRepublishClosedPullRequest(
+  publication?: Publication,
+  actual?: { state?: string; merged?: boolean }
+): boolean {
+  return (
+    publication?.status === "draft" &&
+    actual?.state === "closed" &&
+    actual.merged !== true
+  );
+}
+
+export function ledgerPublishRequestBody(input: {
+  authorised: boolean;
+  anonymised: boolean;
+  publicData: boolean;
+  rePublish?: boolean;
+}): {
+  rePublish?: boolean;
+  values: {
+    publication_authorisation: string;
+    anonymisation_status: string;
+    public_data_declaration: string;
+  };
+} {
+  return {
+    ...(input.rePublish ? { rePublish: true } : {}),
+    values: {
+      publication_authorisation: input.authorised
+        ? "confirmed-authorised-to-publish"
+        : "not-confirmed-do-not-submit",
+      anonymisation_status: input.anonymised
+        ? "confirmed-no-student-identifiers-or-raw-student-material"
+        : "needs-human-privacy-review",
+      public_data_declaration: input.publicData
+        ? "confirmed-public-data"
+        : "not-confirmed-do-not-submit",
+    },
+  };
+}
+
 export function publicationAccessError(reason?: string): string | undefined {
   if (reason !== "missing_write_access") return undefined;
   return "Your connected GitHub account needs collaborator write access to evaluchat/research. No branch or pull request was created.";
@@ -212,13 +252,22 @@ export function LedgerPublicationPanel({
   const [authorised, setAuthorised] = useState(false);
   const [anonymised, setAnonymised] = useState(false);
   const [publicData, setPublicData] = useState(false);
+  const [rePublish, setRePublish] = useState(false);
+  const [pullRequestActual, setPullRequestActual] = useState<{
+    state?: string;
+    merged?: boolean;
+  }>();
 
-  useEffect(() => setPublication(item.publication), [item.publication]);
+  useEffect(() => {
+    setPublication(item.publication);
+    setPullRequestActual(undefined);
+  }, [item.publication]);
 
   const route = `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/publish`;
   const filePath = `evidence-ledgers/${item.snapshot.ledgerId}.en.md`;
 
-  async function openPreview() {
+  async function openPreview(nextRePublish = false) {
+    setRePublish(nextRePublish);
     setDialogOpen(true);
     setPreviewError(undefined);
     setPublishError(undefined);
@@ -254,16 +303,14 @@ export function LedgerPublicationPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          values: {
-            publication_authorisation: authorised
-              ? "confirmed-authorised-to-publish"
-              : "not-confirmed-do-not-submit",
-            anonymisation_status: anonymised
-              ? "confirmed-no-student-identifiers-or-raw-student-material"
-              : "needs-human-privacy-review",
-          },
-        }),
+        body: JSON.stringify(
+          ledgerPublishRequestBody({
+            authorised,
+            anonymised,
+            publicData,
+            rePublish,
+          })
+        ),
       });
       const body = (await response.json()) as {
         publication?: Publication;
@@ -307,6 +354,7 @@ export function LedgerPublicationPanel({
         throw new Error(body.error || "Could not refresh publication status.");
       }
       setPublication(body.publication);
+      setPullRequestActual(body.actual);
       if (!body.actual?.merged) {
         setPublishError("The recorded pull request has not merged yet.");
       }
@@ -340,6 +388,14 @@ export function LedgerPublicationPanel({
             data-testid="ledger-publish"
           >
             Publish
+          </Button>
+        )}
+        {canRepublishClosedPullRequest(publication, pullRequestActual) && (
+          <Button
+            onClick={() => void openPreview(true)}
+            data-testid="ledger-republish"
+          >
+            Republish
           </Button>
         )}
         {publication?.status === "draft" && (

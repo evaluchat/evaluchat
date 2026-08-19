@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import yaml from "js-yaml";
 import type { LedgerConfig, LedgerSnapshotData } from "@opencanvas/shared";
-import { ledgerRenderHash, renderLedgerMarkdown } from "./ledger-publish";
+import { FormValidationError } from "./form-validation";
+import {
+  ledgerRenderHash,
+  renderLedgerMarkdown,
+  validateLedgerPublicationDeclarations,
+} from "./ledger-publish";
 
 const config: LedgerConfig = {
   methodId: "ai-assisted-essay",
@@ -121,5 +126,34 @@ describe("renderLedgerMarkdown", () => {
     expect(fields.scope).toBe(current.predicate);
     expect(fields.input_fingerprint).toBe(current.inputFingerprint);
     expect(fields.render_hash).toBe(ledgerRenderHash(current, config));
+  });
+});
+
+describe("validateLedgerPublicationDeclarations", () => {
+  const confirmed = {
+    publication_authorisation: "confirmed-authorised-to-publish",
+    anonymisation_status:
+      "confirmed-no-student-identifiers-or-raw-student-material",
+    public_data_declaration: "confirmed-public-data",
+  };
+
+  it("requires a confirmed public data declaration", () => {
+    expect(
+      validateLedgerPublicationDeclarations(snapshot(), confirmed).values
+    ).toMatchObject(confirmed);
+
+    expect(() =>
+      validateLedgerPublicationDeclarations(snapshot(), {
+        publication_authorisation: confirmed.publication_authorisation,
+        anonymisation_status: confirmed.anonymisation_status,
+      })
+    ).toThrow(FormValidationError);
+
+    expect(() =>
+      validateLedgerPublicationDeclarations(snapshot(), {
+        ...confirmed,
+        public_data_declaration: "not-confirmed-do-not-submit",
+      })
+    ).toThrow(FormValidationError);
   });
 });

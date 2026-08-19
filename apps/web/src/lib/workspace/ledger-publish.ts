@@ -7,6 +7,7 @@ import type {
 } from "@/lib/apparatuses/evidence-ledger";
 import type { EvidenceSnapshot } from "./evidence";
 import { validateEvidenceSubmission } from "./evidence";
+import { FormValidationError } from "./form-validation";
 
 const RESEARCH_BLOB_URL = "https://github.com/evaluchat/research/blob";
 
@@ -265,7 +266,7 @@ export function renderLedgerMarkdown(
 }
 
 /**
- * Reuse the evidence-submission validator for the two public-safety
+ * Reuse the evidence-submission validator for the public-safety
  * declarations. A ledger has no mutable evidence narrative; its sealed
  * manifest supplies the immutable provenance values.
  */
@@ -301,6 +302,13 @@ export function validateLedgerPublicationDeclarations(
           "needs-human-privacy-review",
         ],
       },
+      public_data_declaration: {
+        id: "public_data_declaration",
+        label: "Public data declaration",
+        type: "select",
+        required: true,
+        options: ["confirmed-public-data", "not-confirmed-do-not-submit"],
+      },
     },
     frozenValues: {},
     methodId: snapshot.methodId,
@@ -308,5 +316,15 @@ export function validateLedgerPublicationDeclarations(
     workspaceItemId: snapshot.ledgerId,
     runId: snapshot.inputFingerprint,
   };
-  return validateEvidenceSubmission(evidenceSnapshot, rawValues);
+  const validated = validateEvidenceSubmission(evidenceSnapshot, rawValues);
+  if (validated.values.public_data_declaration !== "confirmed-public-data") {
+    throw new FormValidationError([
+      {
+        fieldId: "public_data_declaration",
+        message:
+          "A confirmed public data declaration is required before publication.",
+      },
+    ]);
+  }
+  return validated;
 }

@@ -18,6 +18,8 @@ vi.mock("@/components/ui/dialog", () => ({
 
 import {
   LedgerSnapshotCanvas,
+  canRepublishClosedPullRequest,
+  ledgerPublishRequestBody,
   publicationAccessError,
   publicationStatusText,
 } from "./ledger-snapshot-canvas";
@@ -90,5 +92,50 @@ describe("LedgerSnapshotCanvas publication controls", () => {
     expect(publicationAccessError("missing_write_access")).toContain(
       "No branch or pull request was created"
     );
+  });
+
+  it("sends the public data declaration with the other consent fields", () => {
+    expect(
+      ledgerPublishRequestBody({
+        authorised: true,
+        anonymised: true,
+        publicData: true,
+      }).values
+    ).toEqual({
+      publication_authorisation: "confirmed-authorised-to-publish",
+      anonymisation_status:
+        "confirmed-no-student-identifiers-or-raw-student-material",
+      public_data_declaration: "confirmed-public-data",
+    });
+    expect(
+      ledgerPublishRequestBody({
+        authorised: false,
+        anonymised: false,
+        publicData: false,
+        rePublish: true,
+      })
+    ).toEqual({
+      rePublish: true,
+      values: {
+        publication_authorisation: "not-confirmed-do-not-submit",
+        anonymisation_status: "needs-human-privacy-review",
+        public_data_declaration: "not-confirmed-do-not-submit",
+      },
+    });
+  });
+
+  it("offers republish for a closed unmerged draft while keeping refresh copy", () => {
+    const draft = { status: "draft" as const, pullRequestNumber: 85 };
+    expect(publicationStatusText(draft)).toBe("Draft PR — pending human merge");
+    expect(canRepublishClosedPullRequest(draft)).toBe(false);
+    expect(
+      canRepublishClosedPullRequest(draft, { state: "open", merged: false })
+    ).toBe(false);
+    expect(
+      canRepublishClosedPullRequest(draft, { state: "closed", merged: false })
+    ).toBe(true);
+    expect(
+      canRepublishClosedPullRequest(draft, { state: "closed", merged: true })
+    ).toBe(false);
   });
 });

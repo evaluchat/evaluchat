@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { openEvidencePullRequest } from "./evidence-github";
+import { ledgerBranch, openEvidencePullRequest } from "./evidence-github";
 
 const input = (stage = "documented-experience") => ({
   methodId: "ai-assisted-essay",
@@ -199,5 +199,28 @@ describe("openEvidencePullRequest", () => {
     expect(
       fetchMock.mock.calls.some(([url]) => String(url).includes("check-runs"))
     ).toBe(false);
+  });
+});
+
+describe("ledgerBranch", () => {
+  const base = {
+    ledgerId: "ledger_demo",
+    inputFingerprint: "sha256:abcdef0123456789ffff",
+    filePath: "evidence-ledgers/ledger_demo.en.md",
+    markdown: "---\n",
+    body: "body",
+  };
+
+  it("keeps the initial branch unsuffixed and uses a distinct retry suffix each time", () => {
+    expect(ledgerBranch(base)).toBe("ledger/ledger_demo-abcdef012345");
+    expect(ledgerBranch({ ...base, retry: 2 })).toBe(
+      "ledger/ledger_demo-abcdef012345-retry-2"
+    );
+    expect(ledgerBranch({ ...base, retry: 3 })).toBe(
+      "ledger/ledger_demo-abcdef012345-retry-3"
+    );
+    expect(ledgerBranch({ ...base, retry: 2 })).not.toBe(
+      ledgerBranch({ ...base, retry: 3 })
+    );
   });
 });

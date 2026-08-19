@@ -70,6 +70,7 @@ const validValues = {
   publication_authorisation: "confirmed-authorised-to-publish",
   anonymisation_status:
     "confirmed-no-student-identifiers-or-raw-student-material",
+  public_data_declaration: "confirmed-public-data",
 };
 
 describe("ledger publish route", () => {
@@ -121,6 +122,21 @@ describe("ledger publish route", () => {
     expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
   });
 
+  it("returns 503 when the publication identity is missing", async () => {
+    harness.getGithubResearchWriteAccess.mockResolvedValue({
+      allowed: false,
+      reason: "missing_identity",
+    });
+    const response = await POST(request({ values: validValues }), context());
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "The publication service is not configured",
+      reason: "missing_identity",
+    });
+    expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
+  });
+
   it("creates a draft ledger PR with the one immutable artifact", async () => {
     const response = await POST(request({ values: validValues }), context());
 
@@ -158,6 +174,43 @@ describe("ledger publish route", () => {
 
     expect(response.status).toBe(409);
     expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("passes a distinct retry suffix for each republish of a closed PR", async () => {
+    const now = vi.spyOn(Date, "now");
+    now
+      .mockReturnValueOnce(1_700_000_000_002)
+      .mockReturnValueOnce(1_700_000_000_003);
+    harness.getLedgerSnapshotItem.mockResolvedValue({
+      ...structuredClone(snapshot),
+      publication: { status: "draft", pullRequestNumber: 85 },
+    });
+    harness.getLedgerPullRequestStatus.mockResolvedValue({
+      state: "closed",
+      merged: false,
+    });
+
+    const first = await POST(
+      request({ values: validValues, rePublish: true }),
+      context()
+    );
+    expect(first.status).toBe(200);
+    expect(harness.openLedgerPullRequest.mock.calls[0][0].retry).toBe(
+      1_700_000_000_002
+    );
+
+    const second = await POST(
+      request({ values: validValues, rePublish: true }),
+      context()
+    );
+    expect(second.status).toBe(200);
+    expect(harness.openLedgerPullRequest.mock.calls[1][0].retry).toBe(
+      1_700_000_000_003
+    );
+    expect(harness.openLedgerPullRequest.mock.calls[0][0].retry).not.toBe(
+      harness.openLedgerPullRequest.mock.calls[1][0].retry
+    );
+    now.mockRestore();
   });
 
   it("returns consent validation failures before creating a PR", async () => {
