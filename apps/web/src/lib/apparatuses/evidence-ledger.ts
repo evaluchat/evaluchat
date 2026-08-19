@@ -66,6 +66,12 @@ export type EvidenceLedgerContribution = {
   scopeValues: Record<string, LedgerScopeValue>;
   bucket: EvidenceLedgerBucket;
   exclusionReason?: EvidenceLedgerExclusionReason;
+  /** Dimensions whose recorded value is invalid (out of options / bad date /
+   * non-finite number). Mirrors the file-backed resolver: the dimension is
+   * omitted from `dimensionValues`; the packet is excluded ONLY when a filter
+   * targets such a dimension (invalid provenance), never for unfiltered dims.
+   */
+  invalidDimensions?: string[];
 };
 
 export type EvidenceLedgerManifest = {
@@ -925,8 +931,8 @@ export function resolveEvidenceLedgerFromSource(
   const filters = canonicalFilters(options.filters ?? []);
   validateSourceScopeFilters(filters, options.template);
 
-  const contributions = options.contributions
-    .map((source) => {
+  const contributions: EvidenceLedgerContribution[] = options.contributions
+    .map((source): EvidenceLedgerContribution => {
       if (source.bucket === "Resolver exclusion") return { ...source };
 
       const scopeValues: Record<string, LedgerScopeValue> = {};
@@ -934,6 +940,19 @@ export function resolveEvidenceLedgerFromSource(
       let unknown = false;
       let outside = false;
       for (const filter of filters) {
+        // A filter targeting an invalid recorded value is a resolver exclusion
+        // (same as the file-backed resolver's classifyScope invalid path).
+        if (source.invalidDimensions?.includes(filter.fieldId)) {
+          return {
+            ...source,
+            scopeValues: {
+              ...scopeValues,
+              [filter.fieldId]: { status: "unavailable" },
+            },
+            bucket: "Resolver exclusion",
+            exclusionReason: "invalid provenance",
+          };
+        }
         const value = source.dimensionValues[filter.fieldId];
         if (!value) {
           scopeValues[filter.fieldId] = { status: "unavailable" };

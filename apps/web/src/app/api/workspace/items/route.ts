@@ -64,6 +64,12 @@ export async function POST(request: NextRequest) {
       : undefined;
   const hasMethodId = methodId !== undefined;
   const isLedger = parsedBody.kind === "ledger";
+  if (isLedger && !hasMethodId) {
+    return NextResponse.json(
+      { error: "Ledger creation requires methodId" },
+      { status: 400 }
+    );
+  }
   if (!hasMethodId && templateId === undefined) {
     return NextResponse.json(
       { error: "Unsupported template" },

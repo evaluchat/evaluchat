@@ -181,6 +181,29 @@ field_values:
 # p-excluded
 `;
 
+const INVALID_DIM = `---
+type: Evidence Contribution
+id: p-invalid-dim
+lang: en
+origin: native
+status: accepted
+description: "Synthetic p-invalid-dim (education_level not in declared options)"
+method:
+  id: ledger-demo-method
+  version: 1.0.0
+provenance:
+  template_id: evidence-template
+  template_version: "1.0.0"
+field_values:
+  education_level: doctorate
+  country_code: US
+  collection_date: 2024-03-01
+  sample_size: 120
+---
+
+# p-invalid-dim
+`;
+
 const COMMIT_SHA = "deadbeef0123456789abcdef0123456789abcdef";
 
 const FILES: Record<string, string> = {
@@ -193,6 +216,7 @@ const FILES: Record<string, string> = {
   "methods/ledger-demo-method/evidence/p-unknown.en.md": UNKNOWN,
   "methods/ledger-demo-method/evidence/p-unavailable.en.md": UNAVAILABLE,
   "methods/ledger-demo-method/evidence/p-excluded.en.md": EXCLUDED,
+  "methods/ledger-demo-method/evidence/p-invalid-dim.en.md": INVALID_DIM,
 };
 
 const DIRS: Record<string, { name: string; path: string }[]> = {
@@ -219,6 +243,10 @@ const DIRS: Record<string, { name: string; path: string }[]> = {
     {
       name: "p-excluded.en.md",
       path: "methods/ledger-demo-method/evidence/p-excluded.en.md",
+    },
+    {
+      name: "p-invalid-dim.en.md",
+      path: "methods/ledger-demo-method/evidence/p-invalid-dim.en.md",
     },
   ],
 };
@@ -289,7 +317,7 @@ describe("loadLedgerSource", () => {
     const source = await loadLedgerSource("ledger-demo-method", "1.0.0");
     const paths = source.contributions.map((c) => c.path);
     expect(paths).not.toContain("methods/ledger-demo-method/evidence/index.md");
-    expect(paths).toHaveLength(4);
+    expect(paths).toHaveLength(5);
 
     const known = source.contributions.find((c) =>
       c.path.endsWith("p-known.en.md")
@@ -330,7 +358,25 @@ describe("loadLedgerSource", () => {
     expect(excluded.sourceHash).toBe(sha256(EXCLUDED));
   });
 
+  it("keeps a packet with an invalid dimension, omitting only that dimension", async () => {
+    // Mirrors the file-backed resolver: one invalid value does not drop the
+    // packet. The invalid dimension is omitted from dimensionValues and
+    // recorded in invalidDimensions for later filter-time classification.
+    const source = await loadLedgerSource("ledger-demo-method", "1.0.0");
+    const packet = source.contributions.find((c) =>
+      c.path.endsWith("p-invalid-dim.en.md")
+    )!;
+    expect(packet.bucket).toBe("Included");
+    expect(packet.exclusionReason).toBeUndefined();
+    expect(packet.dimensionValues.education_level).toBeUndefined();
+    expect(packet.invalidDimensions).toContain("education_level");
+    expect(packet.dimensionValues.country_code).toEqual({
+      status: "recorded",
+      value: "US",
+    });
+  });
+
   it("counts only accepted packets", async () => {
-    expect(await countAcceptedEvidence("ledger-demo-method")).toBe(3);
+    expect(await countAcceptedEvidence("ledger-demo-method")).toBe(4);
   });
 });

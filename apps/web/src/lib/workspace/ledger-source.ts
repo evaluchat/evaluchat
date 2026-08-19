@@ -322,12 +322,20 @@ function normalizePacket(
   }
   const values = evidenceValues(frontmatter);
   const dimensionValues: Record<string, LedgerDimensionValue> = {};
+  const invalidDimensions: string[] = [];
   for (const dimension of template.dimensions) {
     const value = dimensionValue(
       template.fields[dimension.id],
       values[dimension.id]
     );
-    if (!value) return exclusion(path, source, "invalid provenance");
+    // Mirror the file-backed resolver (evidence-ledger.ts lines 722-728):
+    // an invalid value omits only that dimension; the packet is NOT dropped
+    // here. It becomes a resolver exclusion only when a filter targets the
+    // invalid dimension (handled by resolveEvidenceLedgerFromSource).
+    if (!value) {
+      invalidDimensions.push(dimension.id);
+      continue;
+    }
     dimensionValues[dimension.id] = value;
   }
   return {
@@ -338,6 +346,7 @@ function normalizePacket(
     methodVersion: method.version,
     templateVersion: template.version,
     dimensionValues,
+    invalidDimensions,
     scopeValues: {},
     bucket: "Included",
   };
@@ -397,7 +406,7 @@ export async function listResearchedMethods(): Promise<
   ResearchedLedgerMethod[]
 > {
   if (!researchedMethodsPromise) {
-    researchedMethodsPromise = (async () => {
+    const pending = (async () => {
       const entries = await content("methods");
       if (!Array.isArray(entries)) return [];
       const methods = await Promise.all(
@@ -424,6 +433,13 @@ export async function listResearchedMethods(): Promise<
         left.id.localeCompare(right.id)
       );
     })();
+    // Do not cache rejections permanently: a single transient GitHub failure
+    // (rate limit, timeout, 5xx) must not disable the ledger catalog for the
+    // process lifetime. Clear the memo so the next request retries.
+    researchedMethodsPromise = pending.catch((error) => {
+      researchedMethodsPromise = undefined;
+      throw error;
+    });
   }
   return researchedMethodsPromise;
 }

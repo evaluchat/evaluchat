@@ -685,7 +685,7 @@ function predicateFor(
         filter.max !== undefined ? `${prefix} lte ${filter.max}` : undefined,
       ]
         .filter(Boolean)
-        .join(" ");
+        .join(" and ");
     })
     .join(" and ");
 }
@@ -735,24 +735,27 @@ export async function createLedgerWorkspaceItem(
   userId: string,
   methodId: string
 ): Promise<LedgerWorkspaceItem> {
+  // Network reads happen outside the user lock (slow GitHub calls must
+  // not hold the per-user write lock for seconds at a time).
+  const researched = await listResearchedMethods();
+  const catalogueMethod = researched.find((method) => method.id === methodId);
+  if (
+    !catalogueMethod?.evidenceTemplate ||
+    catalogueMethod.acceptedEvidenceCount <= 0
+  ) {
+    throw new LedgerNotReadyError();
+  }
+  const source = await loadLedgerSource(methodId, catalogueMethod.version);
+  const baseline = resolveEvidenceLedgerFromSource({
+    method: source.method,
+    template: source.template,
+    contributions: source.contributions,
+    filters: [],
+  });
+  if (!baseline.scope.baselineCount)
+    throw new LedgerNotReadyError("Method has no accepted evidence");
+
   return withUserLock(userId, async () => {
-    const researched = await listResearchedMethods();
-    const catalogueMethod = researched.find((method) => method.id === methodId);
-    if (
-      !catalogueMethod?.evidenceTemplate ||
-      catalogueMethod.acceptedEvidenceCount <= 0
-    ) {
-      throw new LedgerNotReadyError();
-    }
-    const source = await loadLedgerSource(methodId, catalogueMethod.version);
-    const baseline = resolveEvidenceLedgerFromSource({
-      method: source.method,
-      template: source.template,
-      contributions: source.contributions,
-      filters: [],
-    });
-    if (!baseline.scope.baselineCount)
-      throw new LedgerNotReadyError("Method has no accepted evidence");
     const now = new Date().toISOString();
     const ledgerConfig: LedgerConfig = {
       methodId: source.method.id,
@@ -793,15 +796,25 @@ export async function updateLedgerConfig(
   itemId: string,
   candidate: unknown
 ): Promise<LedgerWorkspaceItem> {
-  return withUserLock(userId, async () => {
+  // Read + ownership check under a short lock; network + resolve outside the
+  // lock; write under a fresh lock (re-validated against the freshest item).
+  const item = await withUserLock(userId, async () => {
     const manifest = await readManifest(userId);
     const item = manifest.items[itemId];
     if (!item || item.ownerId !== userId || item.kind !== "ledger") {
       throw new WorkspaceItemNotFoundError();
     }
-    const { config } = await resolveLedgerConfig(item, candidate);
+    return item;
+  });
+  const { config } = await resolveLedgerConfig(item, candidate);
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const fresh = manifest.items[itemId];
+    if (!fresh || fresh.ownerId !== userId || fresh.kind !== "ledger") {
+      throw new WorkspaceItemNotFoundError();
+    }
     const updated: LedgerWorkspaceItem = {
-      ...item,
+      ...fresh,
       ledgerConfig: config,
       updatedAt: new Date().toISOString(),
     };
@@ -820,21 +833,29 @@ export async function previewLedgerConfig(
   resolution: EvidenceLedgerResolution;
   predicate: string;
 }> {
-  return withUserLock(userId, async () => {
+  const item = await withUserLock(userId, async () => {
     const manifest = await readManifest(userId);
     const item = manifest.items[itemId];
     if (!item || item.ownerId !== userId || item.kind !== "ledger") {
       throw new WorkspaceItemNotFoundError();
     }
-    const { config, source, resolution } = await resolveLedgerConfig(
-      item,
-      candidate
-    );
+    return item;
+  });
+  const { config, source, resolution } = await resolveLedgerConfig(
+    item,
+    candidate
+  );
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const fresh = manifest.items[itemId];
+    if (!fresh || fresh.ownerId !== userId || fresh.kind !== "ledger") {
+      throw new WorkspaceItemNotFoundError();
+    }
     const updated: LedgerWorkspaceItem = {
-      ...item,
+      ...fresh,
       ledgerConfig: config,
       source: {
-        ...item.source,
+        ...fresh.source,
         sourceCommit: source.sourceCommit,
         baselineAcceptedEvidenceCount: resolution.scope.baselineCount,
       },
@@ -855,18 +876,26 @@ export async function createLedgerSnapshotItem(
   itemId: string,
   candidate?: unknown
 ): Promise<{ item: LedgerSnapshotWorkspaceItem; idempotent: boolean }> {
-  return withUserLock(userId, async () => {
+  const ledger = await withUserLock(userId, async () => {
     const manifest = await readManifest(userId);
     const ledger = manifest.items[itemId];
     if (!ledger || ledger.ownerId !== userId || ledger.kind !== "ledger") {
       throw new WorkspaceItemNotFoundError();
     }
-    const { config, source, resolution } = await resolveLedgerConfig(
-      ledger,
-      candidate
-    );
+    return ledger;
+  });
+  const { config, source, resolution } = await resolveLedgerConfig(
+    ledger,
+    candidate
+  );
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const current = manifest.items[itemId];
+    if (!current || current.ownerId !== userId || current.kind !== "ledger") {
+      throw new WorkspaceItemNotFoundError();
+    }
     const fingerprint = resolution.manifestHash;
-    const existing = ledger.snapshotIds
+    const existing = current.snapshotIds
       .map((snapshotId) => manifest.items[snapshotId])
       .find(
         (snapshot): snapshot is LedgerSnapshotWorkspaceItem =>
@@ -908,24 +937,24 @@ export async function createLedgerSnapshotItem(
       createdAt: now,
       updatedAt: now,
       kind: "ledger_snapshot",
-      parentLedgerItemId: ledger.id,
+      parentLedgerItemId: current.id,
       snapshot: snapshotHeader,
       config,
       source: {
-        ...ledger.source,
+        ...current.source,
         sourceCommit: source.sourceCommit,
         baselineAcceptedEvidenceCount: resolution.scope.baselineCount,
       },
     };
     const updatedLedger: LedgerWorkspaceItem = {
-      ...ledger,
+      ...current,
       ledgerConfig: config,
-      snapshotIds: [...ledger.snapshotIds, snapshot.id],
+      snapshotIds: [...current.snapshotIds, snapshot.id],
       source: snapshot.source,
       updatedAt: now,
     };
     manifest.items[snapshot.id] = snapshot;
-    manifest.items[ledger.id] = updatedLedger;
+    manifest.items[current.id] = updatedLedger;
     await writeManifest(userId, manifest);
     return { item: snapshot, idempotent: false };
   });

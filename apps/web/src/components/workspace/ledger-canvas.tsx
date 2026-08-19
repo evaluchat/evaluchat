@@ -48,6 +48,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
   const [previewKey, setPreviewKey] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string>();
   const configKey = useMemo(() => keyFor(config), [config]);
 
   async function refresh(configToPreview = config) {
@@ -93,6 +94,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
 
   async function generate() {
     setGenerating(true);
+    setGenerateError(undefined);
     try {
       const response = await fetch(
         `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/generate`,
@@ -106,6 +108,13 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
       if (!response.ok) throw new Error("Could not generate ledger");
       const result = (await response.json()) as { item: { id: string } };
       router.push(`/workspace/items/${encodeURIComponent(result.item.id)}`);
+    } catch (error) {
+      // Surface the failure instead of silently re-enabling the button.
+      setGenerateError(
+        error instanceof Error && error.message
+          ? error.message
+          : "Ledger generation failed. Try again."
+      );
     } finally {
       setGenerating(false);
     }
@@ -247,6 +256,15 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
       >
         {generating ? "Generating…" : "Generate ledger"}
       </Button>
+      {generateError && (
+        <p
+          role="alert"
+          className="mt-3 text-sm text-destructive"
+          data-testid="generate-error"
+        >
+          {generateError}
+        </p>
+      )}
     </main>
   );
 }

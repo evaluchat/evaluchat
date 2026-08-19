@@ -129,6 +129,7 @@ export function LedgerSnapshotCanvas({
             contributions={contributions.filter(
               (contribution) => contribution.bucket === "Included"
             )}
+            sourceCommit={item.snapshot.sourceCommit}
           />
         )}
         {view === "Descriptive views" && (
@@ -159,7 +160,10 @@ export function LedgerSnapshotCanvas({
               This sealed record lists scope exclusions and missingness; it does
               not reach a conclusion.
             </p>
-            <SnapshotEvidence contributions={gaps} />
+            <SnapshotEvidence
+              contributions={gaps}
+              sourceCommit={item.snapshot.sourceCommit}
+            />
           </>
         )}
       </section>
@@ -169,8 +173,12 @@ export function LedgerSnapshotCanvas({
 
 function SnapshotEvidence({
   contributions,
+  sourceCommit,
 }: {
   contributions: EvidenceLedgerManifest["contributions"];
+  /** Pin links to the snapshot's source commit so later research-main changes
+   * cannot show different content than the sealed snapshot recorded. */
+  sourceCommit: string;
 }) {
   return (
     <>
@@ -181,7 +189,7 @@ function SnapshotEvidence({
             <li key={contribution.path} className="rounded border p-3 text-sm">
               <a
                 className="font-medium underline"
-                href={`https://github.com/evaluchat/research/blob/main/${contribution.path}`}
+                href={`https://github.com/evaluchat/research/blob/${sourceCommit}/${contribution.path}`}
                 target="_blank"
                 rel="noreferrer"
               >
