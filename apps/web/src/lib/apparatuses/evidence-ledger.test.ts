@@ -18,23 +18,6 @@ function researchRoot(): string {
   return directory;
 }
 
-function writeQuestion(root: string, id = "question-one"): void {
-  const directory = path.join(root, "theory");
-  fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(
-    path.join(directory, `${id}.en.md`),
-    `---
-type: Theory
-id: ${id}
-title: ${id} title
-version: 1.0.0
----
-
-# ${id}
-`
-  );
-}
-
 function writeMethod(
   root: string,
   id: string,
@@ -48,7 +31,7 @@ function writeMethod(
 type: Method
 id: ${id}
 version: 1.0.0
-research_questions: [${questionId}]
+research_questions: ["${questionId}"]
 ---
 
 # ${id}
@@ -72,7 +55,6 @@ id: evidence-template
 version: ${version}
 template_kind: form
 applies_to_method: ${methodId}@1.0.0
-question_id: question-one
 fields:
 ${fields}
 ---
@@ -149,7 +131,6 @@ const betaFields = `  education_level:
 describe("Evidence Ledger resolver", () => {
   it("preserves unquoted dates as strings and rejects malformed date values", () => {
     const root = researchRoot();
-    writeQuestion(root);
     writeMethod(root, "beta-method");
     writeTemplate(root, "beta-method", "1.0.0", betaFields);
     writeEvidence(
@@ -171,7 +152,6 @@ describe("Evidence Ledger resolver", () => {
 
     const result = resolveEvidenceLedger({
       researchRoot: root,
-      questionId: "question-one",
       filters: [
         {
           fieldId: "collection_date",
@@ -199,7 +179,6 @@ describe("Evidence Ledger resolver", () => {
     expect(() =>
       resolveEvidenceLedger({
         researchRoot: root,
-        questionId: "question-one",
         filters: [
           {
             fieldId: "collection_date",
@@ -213,7 +192,6 @@ describe("Evidence Ledger resolver", () => {
 
   it("buckets omitted declared dimensions as unknown", () => {
     const root = researchRoot();
-    writeQuestion(root);
     writeMethod(root, "beta-method");
     writeTemplate(root, "beta-method", "1.0.0", betaFields);
     writeEvidence(
@@ -227,7 +205,6 @@ describe("Evidence Ledger resolver", () => {
 
     const result = resolveEvidenceLedger({
       researchRoot: root,
-      questionId: "question-one",
       filters: [
         {
           fieldId: "collection_date",
@@ -250,34 +227,22 @@ describe("Evidence Ledger resolver", () => {
     });
   });
 
-  it("rejects unsafe question ids before resolving paths", () => {
-    expect(() =>
-      resolveEvidenceLedger({
-        researchRoot: researchRoot(),
-        questionId: "../../secrets",
-      })
-    ).toThrow(/must contain only letters, numbers, and hyphens/);
-  });
-
-  it("returns a deterministic empty ledger for the current no-evidence state", () => {
+  it("returns a method-bound question placeholder for API compatibility", () => {
     const root = researchRoot();
-    writeQuestion(root);
     writeMethod(root, "alpha-method");
     writeTemplate(root, "alpha-method", "1.0.0", alphaFields);
 
     const first = resolveEvidenceLedger({
       researchRoot: root,
-      questionId: "question-one",
     });
     const second = resolveEvidenceLedger({
       researchRoot: root,
-      questionId: "question-one",
     });
 
     expect(first.question).toEqual({
-      id: "question-one",
-      title: "question-one title",
-      path: "theory/question-one.en.md",
+      id: "method-bound",
+      title: "Method-bound evidence ledger",
+      path: "method-bound/placeholder",
       version: "1.0.0",
     });
     expect(first.methods).toEqual([
@@ -309,10 +274,8 @@ describe("Evidence Ledger resolver", () => {
 
   it("merges contributing methods and keeps unknown, unavailable, and exclusions distinct", () => {
     const root = researchRoot();
-    writeQuestion(root);
     writeMethod(root, "alpha-method");
     writeMethod(root, "beta-method");
-    writeMethod(root, "unlinked-method", "other-question");
     writeTemplate(root, "alpha-method", "1.0.0", alphaFields);
     writeTemplate(root, "beta-method", "2.0.0", betaFields);
 
@@ -364,14 +327,6 @@ describe("Evidence Ledger resolver", () => {
       "accepted",
       '  education_level: k12\n  collection_date: "2026-02-01"'
     );
-    writeEvidence(
-      root,
-      "unlinked-method",
-      "unlinked-evidence",
-      "1.0.0",
-      "accepted",
-      "  education_level: k12"
-    );
 
     const filters: LedgerScopeFilter[] = [
       {
@@ -388,7 +343,6 @@ describe("Evidence Ledger resolver", () => {
     ];
     const result = resolveEvidenceLedger({
       researchRoot: root,
-      questionId: "question-one",
       filters,
     });
 
@@ -416,7 +370,7 @@ describe("Evidence Ledger resolver", () => {
         "Outside declared scope": 1,
         Unknown: 1,
         Unavailable: 1,
-        "Resolver exclusion": 3,
+        "Resolver exclusion": 2,
       },
     });
 
@@ -452,10 +406,6 @@ describe("Evidence Ledger resolver", () => {
       bucket: "Resolver exclusion",
       exclusionReason: "invalid provenance",
     });
-    expect(byId.get("unlinked-evidence")).toMatchObject({
-      bucket: "Resolver exclusion",
-      exclusionReason: "unlinked question",
-    });
     expect(
       result.contributions.map((contribution) => contribution.path)
     ).toEqual(
@@ -466,14 +416,12 @@ describe("Evidence Ledger resolver", () => {
 
   it("rejects forged predicates over undeclared outcome fields", () => {
     const root = researchRoot();
-    writeQuestion(root);
     writeMethod(root, "alpha-method");
     writeTemplate(root, "alpha-method", "1.0.0", alphaFields);
 
     expect(() =>
       resolveEvidenceLedger({
         researchRoot: root,
-        questionId: "question-one",
         filters: [
           {
             fieldId: "outcome",
@@ -486,7 +434,6 @@ describe("Evidence Ledger resolver", () => {
     expect(() =>
       resolveEvidenceLedger({
         researchRoot: root,
-        questionId: "question-one",
         filters: [
           {
             fieldId: "outcome",
@@ -500,7 +447,6 @@ describe("Evidence Ledger resolver", () => {
 
   it("rejects selected values absent from a historical ledger dimension", () => {
     const root = researchRoot();
-    writeQuestion(root);
     writeMethod(root, "alpha-method");
     writeTemplate(root, "alpha-method", "1.0.0", alphaFields);
     writeTemplate(
@@ -520,7 +466,6 @@ describe("Evidence Ledger resolver", () => {
     expect(() =>
       resolveEvidenceLedger({
         researchRoot: root,
-        questionId: "question-one",
         filters: [
           {
             fieldId: "education_level",
