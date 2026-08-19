@@ -251,6 +251,7 @@ describe("openLedgerPullRequest", () => {
         response({ check_runs: [{ name: "okf-lint", conclusion: "success" }] })
       )
       .mockResolvedValueOnce(response({ status: "behind" }))
+      .mockResolvedValueOnce(response({}))
       .mockResolvedValueOnce(response({ id: 17 }))
       .mockResolvedValueOnce(response({ merged: true }))
       .mockResolvedValueOnce(
@@ -269,24 +270,29 @@ describe("openLedgerPullRequest", () => {
       mergedAt: "2026-08-20T10:00:00.000Z",
       lintConclusion: "success",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(9);
+    expect(fetchMock).toHaveBeenCalledTimes(10);
     expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
       body: expect.stringContaining('"draft":true'),
     });
     expect(fetchMock.mock.calls[5]?.[0]).toContain("/compare/");
-    expect(fetchMock.mock.calls[6]?.[0]).toContain("/pulls/85/reviews");
-    const review = JSON.parse(String(fetchMock.mock.calls[6]?.[1]?.body));
+    expect(fetchMock.mock.calls[6]?.[0]).toContain("/pulls/85");
+    expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({ method: "PATCH" });
+    expect(JSON.parse(String(fetchMock.mock.calls[6]?.[1]?.body))).toEqual({
+      draft: false,
+    });
+    expect(fetchMock.mock.calls[7]?.[0]).toContain("/pulls/85/reviews");
+    const review = JSON.parse(String(fetchMock.mock.calls[7]?.[1]?.body));
     expect(review).toMatchObject({ event: "APPROVE" });
     expect(review.body).toContain(
       "Integrity criteria met (render_hash deterministic, source_commit pinned, consent confirmed, okf-lint pass)."
     );
     expect(review.body).toContain("Fingerprint: sha256:abcdef0123456789");
-    expect(fetchMock.mock.calls[7]?.[0]).toContain("/pulls/85/merge");
-    expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: "PUT" });
+    expect(fetchMock.mock.calls[8]?.[0]).toContain("/pulls/85/merge");
+    expect(fetchMock.mock.calls[8]?.[1]).toMatchObject({ method: "PUT" });
     expect(
-      JSON.parse(String(fetchMock.mock.calls[7]?.[1]?.body))
+      JSON.parse(String(fetchMock.mock.calls[8]?.[1]?.body))
     ).toMatchObject({ merge_method: "squash", sha: "ledger-head-sha" });
-    expect(fetchMock.mock.calls[8]?.[0]).toContain("/pulls/85");
+    expect(fetchMock.mock.calls[9]?.[0]).toContain("/pulls/85");
   });
 
   it.each([
@@ -314,6 +320,12 @@ describe("openLedgerPullRequest", () => {
       expect(
         fetchMock.mock.calls.some(([url]) => String(url).endsWith("/merge"))
       ).toBe(false);
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, request]) =>
+            String(url).endsWith("/pulls/85") && request?.method === "PATCH"
+        )
+      ).toBe(false);
     }
   );
 
@@ -337,6 +349,12 @@ describe("openLedgerPullRequest", () => {
     expect(
       fetchMock.mock.calls.some(([url]) => String(url).endsWith("/merge"))
     ).toBe(false);
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, request]) =>
+          String(url).endsWith("/pulls/85") && request?.method === "PATCH"
+      )
+    ).toBe(false);
   });
 
   it.each([401, 422])(
@@ -349,10 +367,12 @@ describe("openLedgerPullRequest", () => {
           })
         )
         .mockResolvedValueOnce(response({ status: "behind" }))
+        .mockResolvedValueOnce(response({}))
         .mockResolvedValueOnce(response({ id: 17 }))
         .mockResolvedValueOnce(
           response({ message: "ruleset blocked merge" }, status)
-        );
+        )
+        .mockResolvedValueOnce(response({ state: "open", merged: false }));
 
       const result = await openLedgerPullRequest(ledgerInput());
 
@@ -368,6 +388,35 @@ describe("openLedgerPullRequest", () => {
       ).toBe(true);
     }
   );
+
+  it("returns merged when the merge request throws after GitHub completes it", async () => {
+    const fetchMock = createLedgerPullRequest(vi.spyOn(globalThis, "fetch"))
+      .mockResolvedValueOnce(
+        response({ check_runs: [{ name: "okf-lint", conclusion: "success" }] })
+      )
+      .mockResolvedValueOnce(response({ status: "behind" }))
+      .mockResolvedValueOnce(response({}))
+      .mockResolvedValueOnce(response({ id: 17 }))
+      .mockRejectedValueOnce(new Error("merge request timed out"))
+      .mockResolvedValueOnce(
+        response({
+          state: "closed",
+          merged: true,
+          merged_at: "2026-08-20T11:00:00.000Z",
+        })
+      );
+
+    const result = await openLedgerPullRequest(ledgerInput());
+
+    expect(result).toMatchObject({
+      number: 85,
+      status: "merged",
+      mergedAt: "2026-08-20T11:00:00.000Z",
+    });
+    expect(result.autoMergeError).toBeUndefined();
+    expect(fetchMock.mock.calls[8]?.[0]).toContain("/pulls/85/merge");
+    expect(fetchMock.mock.calls[9]?.[0]).toContain("/pulls/85");
+  });
 });
 
 describe("ledgerBranch", () => {

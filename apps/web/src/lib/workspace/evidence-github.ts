@@ -308,6 +308,11 @@ export async function openLedgerPullRequest(
   if (!sourceCommitValid) return baseResult;
 
   try {
+    await githubRequest(`/repos/${RESEARCH_REPOSITORY}/pulls/${number}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draft: false }),
+    });
     await githubRequest(
       `/repos/${RESEARCH_REPOSITORY}/pulls/${number}/reviews`,
       jsonBody({ event: "APPROVE", body: approvalBody(input) })
@@ -342,6 +347,18 @@ export async function openLedgerPullRequest(
       mergedAt: mergedAt || new Date().toISOString(),
     };
   } catch (error) {
+    try {
+      const status = await getLedgerPullRequestStatus(number);
+      if (status.merged) {
+        return {
+          ...baseResult,
+          status: "merged",
+          mergedAt: status.mergedAt,
+        };
+      }
+    } catch {
+      // Preserve the recoverable draft fallback when GitHub cannot confirm it.
+    }
     // The PR and approval remain visible for a human to complete the merge.
     // Return draft state so the route can persist that recoverable fallback.
     return {
