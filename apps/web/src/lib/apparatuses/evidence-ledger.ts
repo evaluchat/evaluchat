@@ -18,7 +18,6 @@ export type EvidenceLedgerBucket =
   | "Resolver exclusion";
 
 export type EvidenceLedgerExclusionReason =
-  | "unlinked question"
   | "invalid provenance"
   | "inaccessible"
   | "not accepted";
@@ -95,7 +94,7 @@ export type EvidenceLedgerResolution = {
   methods: EvidenceLedgerMethod[];
   /** Every packet encountered under methods/, including resolver exclusions. */
   contributions: EvidenceLedgerContribution[];
-  /** Accepted and question-linked packets before scope filtering. */
+  /** Accepted packets before scope filtering. */
   acceptedEvidence: EvidenceLedgerContribution[];
   scope: {
     filters: LedgerScopeFilter[];
@@ -123,13 +122,11 @@ type MethodSource = {
   version: string;
   path: string;
   absolutePath: string;
-  researchQuestions: string[];
   template?: ResolvedTemplate;
 };
 
 type ResolvedTemplate = EvidenceLedgerTemplate & {
   fields: Record<string, ApparatusEvidenceFieldDefinition>;
-  questionId?: string;
 };
 
 const EVIDENCE_FIELD_TYPE_SET = new Set<string>(EVIDENCE_FIELD_TYPES);
@@ -192,16 +189,6 @@ function markdownFiles(root: string): string[] {
     }
   }
   return files.sort(byCodepoint);
-}
-
-function stringArray(value: unknown): string[] {
-  if (
-    !Array.isArray(value) ||
-    !value.every((item) => typeof item === "string")
-  ) {
-    return [];
-  }
-  return [...value].sort(byCodepoint);
 }
 
 function isValidDate(value: string): boolean {
@@ -339,9 +326,6 @@ function validateAndResolveTemplate(
     path: sourcePath,
     dimensions,
     fields,
-    ...(typeof frontmatter.question_id === "string"
-      ? { questionId: frontmatter.question_id }
-      : {}),
   };
 }
 
@@ -419,7 +403,6 @@ function readMethods(root: string): MethodSource[] {
       ),
       path: canonicalPath(root, absolutePath),
       absolutePath,
-      researchQuestions: stringArray(document.frontmatter.research_questions),
     });
   }
   return methods.sort((left, right) => byCodepoint(left.id, right.id));
