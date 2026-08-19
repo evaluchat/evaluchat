@@ -1,5 +1,5 @@
 import { Client } from "@langchain/langgraph-sdk";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type {
   LedgerConfig,
   LedgerScopeFilter,
@@ -42,6 +42,7 @@ import {
   loadLedgerSource,
   type LoadedLedgerSource,
 } from "./ledger-source";
+import { ledgerRenderHash } from "./ledger-publish";
 import {
   catalogForTemplateId,
   getTemplateById,
@@ -650,21 +651,6 @@ function parseLedgerConfig(
   };
 }
 
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (isRecord(value)) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function sha256(value: string): string {
-  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
-}
-
 function predicateFor(
   config: LedgerConfig,
   source: LoadedLedgerSource
@@ -916,20 +902,14 @@ export async function createLedgerSnapshotItem(
       filters: config.filters,
       manifest: resolution.manifest,
       inputFingerprint: fingerprint,
-      renderHash: sha256(
-        canonicalJson({
-          manifestHash: fingerprint,
-          predicate,
-          buckets: resolution.scope.bucketCounts,
-          resolverVersion: "1.0.0",
-        })
-      ),
+      renderHash: "",
       buckets: resolution.scope.bucketCounts,
       predicate,
       generatedAt: now,
       resolverVersion: "1.0.0",
       sourceCommit: source.sourceCommit,
     };
+    snapshotHeader.renderHash = ledgerRenderHash(snapshotHeader, config);
     const snapshot: LedgerSnapshotWorkspaceItem = {
       id: `wi_${randomUUID()}`,
       ownerId: userId,
@@ -1674,6 +1654,55 @@ export async function getWorkspaceItem(
     );
   }
   return enrichWorkspaceItem(item);
+}
+
+/** Read a sealed snapshot owned by the active workspace user. */
+export async function getLedgerSnapshotItem(
+  userId: string,
+  itemId: string
+): Promise<LedgerSnapshotWorkspaceItem> {
+  const item = await getWorkspaceItem(userId, itemId);
+  if (!item || item.kind !== "ledger_snapshot") {
+    throw new WorkspaceItemNotFoundError();
+  }
+  return item;
+}
+
+/** Persist publication metadata without ever modifying snapshot inputs. */
+export async function updateLedgerSnapshotPublication(
+  userId: string,
+  itemId: string,
+  update: {
+    publication?: LedgerSnapshotWorkspaceItem["publication"];
+    renderHash?: string;
+  }
+): Promise<LedgerSnapshotWorkspaceItem> {
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const item = manifest.items[itemId];
+    if (
+      !item ||
+      item.ownerId !== userId ||
+      item.status !== "active" ||
+      item.kind !== "ledger_snapshot"
+    ) {
+      throw new WorkspaceItemNotFoundError();
+    }
+    const updated: LedgerSnapshotWorkspaceItem = {
+      ...item,
+      ...(update.publication === undefined
+        ? {}
+        : { publication: update.publication }),
+      snapshot:
+        update.renderHash === undefined
+          ? item.snapshot
+          : { ...item.snapshot, renderHash: update.renderHash },
+      updatedAt: new Date().toISOString(),
+    };
+    manifest.items[itemId] = updated;
+    await writeManifest(userId, manifest);
+    return updated;
+  });
 }
 
 export class WorkspaceReviewForbiddenError extends Error {
