@@ -126,10 +126,15 @@ describe("LedgerSnapshotCanvas publication controls", () => {
   });
 
   it("labels unpublished, draft, and merged states without enabling snapshot edits", () => {
+    const draft = { status: "draft" as const, pullRequestNumber: 85 };
     expect(publicationStatusText()).toBe("Unpublished");
+    expect(publicationStatusText(draft)).toBe("Draft PR — pending human merge");
+    expect(publicationStatusText(draft, { state: "open", merged: false })).toBe(
+      "Draft PR — pending human merge"
+    );
     expect(
-      publicationStatusText({ status: "draft", pullRequestNumber: 85 })
-    ).toBe("Draft PR — pending human merge");
+      publicationStatusText(draft, { state: "closed", merged: false })
+    ).toBe("Draft PR closed without merge");
     expect(publicationStatusText({ status: "merged", mergedAt: "now" })).toBe(
       "Merged"
     );
@@ -180,7 +185,12 @@ describe("LedgerSnapshotCanvas publication controls", () => {
 
   it("offers republish for a closed unmerged draft while keeping refresh copy", () => {
     const draft = { status: "draft" as const, pullRequestNumber: 85 };
-    expect(publicationStatusText(draft)).toBe("Draft PR — pending human merge");
+    expect(publicationStatusText(draft, { state: "open", merged: false })).toBe(
+      "Draft PR — pending human merge"
+    );
+    expect(
+      publicationStatusText(draft, { state: "closed", merged: false })
+    ).toBe("Draft PR closed without merge");
     expect(canRepublishClosedPullRequest(draft)).toBe(false);
     expect(
       canRepublishClosedPullRequest(draft, { state: "open", merged: false })

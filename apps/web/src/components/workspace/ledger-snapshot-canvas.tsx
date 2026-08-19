@@ -184,11 +184,16 @@ export function LedgerSnapshotCanvas({
 
 type Publication = NonNullable<LedgerSnapshotWorkspaceItem["publication"]>;
 
-export function publicationStatusText(publication?: Publication): string {
+export function publicationStatusText(
+  publication?: Publication,
+  actual?: { state?: string; merged?: boolean }
+): string {
   if (!publication) return "Unpublished";
   return publication.status === "merged"
     ? "Merged"
-    : "Draft PR — pending human merge";
+    : actual?.state === "closed" && actual.merged !== true
+      ? "Draft PR closed without merge"
+      : "Draft PR — pending human merge";
 }
 
 export function canRepublishClosedPullRequest(
@@ -360,9 +365,6 @@ export function LedgerPublicationPanel({
       }
       setPublication(body.publication);
       setPullRequestActual(body.actual);
-      if (!body.actual?.merged) {
-        setPublishError("The recorded pull request has not merged yet.");
-      }
     } catch (error) {
       setPublishError(
         error instanceof Error
@@ -384,7 +386,7 @@ export function LedgerPublicationPanel({
         <div>
           <h2 className="font-semibold">Publish snapshot</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {publicationStatusText(publication)}
+            {publicationStatusText(publication, pullRequestActual)}
           </p>
         </div>
         {!publication && (
