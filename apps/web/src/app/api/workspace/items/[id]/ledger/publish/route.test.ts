@@ -145,7 +145,7 @@ describe("ledger publish route", () => {
       expect.objectContaining({
         ledgerId: "ledger_demo",
         inputFingerprint: "sha256:abcdef0123456789",
-        filePath: "evidence-ledgers/ledger_demo.en.md",
+        filePath: "methods/demo-method/evidence/ledgers/ledger_demo.en.md",
       })
     );
     const openInput = harness.openLedgerPullRequest.mock.calls[0][0];
@@ -275,7 +275,7 @@ describe("ledger publish route", () => {
     const response = await GET(new Request("http://localhost"), context());
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      filePath: "evidence-ledgers/ledger_demo.en.md",
+      filePath: "methods/demo-method/evidence/ledgers/ledger_demo.en.md",
       destination: "evaluchat/research",
     });
     expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
