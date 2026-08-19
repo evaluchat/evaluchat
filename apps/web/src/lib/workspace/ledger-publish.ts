@@ -278,7 +278,7 @@ export function validateLedgerPublicationDeclarations(
     kind: "evidence",
     templateId: "evidence-template",
     templateVersion: snapshot.templateVersion,
-    sourcePath: `evidence-ledgers/${snapshot.ledgerId}.en.md`,
+    sourcePath: `methods/${snapshot.methodId}/evidence/ledgers/${snapshot.ledgerId}.en.md`,
     guidance: "",
     layoutMarkdown: "",
     fields: {

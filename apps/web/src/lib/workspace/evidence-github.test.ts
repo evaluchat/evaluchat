@@ -206,7 +206,7 @@ describe("ledgerBranch", () => {
   const base = {
     ledgerId: "ledger_demo",
     inputFingerprint: "sha256:abcdef0123456789ffff",
-    filePath: "evidence-ledgers/ledger_demo.en.md",
+    filePath: "methods/ai-assisted-essay/evidence/ledgers/ledger_demo.en.md",
     markdown: "---\n",
     body: "body",
   };

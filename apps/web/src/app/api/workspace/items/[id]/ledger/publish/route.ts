@@ -45,8 +45,8 @@ function publicationBody(input: {
   ].join("\n");
 }
 
-function filePath(ledgerId: string): string {
-  return `evidence-ledgers/${ledgerId}.en.md`;
+function filePath(ledgerId: string, methodId: string): string {
+  return `methods/${methodId}/evidence/ledgers/${ledgerId}.en.md`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,7 +68,7 @@ export async function GET(_request: Request, context: RouteContext) {
         ? item.snapshot
         : { ...item.snapshot, renderHash: computedHash };
     return NextResponse.json({
-      filePath: filePath(snapshot.ledgerId),
+      filePath: filePath(snapshot.ledgerId, snapshot.methodId),
       markdown: renderLedgerMarkdown(snapshot, item.config),
       destination: RESEARCH_REPOSITORY,
     });
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const pullRequest = await openLedgerPullRequest({
       ledgerId: item.snapshot.ledgerId,
       inputFingerprint: item.snapshot.inputFingerprint,
-      filePath: filePath(item.snapshot.ledgerId),
+      filePath: filePath(item.snapshot.ledgerId, item.snapshot.methodId),
       markdown,
       body: publicationBody(item.snapshot),
       ...(retry ? { retry } : {}),
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({
       publication,
       pullRequestUrl: pullRequest.url,
-      filePath: filePath(item.snapshot.ledgerId),
+      filePath: filePath(item.snapshot.ledgerId, item.snapshot.methodId),
       lintConclusion: pullRequest.lintConclusion,
     });
   } catch (error) {

@@ -269,7 +269,7 @@ export function LedgerPublicationPanel({
   }, [item.publication]);
 
   const route = `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/publish`;
-  const filePath = `evidence-ledgers/${item.snapshot.ledgerId}.en.md`;
+  const filePath = `methods/${item.snapshot.methodId}/evidence/ledgers/${item.snapshot.ledgerId}.en.md`;
 
   async function openPreview(nextRePublish = false) {
     setAuthorised(false);
