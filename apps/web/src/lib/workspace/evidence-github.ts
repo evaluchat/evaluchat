@@ -65,7 +65,7 @@ async function sleep(milliseconds: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function waitForOkfLint(
+export async function waitForOkfLint(
   sha: string
 ): Promise<{ passed: boolean; conclusion?: string }> {
   const attempts = Math.max(
@@ -103,6 +103,145 @@ async function waitForOkfLint(
     if (attempt + 1 < attempts && intervalMs > 0) await sleep(intervalMs);
   }
   return { passed: false };
+}
+
+export type GithubResearchWriteAccess = {
+  allowed: boolean;
+  login?: string;
+  reason?: "missing_identity" | "missing_write_access";
+};
+
+/**
+ * The token-backed GitHub identity is the identity used for the subsequent
+ * branch, commit, and PR calls. Check its collaborator permission before a
+ * public write so a failed publish cannot leave a branch behind.
+ */
+export async function getGithubResearchWriteAccess(): Promise<GithubResearchWriteAccess> {
+  let identity: GithubJson;
+  try {
+    identity = await githubRequest("/user", { method: "GET" });
+  } catch {
+    return { allowed: false, reason: "missing_identity" };
+  }
+  const login = identity.login;
+  if (typeof login !== "string" || !login) {
+    return { allowed: false, reason: "missing_identity" };
+  }
+  try {
+    const permission = await githubRequest(
+      `/repos/${RESEARCH_REPOSITORY}/collaborators/${encodeURIComponent(login)}/permission`,
+      { method: "GET" }
+    );
+    const level = permission.permission;
+    if (["admin", "maintain", "write"].includes(level)) {
+      return { allowed: true, login };
+    }
+  } catch {
+    // GitHub returns 404 for a non-collaborator; it remains an access denial.
+  }
+  return { allowed: false, login, reason: "missing_write_access" };
+}
+
+export type LedgerPullRequestStatus = {
+  state: "open" | "closed";
+  merged: boolean;
+  mergedAt?: string;
+};
+
+export async function getLedgerPullRequestStatus(
+  pullRequestNumber: number
+): Promise<LedgerPullRequestStatus> {
+  const pullRequest = await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/pulls/${pullRequestNumber}`,
+    { method: "GET" }
+  );
+  const state = pullRequest.state === "closed" ? "closed" : "open";
+  const merged =
+    pullRequest.merged === true || typeof pullRequest.merged_at === "string";
+  return {
+    state,
+    merged,
+    ...(typeof pullRequest.merged_at === "string"
+      ? { mergedAt: pullRequest.merged_at }
+      : {}),
+  };
+}
+
+export type OpenLedgerPullRequestInput = {
+  ledgerId: string;
+  inputFingerprint: string;
+  filePath: string;
+  markdown: string;
+  body: string;
+  /** A closed prior publication needs a distinct branch, never a force-push. */
+  retry?: number;
+};
+
+export type OpenLedgerPullRequestResult = {
+  number: number;
+  url: string;
+  branch: string;
+  lintConclusion?: string;
+};
+
+function ledgerBranch(input: OpenLedgerPullRequestInput): string {
+  const fingerprint = input.inputFingerprint.replace(/^sha256:/, "");
+  const suffix = input.retry && input.retry > 1 ? `-retry-${input.retry}` : "";
+  return `ledger/${safeBranchPart(input.ledgerId)}-${safeBranchPart(fingerprint.slice(0, 12))}${suffix}`;
+}
+
+/** Create exactly one immutable ledger file in a draft PR. Never merge it. */
+export async function openLedgerPullRequest(
+  input: OpenLedgerPullRequestInput
+): Promise<OpenLedgerPullRequestResult> {
+  const branch = ledgerBranch(input);
+  const baseRef = await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/git/ref/heads/main`,
+    { method: "GET" }
+  );
+  const baseSha = baseRef.object?.sha;
+  if (typeof baseSha !== "string" || !baseSha) {
+    throw new Error("Research main branch did not return a commit SHA");
+  }
+  await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/git/refs`,
+    jsonBody({ ref: `refs/heads/${branch}`, sha: baseSha })
+  );
+  await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/contents/${input.filePath}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: `docs(evidence-ledger): ${input.ledgerId} snapshot ${input.inputFingerprint.replace(/^sha256:/, "").slice(0, 12)}`,
+        content: Buffer.from(input.markdown, "utf8").toString("base64"),
+        branch,
+      }),
+    }
+  );
+  const pullRequest = await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/pulls`,
+    jsonBody({
+      title: `docs(evidence-ledger): ${input.ledgerId}`,
+      head: branch,
+      base: "main",
+      draft: true,
+      body: input.body,
+    })
+  );
+  const number = pullRequest.number;
+  const url = pullRequest.html_url;
+  const headSha = pullRequest.head?.sha;
+  if (
+    typeof number !== "number" ||
+    typeof url !== "string" ||
+    typeof headSha !== "string" ||
+    !headSha
+  ) {
+    throw new Error("GitHub pull request response was incomplete");
+  }
+  const lint = await waitForOkfLint(headSha);
+  return { number, url, branch, lintConclusion: lint.conclusion };
 }
 
 export type OpenEvidencePullRequestInput = {

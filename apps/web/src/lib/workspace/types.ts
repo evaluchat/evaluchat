@@ -3,6 +3,7 @@ import type {
   LedgerConfig,
   LedgerDimension,
   LedgerMissingSemantics,
+  LedgerPublicationRef,
   LedgerSnapshotData,
 } from "@opencanvas/shared";
 
@@ -217,6 +218,8 @@ export type LedgerSnapshotWorkspaceItem = Omit<WorkspaceItemBase, "source"> & {
   kind: "ledger_snapshot";
   parentLedgerItemId: string;
   snapshot: LedgerSnapshotData;
+  /** Present after a draft research PR has been created. */
+  publication?: LedgerPublicationRef;
   config: LedgerConfig;
   source: LedgerSource;
 };
