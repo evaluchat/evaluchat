@@ -208,6 +208,30 @@ describe("LedgerSnapshotCanvas publication controls", () => {
     expect(canRepublishClosedPullRequest(nextDraft, undefined)).toBe(false);
   });
 
+  it("replaces pending-merge copy when the draft PR is closed without merge", () => {
+    const draftItem = {
+      ...item,
+      publication: { status: "draft" as const, pullRequestNumber: 85 },
+    };
+    const pendingMarkup = renderToStaticMarkup(
+      React.createElement(LedgerPublicationPanel, { item: draftItem })
+    );
+    expect(pendingMarkup).toContain("Pending human merge");
+    expect(pendingMarkup).not.toContain("Republish to create a new draft PR.");
+
+    // LedgerPublicationPanel useState order: publication … pullRequestActual (12).
+    reactState.enabled = true;
+    reactState.slots[0] = { value: draftItem.publication };
+    reactState.slots[12] = { value: { state: "closed", merged: false } };
+    const closedMarkup = renderToStaticMarkup(
+      React.createElement(LedgerPublicationPanel, { item: draftItem })
+    );
+    expect(closedMarkup).toContain(
+      "Draft PR closed without merge. Republish to create a new draft PR."
+    );
+    expect(closedMarkup).not.toContain("Pending human merge");
+  });
+
   it("reopening the publish dialog resets declarations and clears stale preview", async () => {
     // LedgerPublicationPanel useState order: publication, dialogOpen, preview,
     // previewError, publishError, isLoadingPreview, isPublishing, isRefreshing,

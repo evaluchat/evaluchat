@@ -429,8 +429,9 @@ export function LedgerPublicationPanel({
       )}
       {publication?.status === "draft" && (
         <p className="mt-2 text-sm text-muted-foreground">
-          Pending human merge. This sealed snapshot remains an unpublished
-          workspace artifact until its draft PR merges.
+          {canRepublishClosedPullRequest(publication, pullRequestActual)
+            ? "Draft PR closed without merge. Republish to create a new draft PR."
+            : "Pending human merge. This sealed snapshot remains an unpublished workspace artifact until its draft PR merges."}
         </p>
       )}
       {publication?.status === "merged" && (
