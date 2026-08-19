@@ -119,7 +119,9 @@ export async function assessThesis(
     const lastContent =
       typeof lastStudentMsg.content === "string"
         ? lastStudentMsg.content
-        : JSON.stringify(lastStudentMsg.content);
+        : lastStudentMsg.content == null
+          ? ""
+          : (JSON.stringify(lastStudentMsg.content) ?? "");
 
     if (detectHollowInput(lastContent)) {
       return {

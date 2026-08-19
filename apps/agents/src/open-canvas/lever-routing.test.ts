@@ -153,6 +153,20 @@ describe("apparatus lever routing", () => {
     ).toBe("cleanState");
   });
 
+  it("assesses a thesis when drafting_gate is an empty string", () => {
+    expect(
+      routeAfterGeneralReply(
+        makeState({
+          phase_state: undefined,
+          apparatusConfiguration: {
+            ...canonicalConfiguration,
+            drafting_gate: "",
+          },
+        })
+      )
+    ).toBe("assessThesis");
+  });
+
   it("assesses a thesis for the canonical socratic profile", () => {
     expect(
       routeAfterGeneralReply(
