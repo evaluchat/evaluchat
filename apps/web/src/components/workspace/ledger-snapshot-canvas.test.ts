@@ -1,11 +1,56 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const reactState = vi.hoisted(() => ({
+  enabled: false,
+  index: 0,
+  slots: [] as Array<{ value: unknown }>,
+  openPreview: undefined as undefined | (() => void),
+}));
+
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    useState(initial: unknown) {
+      if (!reactState.enabled) return actual.useState(initial);
+      const i = reactState.index++;
+      if (!reactState.slots[i]) reactState.slots[i] = { value: initial };
+      return [
+        reactState.slots[i].value,
+        (update: unknown) => {
+          const slot = reactState.slots[i];
+          slot.value =
+            typeof update === "function"
+              ? (update as (value: unknown) => unknown)(slot.value)
+              : update;
+        },
+      ];
+    },
+  };
+});
 
 vi.mock("lucide-react", () => ({ ExternalLink: () => null }));
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("button", { type: "button" }, children),
+  Button: ({
+    children,
+    onClick,
+    ...props
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    "data-testid"?: string;
+  }) => {
+    if (props["data-testid"] === "ledger-publish" && onClick) {
+      reactState.openPreview = onClick;
+    }
+    return React.createElement(
+      "button",
+      { type: "button", ...props },
+      children
+    );
+  },
 }));
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: () => null,
@@ -17,6 +62,7 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 
 import {
+  LedgerPublicationPanel,
   LedgerSnapshotCanvas,
   canRepublishClosedPullRequest,
   ledgerPublishRequestBody,
@@ -71,6 +117,14 @@ const item = {
 };
 
 describe("LedgerSnapshotCanvas publication controls", () => {
+  afterEach(() => {
+    reactState.enabled = false;
+    reactState.index = 0;
+    reactState.slots = [];
+    reactState.openPreview = undefined;
+    vi.unstubAllGlobals();
+  });
+
   it("labels unpublished, draft, and merged states without enabling snapshot edits", () => {
     expect(publicationStatusText()).toBe("Unpublished");
     expect(
@@ -142,5 +196,55 @@ describe("LedgerSnapshotCanvas publication controls", () => {
     const nextDraft = { status: "draft" as const, pullRequestNumber: 86 };
     expect(canRepublishClosedPullRequest(nextDraft)).toBe(false);
     expect(canRepublishClosedPullRequest(nextDraft, undefined)).toBe(false);
+  });
+
+  it("reopening the publish dialog resets declarations and clears stale preview", async () => {
+    // LedgerPublicationPanel useState order: publication, dialogOpen, preview,
+    // previewError, publishError, isLoadingPreview, isPublishing, isRefreshing,
+    // authorised, anonymised, publicData, rePublish, pullRequestActual.
+    const SLOT = {
+      preview: 2,
+      isLoadingPreview: 5,
+      authorised: 8,
+      anonymised: 9,
+      publicData: 10,
+    } as const;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ markdown: "# stale preview" }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: "Could not load the publication preview.",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    reactState.enabled = true;
+    renderToStaticMarkup(React.createElement(LedgerPublicationPanel, { item }));
+    expect(reactState.openPreview).toBeTypeOf("function");
+
+    async function openAndSettle(callCount: number) {
+      reactState.openPreview!();
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(callCount);
+        expect(reactState.slots[SLOT.isLoadingPreview]?.value).toBe(false);
+      });
+    }
+
+    await openAndSettle(1);
+    expect(reactState.slots[SLOT.preview]?.value).toBe("# stale preview");
+    reactState.slots[SLOT.authorised].value = true;
+    reactState.slots[SLOT.anonymised].value = true;
+    reactState.slots[SLOT.publicData].value = true;
+
+    await openAndSettle(2);
+    expect(reactState.slots[SLOT.authorised]?.value).toBe(false);
+    expect(reactState.slots[SLOT.anonymised]?.value).toBe(false);
+    expect(reactState.slots[SLOT.publicData]?.value).toBe(false);
+    expect(reactState.slots[SLOT.preview]?.value).toBeUndefined();
   });
 });

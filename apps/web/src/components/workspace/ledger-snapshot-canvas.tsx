@@ -267,6 +267,10 @@ export function LedgerPublicationPanel({
   const filePath = `evidence-ledgers/${item.snapshot.ledgerId}.en.md`;
 
   async function openPreview(nextRePublish = false) {
+    setAuthorised(false);
+    setAnonymised(false);
+    setPublicData(false);
+    setPreview(undefined);
     setRePublish(nextRePublish);
     setDialogOpen(true);
     setPreviewError(undefined);
