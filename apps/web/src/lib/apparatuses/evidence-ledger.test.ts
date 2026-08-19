@@ -256,7 +256,7 @@ describe("Evidence Ledger resolver", () => {
         researchRoot: researchRoot(),
         questionId: "../../secrets",
       })
-    ).toThrow(EvidenceLedgerResolutionError);
+    ).toThrow(/must contain only letters, numbers, and hyphens/);
   });
 
   it("returns a deterministic empty ledger for the current no-evidence state", () => {

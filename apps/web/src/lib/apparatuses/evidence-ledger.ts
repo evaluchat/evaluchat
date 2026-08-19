@@ -183,6 +183,10 @@ function readMarkdownDocument(absolutePath: string): MarkdownDocument {
   return { source, frontmatter };
 }
 
+function byCodepoint(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function markdownFiles(root: string): string[] {
   if (!fs.existsSync(root)) return [];
   const files: string[] = [];
@@ -198,7 +202,7 @@ function markdownFiles(root: string): string[] {
       files.push(entryPath);
     }
   }
-  return files.sort((left, right) => left.localeCompare(right));
+  return files.sort(byCodepoint);
 }
 
 function stringArray(value: unknown): string[] {
@@ -208,7 +212,7 @@ function stringArray(value: unknown): string[] {
   ) {
     return [];
   }
-  return [...value].sort((left, right) => left.localeCompare(right));
+  return [...value].sort(byCodepoint);
 }
 
 function isValidDate(value: string): boolean {
@@ -283,9 +287,7 @@ function validateAndResolveTemplate(
 
   const fields: Record<string, ApparatusEvidenceFieldDefinition> = {};
   const dimensions: EvidenceLedgerDimension[] = [];
-  for (const fieldId of Object.keys(frontmatter.fields).sort((left, right) =>
-    left.localeCompare(right)
-  )) {
+  for (const fieldId of Object.keys(frontmatter.fields).sort(byCodepoint)) {
     const definition = frontmatter.fields[fieldId];
     if (!isRecord(definition)) {
       throw new EvidenceLedgerResolutionError(
@@ -365,7 +367,7 @@ function templatePaths(root: string, method: MethodSource): string[] {
     }
   }
   paths.push(...markdownFiles(path.join(methodRoot, "evidence-templates")));
-  return [...new Set(paths)].sort((left, right) => left.localeCompare(right));
+  return [...new Set(paths)].sort(byCodepoint);
 }
 
 function resolveTemplates(
@@ -431,7 +433,7 @@ function readMethods(root: string): MethodSource[] {
       researchQuestions: stringArray(document.frontmatter.research_questions),
     });
   }
-  return methods.sort((left, right) => left.id.localeCompare(right.id));
+  return methods.sort((left, right) => byCodepoint(left.id, right.id));
 }
 
 function canonicalize(value: unknown): unknown {
@@ -439,7 +441,7 @@ function canonicalize(value: unknown): unknown {
   if (isRecord(value)) {
     return Object.fromEntries(
       Object.keys(value)
-        .sort((left, right) => left.localeCompare(right))
+        .sort(byCodepoint)
         .map((key) => [key, canonicalize(value[key])])
     );
   }
@@ -464,9 +466,7 @@ function canonicalFilters(filters: LedgerScopeFilter[]): LedgerScopeFilter[] {
         }
         return {
           ...filter,
-          values: [...new Set(filter.values)].sort((left, right) =>
-            left.localeCompare(right)
-          ),
+          values: [...new Set(filter.values)].sort(byCodepoint),
         };
       }
       if (filter.min === undefined && filter.max === undefined) {
@@ -476,7 +476,7 @@ function canonicalFilters(filters: LedgerScopeFilter[]): LedgerScopeFilter[] {
       }
       return { ...filter };
     })
-    .sort((left, right) => left.fieldId.localeCompare(right.fieldId));
+    .sort((left, right) => byCodepoint(left.fieldId, right.fieldId));
 }
 
 function validateScopeFilters(
@@ -908,7 +908,7 @@ export function resolveEvidenceLedger(
       );
     }
   }
-  contributions.sort((left, right) => left.path.localeCompare(right.path));
+  contributions.sort((left, right) => byCodepoint(left.path, right.path));
 
   const acceptedEvidence = contributions.filter(
     (contribution) => contribution.bucket !== "Resolver exclusion"

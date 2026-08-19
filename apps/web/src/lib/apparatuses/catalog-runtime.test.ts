@@ -217,7 +217,10 @@ describe("generated apparatus catalog", () => {
         collection_date: {
           type: "date" as const,
           missing_semantics: "unknown",
-          ledger_dimension: { role: "collection", control: "range" },
+          ledger_dimension: {
+            role: "collection" as const,
+            control: "range" as const,
+          },
         },
       },
     };

@@ -15,7 +15,7 @@ reviews:
     # manually with @coderabbitai review on demand. Other direct-to-main PRs
     # (feature/fix) keep automatic review.
     ignore_title_keywords:
-      - "release"
+      - "release:"
   pre_merge_checks:
     docstrings:
       mode: off
