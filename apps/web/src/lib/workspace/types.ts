@@ -8,6 +8,7 @@ import type {
 } from "@opencanvas/shared";
 
 export const DEFAULT_WORKSPACE_TEMPLATE_ID = "evaluchat-getting-started";
+export const FINDING_STARTER_TEMPLATE_ID = "finding-starter";
 export const DEFAULT_METHOD_PROFILE_ID = "canonical-constrained-dialogue";
 
 export type FormFieldType =

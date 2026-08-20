@@ -12,6 +12,7 @@
     "generate:apparatus": "tsx scripts/generate-apparatus-mirror.ts",
     "generate:templates": "tsx scripts/generate-template-catalog.ts",
     "generate:platform-templates": "tsx scripts/generate-platform-template-catalog.ts",
+    "generate:workspace-templates": "tsx scripts/generate-workspace-template-catalog.ts",
     "deploy:oss-dev": "bash scripts/oss-dev-deploy.sh",
     "build": "turbo build",
     "turbo:command": "turbo",
