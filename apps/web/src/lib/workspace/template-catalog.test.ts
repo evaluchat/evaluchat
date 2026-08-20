@@ -51,8 +51,8 @@ describe("workspace template catalog", () => {
     expect(template.assistantGuidance.toLowerCase()).toMatch(
       /do not suggest a claim/
     );
-    expect(template.assistantGuidance.toLowerCase()).toMatch(
-      /recommend a confidence tier/
+    expect(template.assistantGuidance).toContain(
+      "Do not suggest a claim, recommend a confidence tier"
     );
   });
 
