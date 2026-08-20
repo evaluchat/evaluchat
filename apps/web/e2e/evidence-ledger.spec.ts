@@ -114,7 +114,7 @@ test.describe("@regression evidence-ledger", () => {
     const banner = page.getByTestId("workspace-item-banner");
     await expect(banner.getByRole("link", { name: "Workspace" })).toBeVisible();
     await expect(banner.getByTestId("generate-ledger")).toBeVisible();
-    await expect(page.locator("#chat-input")).toBeVisible({
+    await expect(page.getByTestId("chat-input")).toBeVisible({
       timeout: TIMEOUTS.pageLoad,
     });
     // Method card: Method + baseline accepted evidence.
@@ -187,7 +187,7 @@ test.describe("@regression evidence-ledger", () => {
       timeout: TIMEOUTS.pageLoad,
     });
 
-    const chatInput = page.locator("#chat-input");
+    const chatInput = page.getByTestId("chat-input");
     await expect(chatInput).toBeVisible({ timeout: TIMEOUTS.pageLoad });
     await chatInput.fill("Filter the ledger to education_level k12");
     await chatInput.press("Enter");
@@ -247,7 +247,7 @@ test.describe("@regression evidence-ledger", () => {
     await expect(header).toContainText("Resolver exclusion: 2");
 
     // No edit affordances in the snapshot.
-    await expect(page.locator("#chat-input")).toHaveCount(0);
+    await expect(page.getByTestId("chat-input")).toHaveCount(0);
     await expect(
       page.locator("button:has-text('Generate ledger')")
     ).toHaveCount(0);
