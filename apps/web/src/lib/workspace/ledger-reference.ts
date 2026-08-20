@@ -111,35 +111,6 @@ function dumpFrontmatter(frontmatter: Frontmatter): string {
     .trimEnd();
 }
 
-function evidenceLedgerEntries(value: unknown): MergedLedger[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((entry) => {
-    if (!isRecord(entry) || typeof entry.id !== "string") return [];
-    const method = identity(entry.method);
-    const evidenceTemplate = identity(entry.evidence_template);
-    if (
-      !method ||
-      !evidenceTemplate ||
-      typeof entry.path !== "string" ||
-      typeof entry.source_commit !== "string" ||
-      typeof entry.input_fingerprint !== "string"
-    ) {
-      return [];
-    }
-    return [
-      {
-        id: entry.id,
-        title: typeof entry.title === "string" ? entry.title : entry.id,
-        path: entry.path,
-        method,
-        evidence_template: evidenceTemplate,
-        source_commit: entry.source_commit,
-        input_fingerprint: entry.input_fingerprint,
-      },
-    ];
-  });
-}
-
 function citationFields(ledger: MergedLedger) {
   return {
     id: ledger.id,
@@ -171,16 +142,15 @@ export function insertLedgerReference(
   ledger: MergedLedger
 ): string {
   const { frontmatter, body } = parseMarkdownFrontmatter(markdown);
-  const existing = evidenceLedgerEntries(frontmatter.evidence_ledgers);
-  const alreadyCited = existing.some((entry) => entry.id === ledger.id);
+  const raw = frontmatter.evidence_ledgers;
+  const isList = Array.isArray(raw);
+  const alreadyCited =
+    isList && raw.some((entry) => isRecord(entry) && entry.id === ledger.id);
   const alreadyCard = body.includes(ledgerRefMarker(ledger.id));
   if (alreadyCited && alreadyCard) return markdown;
 
-  if (!alreadyCited) {
-    frontmatter.evidence_ledgers = [
-      ...existing.map(citationFields),
-      citationFields(ledger),
-    ];
+  if (isList && !alreadyCited) {
+    frontmatter.evidence_ledgers = [...raw, citationFields(ledger)];
   }
   const nextBody = insertCard(
     body,

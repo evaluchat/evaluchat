@@ -252,4 +252,70 @@ describe("insertLedgerReference", () => {
     ]);
     expect(twice).toBe(once);
   });
+
+  it("retains a pre-existing evidence_ledgers entry instead of rewriting the list", async () => {
+    const { insertLedgerReference } = await import("./ledger-picker");
+    const ledger = {
+      id: "ledger-k12-us",
+      title: "Demo method — education level k12, country US",
+      path: "methods/demo-method/evidence/ledgers/ledger-k12-us.en.md",
+      method: { id: "demo-method", version: "1.0.0" },
+      evidence_template: { id: "evidence-template", version: "1.2.0" },
+      source_commit: "abcdef0123456789",
+      input_fingerprint: "sha256:ledgerhash",
+    };
+    const source = FINDING.replace(
+      "evidence_ledgers: []",
+      `evidence_ledgers:
+  - id: leftover-malformed
+    extra: keep-me
+    path: not-a-complete-citation`
+    );
+    const next = insertLedgerReference(source, ledger);
+    const match = next.match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+    expect(match).toBeTruthy();
+    const frontmatter = yaml.load(match![1], {
+      schema: yaml.JSON_SCHEMA,
+    }) as Record<string, unknown>;
+    expect(frontmatter.evidence_ledgers).toEqual([
+      {
+        id: "leftover-malformed",
+        extra: "keep-me",
+        path: "not-a-complete-citation",
+      },
+      {
+        id: "ledger-k12-us",
+        path: "methods/demo-method/evidence/ledgers/ledger-k12-us.en.md",
+        method: { id: "demo-method", version: "1.0.0" },
+        evidence_template: { id: "evidence-template", version: "1.2.0" },
+        source_commit: "abcdef0123456789",
+        input_fingerprint: "sha256:ledgerhash",
+      },
+    ]);
+  });
+
+  it("does not replace a non-array evidence_ledgers value", async () => {
+    const { insertLedgerReference } = await import("./ledger-picker");
+    const ledger = {
+      id: "ledger-k12-us",
+      title: "Demo method — education level k12, country US",
+      path: "methods/demo-method/evidence/ledgers/ledger-k12-us.en.md",
+      method: { id: "demo-method", version: "1.0.0" },
+      evidence_template: { id: "evidence-template", version: "1.2.0" },
+      source_commit: "abcdef0123456789",
+      input_fingerprint: "sha256:ledgerhash",
+    };
+    const source = FINDING.replace(
+      "evidence_ledgers: []",
+      'evidence_ledgers: "keep-scalar"'
+    );
+    const next = insertLedgerReference(source, ledger);
+    const match = next.match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+    expect(match).toBeTruthy();
+    const frontmatter = yaml.load(match![1], {
+      schema: yaml.JSON_SCHEMA,
+    }) as Record<string, unknown>;
+    expect(frontmatter.evidence_ledgers).toBe("keep-scalar");
+    expect(next).toContain("<!-- ledger-ref:ledger-k12-us -->");
+  });
 });
