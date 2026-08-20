@@ -24,6 +24,7 @@ import { MethodParticipantCanvas } from "./method-participant-canvas";
 import { MethodRunCanvas } from "./method-run-canvas";
 import { EvidenceCanvas } from "./evidence-canvas";
 import { LedgerCanvas } from "./ledger-canvas";
+import { LedgerPublishPage } from "./ledger-publish-page";
 import { LedgerSnapshotCanvas } from "./ledger-snapshot-canvas";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -292,6 +293,9 @@ export function WorkspaceCanvas() {
   }
 
   if (item.kind === "ledger_snapshot") {
+    if (searchParams.get("publish") === "1") {
+      return <LedgerPublishPage item={item} />;
+    }
     return <LedgerSnapshotCanvas item={item} />;
   }
 
