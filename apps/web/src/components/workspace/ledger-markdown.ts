@@ -81,11 +81,15 @@ function normalizeFilter(
   ) {
     return undefined;
   }
+  const minValue =
+    typeof min === "number" || typeof min === "string" ? min : undefined;
+  const maxValue =
+    typeof max === "number" || typeof max === "string" ? max : undefined;
   return {
     fieldId,
     control: "range",
-    ...(min !== undefined ? { min } : {}),
-    ...(max !== undefined ? { max } : {}),
+    ...(minValue !== undefined ? { min: minValue } : {}),
+    ...(maxValue !== undefined ? { max: maxValue } : {}),
   };
 }
 
