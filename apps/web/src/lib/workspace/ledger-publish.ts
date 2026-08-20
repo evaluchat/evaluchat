@@ -8,6 +8,7 @@ import type {
 import type { EvidenceSnapshot } from "./evidence";
 import { validateEvidenceSubmission } from "./evidence";
 import { FormValidationError } from "./form-validation";
+import { ledgerEvidenceFilePath } from "./ledger-paths";
 
 const RESEARCH_BLOB_URL = "https://github.com/evaluchat/research/blob";
 
@@ -278,7 +279,7 @@ export function validateLedgerPublicationDeclarations(
     kind: "evidence",
     templateId: "evidence-template",
     templateVersion: snapshot.templateVersion,
-    sourcePath: `methods/${snapshot.methodId}/evidence/ledgers/${snapshot.ledgerId}.en.md`,
+    sourcePath: ledgerEvidenceFilePath(snapshot.ledgerId, snapshot.methodId),
     guidance: "",
     layoutMarkdown: "",
     fields: {

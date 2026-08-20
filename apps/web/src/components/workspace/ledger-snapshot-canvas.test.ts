@@ -9,12 +9,12 @@ vi.mock("next/link", () => ({
 vi.mock("lucide-react", () => ({ ChevronRight: () => null }));
 
 import {
-  LedgerSnapshotCanvas,
   canRepublishClosedPullRequest,
   ledgerPublishRequestBody,
   publicationAccessError,
   publicationStatusText,
-} from "./ledger-snapshot-canvas";
+} from "@/lib/workspace/ledger-publication";
+import { LedgerSnapshotCanvas } from "./ledger-snapshot-canvas";
 
 const item = {
   id: "wi_snapshot",

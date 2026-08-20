@@ -140,7 +140,9 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
             Workspace
           </Link>
           <ChevronRight className="h-4 w-4" aria-hidden />
-          <span className="font-medium text-foreground">Evidence Ledger</span>
+          <span aria-current="page" className="font-medium text-foreground">
+            Evidence Ledger
+          </span>
         </nav>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="text-lg font-semibold">Evidence Ledger</h1>
@@ -150,7 +152,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
         </div>
       </header>
       <section className="rounded-lg border bg-card p-5">
-        <h1 className="text-lg font-semibold">Selected Method version</h1>
+        <h2 className="text-lg font-semibold">Selected Method version</h2>
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Method</dt>

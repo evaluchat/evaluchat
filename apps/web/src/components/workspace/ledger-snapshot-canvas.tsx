@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { EvidenceLedgerManifest } from "@/lib/apparatuses/evidence-ledger";
 import type { LedgerSnapshotWorkspaceItem } from "@/lib/workspace/types";
+import { publicationStatusText } from "@/lib/workspace/ledger-publication";
 
 const VIEWS = [
   "Scope",
@@ -59,7 +60,9 @@ export function LedgerSnapshotCanvas({
           Evidence Ledger
         </Link>
         <ChevronRight className="h-4 w-4" aria-hidden />
-        <span className="font-medium text-foreground">Ledger Snapshot</span>
+        <span aria-current="page" className="font-medium text-foreground">
+          Ledger Snapshot
+        </span>
       </nav>
       <header className="rounded-lg border bg-card p-5">
         <h1 className="text-lg font-semibold">Ledger Snapshot</h1>
@@ -208,65 +211,6 @@ export function LedgerSnapshotCanvas({
       </section>
     </main>
   );
-}
-
-type Publication = NonNullable<LedgerSnapshotWorkspaceItem["publication"]>;
-
-export function publicationStatusText(
-  publication?: Publication,
-  actual?: { state?: string; merged?: boolean }
-): string {
-  if (!publication) return "Unpublished";
-  return publication.status === "merged"
-    ? "Merged"
-    : actual?.state === "closed" && actual.merged !== true
-      ? "Draft PR closed without merge"
-      : "Draft PR — pending human merge";
-}
-
-export function canRepublishClosedPullRequest(
-  publication?: Publication,
-  actual?: { state?: string; merged?: boolean }
-): boolean {
-  return (
-    publication?.status === "draft" &&
-    actual?.state === "closed" &&
-    actual.merged !== true
-  );
-}
-
-export function ledgerPublishRequestBody(input: {
-  authorised: boolean;
-  anonymised: boolean;
-  publicData: boolean;
-  rePublish?: boolean;
-}): {
-  rePublish?: boolean;
-  values: {
-    publication_authorisation: string;
-    anonymisation_status: string;
-    public_data_declaration: string;
-  };
-} {
-  return {
-    ...(input.rePublish ? { rePublish: true } : {}),
-    values: {
-      publication_authorisation: input.authorised
-        ? "confirmed-authorised-to-publish"
-        : "not-confirmed-do-not-submit",
-      anonymisation_status: input.anonymised
-        ? "confirmed-no-student-identifiers-or-raw-student-material"
-        : "needs-human-privacy-review",
-      public_data_declaration: input.publicData
-        ? "confirmed-public-data"
-        : "not-confirmed-do-not-submit",
-    },
-  };
-}
-
-export function publicationAccessError(reason?: string): string | undefined {
-  if (reason !== "missing_write_access") return undefined;
-  return "Your connected GitHub account needs collaborator write access to evaluchat/research. No branch or pull request was created.";
 }
 
 function SnapshotEvidence({

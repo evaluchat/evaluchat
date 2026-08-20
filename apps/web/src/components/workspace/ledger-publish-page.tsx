@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, ExternalLink } from "lucide-react";
 import type { LedgerSnapshotWorkspaceItem } from "@/lib/workspace/types";
-import { Button } from "@/components/ui/button";
+import { ledgerEvidenceFilePath } from "@/lib/workspace/ledger-paths";
 import {
   canRepublishClosedPullRequest,
   ledgerPublishRequestBody,
   publicationAccessError,
   publicationStatusText,
-} from "./ledger-snapshot-canvas";
+} from "@/lib/workspace/ledger-publication";
+import { Button } from "@/components/ui/button";
 
 type Publication = NonNullable<LedgerSnapshotWorkspaceItem["publication"]>;
 
@@ -38,7 +39,10 @@ export function LedgerPublishPage({
   const route = `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/publish`;
   const snapshotHref = `/workspace/items/${encodeURIComponent(item.id)}`;
   const ledgerHref = `/workspace/items/${encodeURIComponent(item.parentLedgerItemId)}`;
-  const filePath = `methods/${item.snapshot.methodId}/evidence/ledgers/${item.snapshot.ledgerId}.en.md`;
+  const filePath = ledgerEvidenceFilePath(
+    item.snapshot.ledgerId,
+    item.snapshot.methodId
+  );
 
   async function openPreview(nextRePublish = false) {
     setAuthorised(false);
@@ -187,7 +191,9 @@ export function LedgerPublishPage({
             Ledger Snapshot
           </Link>
           <ChevronRight className="h-4 w-4" aria-hidden />
-          <span className="font-medium text-foreground">Publish</span>
+          <span aria-current="page" className="font-medium text-foreground">
+            Publish
+          </span>
         </nav>
         <div>
           <h1 className="text-xl font-semibold">
