@@ -14,6 +14,7 @@ import {
   EditorCursorPosition,
   FormAgentContext,
   GraphInput,
+  LedgerAgentContext,
   ProgrammingLanguageOptions,
   RewriteArtifactMetaToolResponse,
   SearchResult,
@@ -113,6 +114,7 @@ interface GraphData {
   messages: BaseMessage[];
   artifact: ArtifactV3 | undefined;
   formContext: FormAgentContext | undefined;
+  ledgerContext: LedgerAgentContext | undefined;
   updateRenderedArtifactRequired: boolean;
   artifactSyncGeneration: number;
   isArtifactSaved: boolean;
@@ -127,6 +129,7 @@ interface GraphData {
   setFeedbackSubmitted: Dispatch<SetStateAction<boolean>>;
   setArtifact: Dispatch<SetStateAction<ArtifactV3 | undefined>>;
   setFormContext: Dispatch<SetStateAction<FormAgentContext | undefined>>;
+  setLedgerContext: Dispatch<SetStateAction<LedgerAgentContext | undefined>>;
   setSelectedBlocks: Dispatch<SetStateAction<TextHighlight | undefined>>;
   setSelectedArtifact: (index: number) => void;
   setMessages: Dispatch<SetStateAction<BaseMessage[]>>;
@@ -210,8 +213,10 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<BaseMessage[]>([]);
   const [artifact, setArtifact] = useState<ArtifactV3>();
   const [formContext, setFormContext] = useState<FormAgentContext>();
+  const [ledgerContext, setLedgerContext] = useState<LedgerAgentContext>();
   const artifactRef = useRef<ArtifactV3 | undefined>(undefined);
   const formContextRef = useRef<FormAgentContext | undefined>(undefined);
+  const ledgerContextRef = useRef<LedgerAgentContext | undefined>(undefined);
   const [selectedBlocks, setSelectedBlocks] = useState<TextHighlight>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [updateRenderedArtifactRequired, setUpdateRenderedArtifactRequired] =
@@ -289,6 +294,10 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     formContextRef.current = formContext;
   }, [formContext]);
+
+  useEffect(() => {
+    ledgerContextRef.current = ledgerContext;
+  }, [ledgerContext]);
 
   // Cursor position — updated by TextRenderer, read by streamMessageV2.
   // Only updates when the Workspace has focus, so the position persists
@@ -668,6 +677,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     setMessages([]);
     setArtifact(undefined);
     setFormContext(undefined);
+    setLedgerContext(undefined);
     lastSavedFormContext.current = undefined;
     setFirstTokenReceived(true);
   };
@@ -855,6 +865,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       }),
       ...params,
       ...messagesInput,
+      ledgerContext: params.ledgerContext ?? ledgerContextRef.current,
       ...(apparatusConfiguration ? { apparatusConfiguration } : {}),
       ...(highlightedTextForInput && {
         highlightedText: highlightedTextForInput,
@@ -2235,6 +2246,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       messages,
       artifact,
       formContext,
+      ledgerContext,
       updateRenderedArtifactRequired,
       artifactSyncGeneration,
       isArtifactSaved,
@@ -2249,6 +2261,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       setFeedbackSubmitted,
       setArtifact,
       setFormContext,
+      setLedgerContext,
       setSelectedBlocks,
       setSelectedArtifact,
       setMessages,

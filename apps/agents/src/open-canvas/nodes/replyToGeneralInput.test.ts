@@ -387,6 +387,86 @@ describe("replyToGeneralInput", () => {
     ]);
   });
 
+  it("includes declared ledger dimensions and the ledger update protocol", async () => {
+    const state = createMockState({
+      _messages: [
+        new HumanMessage({
+          content: "Filter to K-12 evidence",
+          id: "1",
+        }),
+      ],
+      ledgerContext: {
+        kind: "ledger",
+        methodId: "evidence-method",
+        methodTitle: "Evidence method",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "2.0.0",
+        dimensions: [
+          {
+            id: "education_level",
+            role: "context",
+            control: "multi-select",
+            options: ["k12", "higher_ed"],
+            type: "text",
+          },
+          {
+            id: "collection_date",
+            role: "collection",
+            control: "range",
+            type: "date",
+          },
+        ],
+        filters: {
+          education_level: { control: "multi-select", values: ["k12"] },
+        },
+        baselineCount: 12,
+        scope: {
+          buckets: { Included: 6 },
+          predicate: "education_level in [k12]",
+        },
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("<ledger-updates>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"education_level"'),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"collection_date"'),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("does not add the ledger protocol when no ledger context is set", async () => {
+    const state = createMockState({
+      _messages: [new HumanMessage({ content: "Help me", id: "1" })],
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<ledger-updates>"),
+      }),
+      ...state._messages,
+    ]);
+  });
+
   it("orients Method brief chats to the assignment initiator", async () => {
     const state = createMockState({
       _messages: [new HumanMessage({ content: "Review the brief", id: "1" })],
