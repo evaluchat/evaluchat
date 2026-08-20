@@ -109,6 +109,9 @@ export async function validateFindingSubmission(
     });
   const { frontmatter } = parseMarkdownFrontmatter(markdown);
   const issues: FindingValidationIssue[] = [];
+  if (frontmatter.type !== "Finding") {
+    issues.push({ fieldId: "type", message: 'type must be "Finding".' });
+  }
   const questions = questionResources(frontmatter.research_questions);
   const ledgers = ledgerEntries(frontmatter.evidence_ledgers);
 

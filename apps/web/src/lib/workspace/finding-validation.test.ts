@@ -119,6 +119,19 @@ describe("validateFindingSubmission", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("rejects a non-Finding type even with valid reference lists", async () => {
+    await expectIssue(
+      finding({ type: "Notes" }),
+      "type",
+      /type must be "Finding"/
+    );
+    await expectIssue(
+      finding({ type: undefined }),
+      "type",
+      /type must be "Finding"/
+    );
+  });
+
   it("rejects a missing research_questions list", async () => {
     await expectIssue(
       finding({ research_questions: [] }),
