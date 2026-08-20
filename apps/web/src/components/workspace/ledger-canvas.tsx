@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 import type { LedgerConfig } from "@opencanvas/shared";
 import type {
   EvidenceLedgerBucket,
@@ -125,8 +127,32 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
       className="mx-auto max-w-4xl space-y-6 p-6"
       data-testid="ledger-canvas"
     >
+      <header className="space-y-2">
+        <nav
+          aria-label="Ledger navigation"
+          className="flex items-center gap-1 text-sm text-muted-foreground"
+          data-testid="ledger-breadcrumb"
+        >
+          <Link
+            href="/workspace"
+            className="hover:text-foreground hover:underline"
+          >
+            Workspace
+          </Link>
+          <ChevronRight className="h-4 w-4" aria-hidden />
+          <span aria-current="page" className="font-medium text-foreground">
+            Evidence Ledger
+          </span>
+        </nav>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h1 className="text-lg font-semibold">Evidence Ledger</h1>
+          <p className="text-sm text-muted-foreground">
+            {item.source.methodId}@{item.source.methodVersion}
+          </p>
+        </div>
+      </header>
       <section className="rounded-lg border bg-card p-5">
-        <h1 className="text-lg font-semibold">Selected Method version</h1>
+        <h2 className="text-lg font-semibold">Selected Method version</h2>
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Method</dt>

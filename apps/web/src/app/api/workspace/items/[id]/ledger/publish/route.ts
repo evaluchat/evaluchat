@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyUserAuthenticated } from "@/lib/supabase/verify_user_server";
 import { FormValidationError } from "@/lib/workspace/form-validation";
+import { ledgerEvidenceFilePath } from "@/lib/workspace/ledger-paths";
 import {
   ledgerRenderHash,
   renderLedgerMarkdown,
@@ -45,10 +46,6 @@ function publicationBody(input: {
   ].join("\n");
 }
 
-function filePath(ledgerId: string, methodId: string): string {
-  return `methods/${methodId}/evidence/ledgers/${ledgerId}.en.md`;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -68,7 +65,7 @@ export async function GET(_request: Request, context: RouteContext) {
         ? item.snapshot
         : { ...item.snapshot, renderHash: computedHash };
     return NextResponse.json({
-      filePath: filePath(snapshot.ledgerId, snapshot.methodId),
+      filePath: ledgerEvidenceFilePath(snapshot.ledgerId, snapshot.methodId),
       markdown: renderLedgerMarkdown(snapshot, item.config),
       destination: RESEARCH_REPOSITORY,
     });
@@ -186,7 +183,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const pullRequest = await openLedgerPullRequest({
       ledgerId: item.snapshot.ledgerId,
       inputFingerprint: item.snapshot.inputFingerprint,
-      filePath: filePath(item.snapshot.ledgerId, item.snapshot.methodId),
+      filePath: ledgerEvidenceFilePath(
+        item.snapshot.ledgerId,
+        item.snapshot.methodId
+      ),
       markdown,
       body: publicationBody(item.snapshot),
       renderHashMatches,
@@ -206,7 +206,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({
       publication,
       pullRequestUrl: pullRequest.url,
-      filePath: filePath(item.snapshot.ledgerId, item.snapshot.methodId),
+      filePath: ledgerEvidenceFilePath(
+        item.snapshot.ledgerId,
+        item.snapshot.methodId
+      ),
       lintConclusion: pullRequest.lintConclusion,
       ...(pullRequest.autoMergeError
         ? { autoMergeError: pullRequest.autoMergeError }
