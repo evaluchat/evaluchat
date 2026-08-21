@@ -677,6 +677,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     setMessages([]);
     setArtifact(undefined);
     setFormContext(undefined);
+    ledgerContextRef.current = undefined;
     setLedgerContext(undefined);
     lastSavedFormContext.current = undefined;
     setFirstTokenReceived(true);
@@ -2213,6 +2214,11 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       | undefined;
     setFormContext(loadedFormContext);
     lastSavedFormContext.current = loadedFormContext;
+    const loadedLedgerContext = castThreadValues?.ledgerContext as
+      | LedgerAgentContext
+      | undefined;
+    ledgerContextRef.current = loadedLedgerContext;
+    setLedgerContext(loadedLedgerContext);
 
     if (!castValues?.messages?.length) {
       setMessages([]);

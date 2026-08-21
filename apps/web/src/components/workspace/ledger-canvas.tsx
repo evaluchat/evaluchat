@@ -63,7 +63,8 @@ function withFilter(
 function buildLedgerAgentContext(
   item: LedgerWorkspaceItem,
   config: LedgerConfig,
-  preview: Preview | undefined
+  preview: Preview | undefined,
+  template: EvidenceLedgerTemplate | undefined
 ): LedgerAgentContext {
   return {
     kind: "ledger",
@@ -74,7 +75,7 @@ function buildLedgerAgentContext(
     methodVersion: item.source.methodVersion,
     templateId: item.source.templateId,
     templateVersion: item.source.templateVersion,
-    dimensions: (preview?.template.dimensions ?? []).map((dimension) => ({
+    dimensions: (template?.dimensions ?? []).map((dimension) => ({
       id: dimension.id,
       role: dimension.role,
       control: dimension.control,
@@ -111,6 +112,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
   const { selectedAssistant } = useAssistantContext();
   const [config, setConfig] = useState<LedgerConfig>(item.ledgerConfig);
   const [preview, setPreview] = useState<Preview>();
+  const [template, setTemplate] = useState<EvidenceLedgerTemplate>();
   const [previewKey, setPreviewKey] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -121,10 +123,55 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
   const bootstrappedItem = useRef<string | null>(null);
   const kickedOffItem = useRef<string | null>(null);
   const lastAppliedUpdate = useRef<object | null>(null);
+  const latestPreviewRequest = useRef(0);
+  const pendingDraftSave = useRef<
+    { config: LedgerConfig; timeout: number } | undefined
+  >();
+  const draftSavePromise = useRef<Promise<void>>();
   const configKey = useMemo(() => keyFor(config), [config]);
+  const dimensions = useMemo(() => template?.dimensions ?? [], [template]);
+
+  const saveDraft = useCallback(
+    (configToSave: LedgerConfig) => {
+      const savePromise = fetch(
+        `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/config`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ config: configToSave }),
+        }
+      )
+        .then((response) => {
+          if (!response.ok)
+            throw new Error("Could not save ledger config draft");
+        })
+        .catch((error) => {
+          console.warn("Could not save ledger config draft", error);
+        });
+      draftSavePromise.current = savePromise;
+      void savePromise.finally(() => {
+        if (draftSavePromise.current === savePromise) {
+          draftSavePromise.current = undefined;
+        }
+      });
+      return savePromise;
+    },
+    [item.id]
+  );
+
+  const flushPendingDraftSave = useCallback(() => {
+    const pendingSave = pendingDraftSave.current;
+    if (!pendingSave) return draftSavePromise.current;
+
+    window.clearTimeout(pendingSave.timeout);
+    pendingDraftSave.current = undefined;
+    return saveDraft(pendingSave.config);
+  }, [saveDraft]);
 
   const refresh = useCallback(
     async (configToPreview = config) => {
+      const request = ++latestPreviewRequest.current;
       setLoading(true);
       try {
         const response = await fetch(
@@ -138,13 +185,16 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
         );
         if (!response.ok) throw new Error("Could not preview ledger");
         const result = (await response.json()) as Preview;
+        if (request !== latestPreviewRequest.current) return;
         setPreview(result);
+        setTemplate(result.template);
         setPreviewKey(keyFor(configToPreview));
       } catch {
+        if (request !== latestPreviewRequest.current) return;
         setPreview(undefined);
         setPreviewKey(undefined);
       } finally {
-        setLoading(false);
+        if (request === latestPreviewRequest.current) setLoading(false);
       }
     },
     [config, item.id]
@@ -167,12 +217,17 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
   }, [item.id]);
 
   useEffect(() => {
-    graphData.setLedgerContext(buildLedgerAgentContext(item, config, preview));
-  }, [config, graphData.setLedgerContext, item, preview]);
+    graphData.setLedgerContext(
+      buildLedgerAgentContext(item, config, preview, template)
+    );
+    return () => graphData.setLedgerContext(undefined);
+  }, [config, graphData.setLedgerContext, item, preview, template]);
 
   const getStreamInput = useCallback(
-    () => ({ ledgerContext: buildLedgerAgentContext(item, config, preview) }),
-    [config, item, preview]
+    () => ({
+      ledgerContext: buildLedgerAgentContext(item, config, preview, template),
+    }),
+    [config, item, preview, template]
   );
 
   useEffect(() => {
@@ -202,16 +257,21 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
       })
       .catch((error) => {
         kickedOffItem.current = null;
+        graphData.setMessages((messages) =>
+          messages.filter((message) => message.id !== kickoff.id)
+        );
         console.error("Ledger workspace kickoff failed", error);
+        toast({
+          title: "Could not open ledger chat",
+          description: "Please try again.",
+          variant: "destructive",
+        });
       });
-  }, [getStreamInput, graphData, item.id, preview, selectedAssistant]);
+  }, [getStreamInput, graphData, item.id, preview, selectedAssistant, toast]);
 
   useEffect(() => {
     if (graphData.isStreaming || !graphData.messages.length) return;
-    const result = findLatestLedgerUpdate(
-      graphData.messages,
-      preview?.template.dimensions ?? []
-    );
+    const result = findLatestLedgerUpdate(graphData.messages, dimensions);
     if (!result) return;
     const { message: assistantMessage, parsed } = result;
     if (lastAppliedUpdate.current === assistantMessage) return;
@@ -232,29 +292,33 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
           : message
       )
     );
-  }, [config, graphData, preview?.template.dimensions, refresh]);
+  }, [config, dimensions, graphData, refresh]);
+
+  useEffect(() => {
+    return () => {
+      void flushPendingDraftSave();
+    };
+  }, [flushPendingDraftSave]);
 
   useEffect(() => {
     if (configKey === keyFor(item.ledgerConfig)) return;
     const configToSave = config;
     const timeout = window.setTimeout(() => {
-      void fetch(
-        `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/config`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ config: configToSave }),
-        }
-      ).catch((error) => {
-        console.warn("Could not save ledger config draft", error);
-      });
+      if (pendingDraftSave.current?.timeout === timeout) {
+        pendingDraftSave.current = undefined;
+      }
+      void saveDraft(configToSave);
     }, 600);
+    pendingDraftSave.current = { config: configToSave, timeout };
 
-    return () => window.clearTimeout(timeout);
-  }, [config, configKey, item.id, item.ledgerConfig]);
+    return () => {
+      if (pendingDraftSave.current?.timeout === timeout) {
+        window.clearTimeout(timeout);
+        pendingDraftSave.current = undefined;
+      }
+    };
+  }, [config, configKey, item.ledgerConfig, saveDraft]);
 
-  const dimensions = preview?.template.dimensions || [];
   const groups = [
     ["Context", dimensions.filter((dimension) => dimension.role === "context")],
     [
@@ -354,8 +418,8 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
         {!chatCollapsed && <ResizableHandle />}
         <ResizablePanel
           defaultSize={chatCollapsed ? 100 : 75}
-          minSize={50}
-          maxSize={85}
+          minSize={chatCollapsed ? 100 : 50}
+          maxSize={chatCollapsed ? 100 : 85}
           className="min-w-0 bg-white"
           id="ledger-editor-panel"
           order={2}

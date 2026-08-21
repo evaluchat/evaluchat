@@ -54,7 +54,12 @@ function normalizeFilter(
     if (
       !Array.isArray(value.values) ||
       value.values.length === 0 ||
-      value.values.some((entry) => typeof entry !== "string")
+      value.values.some(
+        (entry) =>
+          typeof entry !== "string" ||
+          (dimension.options !== undefined &&
+            !dimension.options.includes(entry))
+      )
     ) {
       return undefined;
     }

@@ -60,6 +60,15 @@ describe("ledger markdown updates", () => {
     });
   });
 
+  it("drops filters with values outside a dimension's declared options", () => {
+    const parsed = parseLedgerUpdates(
+      'Done. <ledger-updates>{"education_level":{"control":"multi-select","values":["unknown"]}}</ledger-updates>',
+      dimensions
+    );
+
+    expect(parsed?.updates).toEqual([]);
+  });
+
   it("ignores malformed and partial streaming blocks", () => {
     expect(
       parseLedgerUpdates(
