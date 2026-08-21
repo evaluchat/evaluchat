@@ -5,6 +5,7 @@ import {
 } from "./thread-policy";
 import type {
   FormWorkspaceItem,
+  LedgerWorkspaceItem,
   MarkdownWorkspaceItem,
   MethodParticipantWorkspaceItem,
 } from "./types";
@@ -87,6 +88,34 @@ describe("enforceWorkspaceThreadPolicy", () => {
         "platform-assistant"
       ).config.configurable.systemPrompt
     ).toBe("trusted guidance");
+  });
+
+  it("allows assistant threads for Ledger workspace items", () => {
+    const ledgerItem: LedgerWorkspaceItem = {
+      id: "wi_ledger",
+      ownerId: "user_owned",
+      kind: "ledger",
+      status: "active",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+      snapshotIds: [],
+      ledgerConfig: {
+        methodId: "method_a",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "1.0.0",
+        filters: [],
+      },
+      source: {
+        methodId: "method_a",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "1.0.0",
+        sourceCommit: "sha256:source",
+      },
+    };
+
+    expect(supportsWorkspaceThreads(ledgerItem)).toBe(true);
   });
 
   it("injects the assignment prompt for method participant threads", () => {

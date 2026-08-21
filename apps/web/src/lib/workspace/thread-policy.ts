@@ -8,7 +8,8 @@ export function supportsWorkspaceThreads(item: WorkspaceItem): boolean {
     item.kind === "markdown_template" ||
     item.kind === "form_template" ||
     item.kind === "method" ||
-    item.kind === "method_participant"
+    item.kind === "method_participant" ||
+    item.kind === "ledger"
   );
 }
 
