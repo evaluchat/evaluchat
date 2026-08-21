@@ -270,6 +270,9 @@ test.describe("@regression evidence-ledger", () => {
     // Counterevidence keeps its count in the summary and remains caveated.
     const gapSummary = summaries.getByText(/Counterevidence and gaps \(8\)/);
     await expect(gapSummary).toBeVisible();
+    await expect(
+      page.getByText("No interpretation is generated.")
+    ).not.toBeVisible();
     await gapSummary.click();
     await expect(
       page.getByText("No interpretation is generated.")

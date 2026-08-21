@@ -45,7 +45,7 @@
  * details semantic in the block itself and collapse that group with its
  * native open state. */
 [data-node-type="blockContainer"]:has(
-    > [data-content-type="details"]:not([data-open="true"])
+    [data-content-type="details"] details:not([open])
   )
   > [data-node-type="blockGroup"] {
   display: none;
