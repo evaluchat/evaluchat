@@ -39,7 +39,7 @@ vi.mock("@/lib/workspace/ledger-publish", () => ({
     harness.validateLedgerPublicationDeclarations,
 }));
 
-import { GET, POST } from "./route";
+import { POST } from "./route";
 import { POST as statusPOST } from "./status/route";
 
 const snapshot = {
@@ -329,16 +329,6 @@ describe("ledger publish route", () => {
     const response = await POST(request({ values: {} }), context());
 
     expect(response.status).toBe(422);
-    expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
-  });
-
-  it("renders a private one-file preview without creating a PR", async () => {
-    const response = await GET(new Request("http://localhost"), context());
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      filePath: "methods/demo-method/evidence/ledgers/ledger_demo.en.md",
-      destination: "evaluchat/research",
-    });
     expect(harness.openLedgerPullRequest).not.toHaveBeenCalled();
   });
 

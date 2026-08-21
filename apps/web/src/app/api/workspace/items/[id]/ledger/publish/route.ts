@@ -11,7 +11,6 @@ import {
   getGithubResearchWriteAccess,
   getLedgerPullRequestStatus,
   openLedgerPullRequest,
-  RESEARCH_REPOSITORY,
 } from "@/lib/workspace/evidence-github";
 import {
   getLedgerSnapshotItem,
@@ -48,40 +47,6 @@ function publicationBody(input: {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Serve the one-file, read-only publish preview without creating any GitHub state. */
-export async function GET(_request: Request, context: RouteContext) {
-  const auth = await verifyUserAuthenticated();
-  if (!auth?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { id } = await context.params;
-  try {
-    const item = await getLedgerSnapshotItem(auth.user.id, id);
-    const computedHash = ledgerRenderHash(item.snapshot, item.config);
-    const snapshot =
-      item.snapshot.renderHash === computedHash
-        ? item.snapshot
-        : { ...item.snapshot, renderHash: computedHash };
-    return NextResponse.json({
-      filePath: ledgerEvidenceFilePath(snapshot.ledgerId, snapshot.methodId),
-      markdown: renderLedgerMarkdown(snapshot, item.config),
-      destination: RESEARCH_REPOSITORY,
-    });
-  } catch (error) {
-    if (error instanceof WorkspaceItemNotFoundError) {
-      return NextResponse.json(
-        { error: "Ledger snapshot not found" },
-        { status: 404 }
-      );
-    }
-    console.error("[workspace] failed to preview ledger publication", error);
-    return NextResponse.json(
-      { error: "Could not preview ledger publication" },
-      { status: 500 }
-    );
-  }
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {

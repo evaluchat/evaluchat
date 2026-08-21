@@ -4,6 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
   push: vi.fn(),
+  bannerSubmit: undefined as undefined | (() => void),
+  publishDialogOpen: false,
+  publishSuccess: undefined as
+    | undefined
+    | ((publication: {
+        status: "draft" | "merged";
+        pullRequestUrl?: string;
+        pullRequestNumber?: number;
+        mergedAt?: string;
+      }) => void),
   graphData: {
     clearState: vi.fn(),
     setChatStarted: vi.fn(),
@@ -16,6 +26,35 @@ const harness = vi.hoisted(() => ({
     streamMessage: vi.fn(),
   },
 }));
+
+const manualState = vi.hoisted(() => ({
+  enabled: false,
+  index: 0,
+  slots: [] as Array<{ value: unknown }>,
+}));
+
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    useState(initial: unknown) {
+      if (!manualState.enabled) return actual.useState(initial);
+      const index = manualState.index++;
+      if (!manualState.slots[index])
+        manualState.slots[index] = { value: initial };
+      return [
+        manualState.slots[index].value,
+        (update: unknown) => {
+          const slot = manualState.slots[index];
+          slot.value =
+            typeof update === "function"
+              ? (update as (value: unknown) => unknown)(slot.value)
+              : update;
+        },
+      ];
+    },
+  };
+});
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: harness.push }),
@@ -54,6 +93,30 @@ vi.mock("@/components/ui/resizable", () => ({
     React.createElement("div", undefined, children),
   ResizableHandle: () => React.createElement("div"),
 }));
+vi.mock("@/components/artifacts/readonly-markdown-renderer-lazy", () => ({
+  ReadonlyMarkdownRendererSuspense: ({
+    markdown,
+    testId,
+  }: {
+    markdown: string;
+    testId: string;
+  }) => React.createElement("div", { "data-testid": testId }, markdown),
+}));
+vi.mock("./ledger-publish-dialog", () => ({
+  LedgerPublishDialog: ({
+    open,
+    onPublished,
+  }: {
+    open: boolean;
+    onPublished: typeof harness.publishSuccess;
+  }) => {
+    harness.publishDialogOpen = open;
+    harness.publishSuccess = onPublished;
+    return open
+      ? React.createElement("div", { "data-testid": "ledger-publish-dialog" })
+      : null;
+  },
+}));
 vi.mock("./workspace-item-banner", () => ({
   WorkspaceItemBanner: ({
     onSubmit,
@@ -65,20 +128,25 @@ vi.mock("./workspace-item-banner", () => ({
     submitLabel?: string;
     submitTestId?: string;
     extraActions?: React.ReactNode;
-  }) =>
-    React.createElement(
+  }) => {
+    harness.bannerSubmit = onSubmit;
+    return React.createElement(
       "div",
       { "data-testid": "workspace-item-banner" },
       extraActions,
       onSubmit
         ? React.createElement(
             "button",
-            { "data-testid": submitTestId },
+            {
+              "data-testid": submitTestId,
+              onClick: onSubmit,
+            },
             submitLabel
           )
         : null,
       React.createElement("a", { href: "/workspace" }, "Workspace")
-    ),
+    );
+  },
 }));
 vi.mock("./workspace-item-delete-dialog", () => ({
   WorkspaceItemDeleteDialog: () => null,
@@ -143,7 +211,7 @@ const item = {
 };
 
 describe("LedgerSnapshotCanvas", () => {
-  it("uses the workspace banner for back navigation and publishing", () => {
+  it("uses the workspace banner and read-only markdown details groups", () => {
     const markup = renderToStaticMarkup(
       React.createElement(LedgerSnapshotCanvas, { item })
     );
@@ -151,10 +219,50 @@ describe("LedgerSnapshotCanvas", () => {
     expect(markup).toContain('data-testid="workspace-item-banner"');
     expect(markup).toContain('href="/workspace"');
     expect(markup).toContain('data-testid="ledger-publish"');
+    expect(markup).toContain('data-testid="ledger-snapshot-markdown"');
+    expect(markup.match(/&lt;details/g)).toHaveLength(6);
+    expect(markup).toContain("&lt;summary&gt;Scope&lt;/summary&gt;");
+    expect(markup).toContain("Descriptive distributions");
+    expect(markup).toContain("Canonical manifest");
+    expect(markup).not.toContain("Ledger snapshot views");
     expect(markup).not.toContain("ledger-snapshot-breadcrumb");
     expect(markup).not.toContain('data-testid="ledger-publication"');
     expect(markup).not.toContain("textarea");
     expect(markup).not.toContain("contenteditable");
+  });
+
+  it("opens the dialog from the banner and replaces it with a draft PR link", () => {
+    manualState.enabled = true;
+    manualState.index = 0;
+    let markup = renderToStaticMarkup(
+      React.createElement(LedgerSnapshotCanvas, { item })
+    );
+    expect(markup).not.toContain('data-testid="ledger-publish-dialog"');
+
+    harness.bannerSubmit!();
+    manualState.index = 0;
+    markup = renderToStaticMarkup(
+      React.createElement(LedgerSnapshotCanvas, { item })
+    );
+    expect(markup).toContain('data-testid="ledger-publish-dialog"');
+
+    harness.publishSuccess!({
+      status: "draft",
+      pullRequestUrl: "https://github.com/evaluchat/research/pull/85",
+      pullRequestNumber: 85,
+    });
+    manualState.index = 0;
+    markup = renderToStaticMarkup(
+      React.createElement(LedgerSnapshotCanvas, { item })
+    );
+    expect(markup).toContain("Draft PR — pending human merge");
+    expect(markup).toContain(
+      'href="https://github.com/evaluchat/research/pull/85"'
+    );
+
+    manualState.enabled = false;
+    manualState.index = 0;
+    manualState.slots = [];
   });
 
   it("moves published state and its pull request link into the banner", () => {
