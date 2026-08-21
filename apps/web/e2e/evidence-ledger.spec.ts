@@ -200,7 +200,7 @@ test.describe("@regression evidence-ledger", () => {
     });
   });
 
-  test("4 · generate read-only Ledger Snapshot with 5 views", async ({
+  test("4 · generate Ledger Snapshot canvas with chat and 5 views", async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -221,8 +221,14 @@ test.describe("@regression evidence-ledger", () => {
     await expect(
       page.getByRole("heading", { name: "Ledger Snapshot" })
     ).toBeVisible();
+    const banner = page.getByTestId("workspace-item-banner");
+    await expect(banner.getByRole("link", { name: "Workspace" })).toBeVisible();
+    await expect(page.getByTestId("ledger-snapshot-breadcrumb")).toHaveCount(0);
+    await expect(banner.getByTestId("ledger-publish")).toBeVisible();
+    const chatInput = page.getByTestId("chat-input");
+    await expect(chatInput).toBeVisible({ timeout: TIMEOUTS.pageLoad });
 
-    // 5 read-only views.
+    // The five sealed-record views remain available in the details pane.
     const nav = page.getByRole("navigation", {
       name: "Ledger snapshot views",
     });
@@ -233,9 +239,10 @@ test.describe("@regression evidence-ledger", () => {
       "Comparability",
       "Counterevidence and gaps",
     ]) {
-      await expect(
-        nav.getByRole("button", { name: new RegExp(view) })
-      ).toBeVisible();
+      const button = nav.getByRole("button", { name: new RegExp(view) });
+      await expect(button).toBeVisible();
+      await button.click();
+      await expect(button).toHaveClass(/bg-primary/);
     }
 
     // Snapshot header renders the bucket totals.
@@ -246,17 +253,16 @@ test.describe("@regression evidence-ledger", () => {
     await expect(header).toContainText("Unavailable: 2");
     await expect(header).toContainText("Resolver exclusion: 2");
 
-    // No edit affordances in the snapshot.
-    await expect(page.getByTestId("chat-input")).toHaveCount(0);
+    // No regeneration affordances exist in the snapshot canvas.
     await expect(
       page.locator("button:has-text('Generate ledger')")
     ).toHaveCount(0);
 
-    // No claim/conclusion prose anywhere in the snapshot.
+    // The sealed record is caveated, never conclusive: the explicit
+    // "does not reach a conclusion" caveat is asserted below.
     const snapshotText = await page
-      .locator("[data-testid='ledger-snapshot-canvas']")
+      .locator("#ledger-snapshot-details-panel")
       .innerText();
-    expect(snapshotText.toLowerCase()).not.toContain("conclusion");
     expect(snapshotText.toLowerCase().includes("we conclude")).toBeFalsy();
 
     // Counterevidence view shows a non-empty badge (gaps exist) and is caveated.
@@ -287,6 +293,20 @@ test.describe("@regression evidence-ledger", () => {
       expect(href).not.toContain("/blob/main/");
       expect(href).toMatch(/\/blob\/[0-9a-f]{7,40}\//);
     }
+
+    // Snapshot chat can discuss the sealed record without generating a canvas
+    // artifact. Wait for its hidden kickoff before checking the next assistant
+    // message, so this proves the user question receives a reply.
+    const assistantMessages = page.locator(
+      "#ledger-snapshot-chat-panel div.relative.w-full.max-w-2xl.py-4"
+    );
+    await expect(assistantMessages).not.toHaveCount(0, { timeout: 60_000 });
+    const assistantMessageCount = await assistantMessages.count();
+    await chatInput.fill("Summarise the evidence and gaps");
+    await chatInput.press("Enter");
+    await expect
+      .poll(() => assistantMessages.count(), { timeout: 60_000 })
+      .toBeGreaterThan(assistantMessageCount);
   });
 
   test("5 · snapshot immutability — filters/fingerprint survive regeneration", async ({

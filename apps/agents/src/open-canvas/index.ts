@@ -26,7 +26,10 @@ const routeNode = (state: typeof OpenCanvasGraphAnnotation.State) => {
     throw new Error("'next' state field not set.");
   }
 
-  return new Send(state.next, {
+  // A snapshot is a sealed read-only record. Even if an untrusted client
+  // supplies a canvas action, always route it to the conversational reply.
+  const next = state.ledgerSnapshotContext ? "replyToGeneralInput" : state.next;
+  return new Send(next, {
     ...state,
   });
 };
@@ -38,6 +41,9 @@ export const cleanState = (state: typeof OpenCanvasGraphAnnotation.State) => {
     // generic defaults intentionally clear per-turn routing inputs, but must
     // not erase the structured values after the assistant has replied.
     formContext: state.formContext,
+    // Snapshot context is derived from the immutable workspace item at boot;
+    // never retain it in a LangGraph thread checkpoint.
+    ledgerSnapshotContext: undefined,
   };
 };
 
@@ -50,7 +56,7 @@ export const routeAfterGeneralReply = (
 
   // Form conversations are not teaching sessions. They should finish after
   // the conversational reply instead of entering the thesis gatekeeper.
-  if (state.formContext) return "cleanState";
+  if (state.formContext || state.ledgerSnapshotContext) return "cleanState";
 
   const phase =
     state.phase_state ||

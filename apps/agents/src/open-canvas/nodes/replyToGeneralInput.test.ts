@@ -133,6 +133,13 @@ describe("replyToGeneralInput", () => {
       }),
       ...state._messages,
     ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("You are an AI writing coach"),
+      }),
+      ...state._messages,
+    ]);
   });
 
   it("should include submitted phase instructions when phase_state is submitted", async () => {
@@ -446,6 +453,224 @@ describe("replyToGeneralInput", () => {
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
         content: expect.stringContaining('"collection_date"'),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("includes only the read-only Ledger Snapshot summary", async () => {
+    const state = createMockState({
+      _messages: [
+        new HumanMessage({
+          content: "Summarise the evidence and gaps",
+          id: "1",
+        }),
+      ],
+      ledgerSnapshotContext: {
+        kind: "ledger_snapshot",
+        ledgerId: "ledger_demo",
+        parentLedgerItemId: "wi_ledger",
+        methodId: "evidence-method",
+        methodTitle: "Evidence method",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "2.0.0",
+        predicate: "education_level in [k12]",
+        sourceCommit: "abc123",
+        generatedAt: "2026-08-19T12:00:00.000Z",
+        buckets: { Included: 6, Unknown: 2, Unavailable: 2 },
+        contributions: {
+          included: 12,
+          perDimension: {
+            education_level: { higher_ed: 2, k12: 4 },
+          },
+          gaps: [{ path: "evidence/missing-study.md", bucket: "Unavailable" }],
+        },
+        publication: {
+          status: "draft",
+          prUrl: "https://github.com/evaluchat/research/pull/42",
+        },
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("<ledger-snapshot-context>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"sourceCommit": "abc123"'),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"bucket": "Unavailable"'),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("machine-readable update block"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("education_level in [k12]"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("External source detection"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("writing coach"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<ledger-updates>"),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("does not intercept hollow Ledger Snapshot input with essay clarification", async () => {
+    const state = createMockState({
+      phase_state: "socratic",
+      _messages: [new HumanMessage({ content: "ok", id: "1" })],
+      ledgerSnapshotContext: {
+        kind: "ledger_snapshot",
+        ledgerId: "ledger_demo",
+        parentLedgerItemId: "wi_ledger",
+        methodId: "evidence-method",
+        methodTitle: "Evidence method",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "2.0.0",
+        predicate: "education_level in [k12]",
+        sourceCommit: "abc123",
+        generatedAt: "2026-08-19T12:00:00.000Z",
+        buckets: { Included: 6, Unknown: 2, Unavailable: 2 },
+        contributions: {
+          included: 12,
+          perDimension: {
+            education_level: { higher_ed: 2, k12: 4 },
+          },
+          gaps: [{ path: "evidence/missing-study.md", bucket: "Unavailable" }],
+        },
+        publication: {
+          status: "draft",
+          prUrl: "https://github.com/evaluchat/research/pull/42",
+        },
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    const result = await replyToGeneralInput(state, config);
+
+    expect(String(result.messages?.[0]?.content)).not.toContain(
+      "I didn't quite catch that"
+    );
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("<ledger-snapshot-context>"),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("uses the Ledger Snapshot context for mixed workspace contexts", async () => {
+    const state = createMockState({
+      _messages: [new HumanMessage({ content: "Help me", id: "1" })],
+      formContext: {
+        templateId: "assignment-brief",
+        title: "Assignment brief",
+        description: "A brief for an assignment",
+        layoutMarkdown: "# {{title}}",
+        fields: {
+          title: { label: "Title", type: "text", required: true },
+        },
+        values: { title: "Old title" },
+      },
+      ledgerContext: {
+        kind: "ledger",
+        methodId: "evidence-method",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "2.0.0",
+        dimensions: [],
+        filters: {},
+      },
+      ledgerSnapshotContext: {
+        kind: "ledger_snapshot",
+        ledgerId: "ledger_demo",
+        parentLedgerItemId: "wi_ledger",
+        methodId: "evidence-method",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "2.0.0",
+        predicate: "all accepted evidence",
+        sourceCommit: "abc123",
+        generatedAt: "2026-08-19T12:00:00.000Z",
+        buckets: {},
+        contributions: { included: 0, perDimension: {}, gaps: [] },
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<ledger-updates>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<form-updates>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("<ledger-snapshot-context>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("is read-only."),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("all accepted evidence"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"included": 0'),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<ledger-updates>"),
       }),
       ...state._messages,
     ]);

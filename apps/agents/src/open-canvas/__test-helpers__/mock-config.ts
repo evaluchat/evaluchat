@@ -95,6 +95,7 @@ export function createMockState(
     artifact: undefined as any,
     formContext: undefined,
     ledgerContext: undefined,
+    ledgerSnapshotContext: undefined,
     next: undefined,
     language: undefined,
     artifactLength: undefined,

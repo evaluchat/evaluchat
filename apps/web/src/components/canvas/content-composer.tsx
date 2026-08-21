@@ -55,7 +55,11 @@ export interface ContentComposerChatInterfaceProps {
   quickStartPrompts?: string[];
   getStreamInput?: () => Pick<
     GraphInput,
-    "artifact" | "formContext" | "ledgerContext"
+    | "artifact"
+    | "formContext"
+    | "ledgerContext"
+    | "ledgerSnapshotContext"
+    | "next"
   >;
 }
 
