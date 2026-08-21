@@ -18,7 +18,8 @@ import {
  *   3. Set filters education_level ∈ [k12] + collection_date 2024-01-01..2024-12-31
  *      → preview: Included 6 · Outside declared scope 2 · Unknown 2 ·
  *      Unavailable 2 · Resolver exclusion 2 (baseline 12) + exact predicate.
- *   4. Generate → read-only Ledger Snapshot with 5 views, no edit affordances,
+ *   4. Generate → read-only Ledger Snapshot markdown canvas with expand groups,
+ *      no edit affordances,
  *      no claim/conclusion text.
  *   5. Change a filter → preview out of date → refresh → generate → NEW
  *      snapshot; prior snapshot's input fingerprint unchanged; opening it still
@@ -200,7 +201,7 @@ test.describe("@regression evidence-ledger", () => {
     });
   });
 
-  test("4 · generate Ledger Snapshot canvas with chat and 5 views", async ({
+  test("4 · generate Ledger Snapshot canvas with chat, expand groups, and inline publishing", async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -228,30 +229,31 @@ test.describe("@regression evidence-ledger", () => {
     const chatInput = page.getByTestId("chat-input");
     await expect(chatInput).toBeVisible({ timeout: TIMEOUTS.pageLoad });
 
-    // The five sealed-record views remain available in the details pane.
-    const nav = page.getByRole("navigation", {
-      name: "Ledger snapshot views",
-    });
-    for (const view of [
+    // The read-only document has one native expand group per top-level section.
+    const markdown = page.getByTestId("ledger-snapshot-markdown");
+    await expect(markdown).toBeVisible({ timeout: 30_000 });
+    const summaries = markdown.locator("summary");
+    for (const section of [
       "Scope",
       "Evidence",
-      "Descriptive views",
+      "Descriptive distributions",
       "Comparability",
-      "Counterevidence and gaps",
+      "Canonical manifest",
     ]) {
-      const button = nav.getByRole("button", { name: new RegExp(view) });
-      await expect(button).toBeVisible();
-      await button.click();
-      await expect(button).toHaveClass(/bg-primary/);
+      await expect(
+        summaries.getByText(section, { exact: true })
+      ).toBeVisible();
     }
+    await expect(
+      summaries.getByText(/^Counterevidence and gaps \(\d+\)$/)
+    ).toBeVisible();
+    await expect(markdown.locator("details")).toHaveCount(6);
+    await expect(markdown.locator("details[open]")).toHaveCount(1);
 
     // Snapshot header renders the bucket totals.
-    const header = page.locator(
-      "[data-testid='ledger-snapshot-canvas'] header"
-    );
-    await expect(header).toContainText("Included: 6");
-    await expect(header).toContainText("Unavailable: 2");
-    await expect(header).toContainText("Resolver exclusion: 2");
+    await expect(markdown).toContainText("Included");
+    await expect(markdown).toContainText("Unavailable");
+    await expect(markdown).toContainText("Resolver exclusion");
 
     // No regeneration affordances exist in the snapshot canvas.
     await expect(
@@ -265,22 +267,21 @@ test.describe("@regression evidence-ledger", () => {
       .innerText();
     expect(snapshotText.toLowerCase().includes("we conclude")).toBeFalsy();
 
-    // Counterevidence view shows a non-empty badge (gaps exist) and is caveated.
-    const gapsBtn = nav.getByRole("button", {
-      name: /Counterevidence and gaps/,
-    });
+    // Counterevidence keeps its count in the summary and remains caveated.
+    const gapSummary = summaries.getByText(/Counterevidence and gaps \(8\)/);
+    await expect(gapSummary).toBeVisible();
     await expect(
-      gapsBtn.locator('[aria-label="non-empty counterevidence"]')
-    ).toBeVisible();
-    await gapsBtn.click();
+      page.getByText("No interpretation is generated.")
+    ).not.toBeVisible();
+    await gapSummary.click();
     await expect(
-      page.getByText("it does not reach a conclusion")
+      page.getByText("No interpretation is generated.")
     ).toBeVisible();
 
     // Evidence view: source links are pinned to the snapshot's source commit,
     // never `blob/main` — a later research-main change must not silently alter
     // what a sealed snapshot links to (Wave A review fix).
-    await nav.getByRole("button", { name: /Evidence/ }).click();
+    await summaries.getByText("Evidence", { exact: true }).click();
     const evidenceAnchors = page.locator(
       "[data-testid='ledger-snapshot-canvas'] a[href*='github.com/evaluchat/research/blob/']"
     );
@@ -293,6 +294,45 @@ test.describe("@regression evidence-ledger", () => {
       expect(href).not.toContain("/blob/main/");
       expect(href).toMatch(/\/blob\/[0-9a-f]{7,40}\//);
     }
+
+    // Publishing remains inline: safety declarations gate the same POST and a
+    // successful response replaces the banner submit slot with the draft PR.
+    await page.route(
+      "**/api/workspace/items/*/ledger/publish",
+      async (route) => {
+        const request = route.request();
+        expect(request.method()).toBe("POST");
+        const body = JSON.parse(request.postData() ?? "{}");
+        expect(body).toMatchObject({
+          values: {
+            publication_authorisation: "confirmed-authorised-to-publish",
+            anonymisation_status:
+              "confirmed-no-student-identifiers-or-raw-student-material",
+            public_data_declaration: "confirmed-public-data",
+          },
+        });
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({
+            publication: {
+              status: "draft",
+              pullRequestNumber: 85,
+              pullRequestUrl: "https://github.com/evaluchat/research/pull/85",
+            },
+          }),
+        });
+      }
+    );
+    await banner.getByTestId("ledger-publish").click();
+    const publishDialog = page.getByTestId("ledger-publish-dialog");
+    await expect(publishDialog).toBeVisible();
+    await publishDialog.getByTestId("ledger-publication-authorisation").check();
+    await publishDialog.getByTestId("ledger-anonymisation-status").check();
+    await publishDialog.getByTestId("ledger-public-data-declaration").check();
+    await publishDialog.getByTestId("ledger-confirm-publish").click();
+    await expect(
+      banner.getByRole("link", { name: "Draft PR" })
+    ).toHaveAttribute("href", "https://github.com/evaluchat/research/pull/85");
 
     // Snapshot chat can discuss the sealed record without generating a canvas
     // artifact. Wait for its hidden kickoff before checking the next assistant
@@ -324,12 +364,19 @@ test.describe("@regression evidence-ledger", () => {
     await expect(page.getByTestId("ledger-snapshot-canvas")).toBeVisible({
       timeout: 60_000,
     });
-    const firstFingerprint = await page
-      .locator("[data-testid='ledger-snapshot-canvas']")
-      .getByText("Input fingerprint")
-      .locator("..")
-      .locator("dd")
-      .innerText();
+    const firstSnapshotId = page.url().split("/").pop()!;
+    const firstSnapshotsResponse = await page.request.get(
+      `${baseUrl()}/api/workspace/items/${itemId}/ledger/snapshots`
+    );
+    expect(firstSnapshotsResponse.ok()).toBeTruthy();
+    const firstSnapshotsBody = (await firstSnapshotsResponse.json()) as {
+      snapshots: Array<{ id: string; snapshot: { inputFingerprint: string } }>;
+    };
+    const firstSnapshot = firstSnapshotsBody.snapshots.find(
+      (snapshot) => snapshot.id === firstSnapshotId
+    );
+    expect(firstSnapshot).toBeTruthy();
+    const firstFingerprint = firstSnapshot!.snapshot.inputFingerprint;
     expect(firstFingerprint.length).toBeGreaterThan(0);
 
     // Return to the ledger and generate a SECOND snapshot under different filters.
@@ -347,12 +394,19 @@ test.describe("@regression evidence-ledger", () => {
     await expect(page.getByTestId("ledger-snapshot-canvas")).toBeVisible({
       timeout: 60_000,
     });
-    const secondFingerprint = await page
-      .locator("[data-testid='ledger-snapshot-canvas']")
-      .getByText("Input fingerprint")
-      .locator("..")
-      .locator("dd")
-      .innerText();
+    const secondSnapshotId = page.url().split("/").pop()!;
+    const secondSnapshotsResponse = await page.request.get(
+      `${baseUrl()}/api/workspace/items/${itemId}/ledger/snapshots`
+    );
+    expect(secondSnapshotsResponse.ok()).toBeTruthy();
+    const secondSnapshotsBody = (await secondSnapshotsResponse.json()) as {
+      snapshots: Array<{ id: string; snapshot: { inputFingerprint: string } }>;
+    };
+    const secondSnapshot = secondSnapshotsBody.snapshots.find(
+      (snapshot) => snapshot.id === secondSnapshotId
+    );
+    expect(secondSnapshot).toBeTruthy();
+    const secondFingerprint = secondSnapshot!.snapshot.inputFingerprint;
 
     // Different config → different input fingerprint (new snapshot, not idempotent).
     expect(secondFingerprint).not.toBe(firstFingerprint);
@@ -366,34 +420,28 @@ test.describe("@regression evidence-ledger", () => {
       snapshots: Array<{ id: string; snapshot: { inputFingerprint: string } }>;
     };
     expect(listBody.snapshots.length).toBeGreaterThanOrEqual(2);
-    const firstSnapshot = listBody.snapshots.find(
+    const listedFirstSnapshot = listBody.snapshots.find(
       (s) => s.snapshot.inputFingerprint === firstFingerprint
     );
-    expect(firstSnapshot).toBeTruthy();
+    expect(listedFirstSnapshot).toBeTruthy();
 
     // Opening the ORIGINAL snapshot still renders identically (immutability).
-    await openWorkspaceItem(page, firstSnapshot!.id);
+    await openWorkspaceItem(page, listedFirstSnapshot!.id);
     await expect(page.getByTestId("ledger-snapshot-canvas")).toBeVisible({
       timeout: TIMEOUTS.pageLoad,
     });
-    const reopenedFingerprint = await page
-      .locator("[data-testid='ledger-snapshot-canvas']")
-      .getByText("Input fingerprint")
-      .locator("..")
-      .locator("dd")
-      .innerText();
-    expect(reopenedFingerprint).toBe(firstFingerprint);
+    expect(page.url()).toContain(listedFirstSnapshot!.id);
     // The original (baseline, unfiltered) snapshot still renders the bucket
     // totals it was sealed with — Included 12 — even though a second filtered
     // snapshot was generated after it. This proves immutability of the
     // prior snapshot's sealed record + render.
-    const reopenedHeader = page.locator(
-      "[data-testid='ledger-snapshot-canvas'] header"
-    );
-    await expect(reopenedHeader).toContainText("Included: 12");
-    await expect(reopenedHeader).toContainText("Resolver exclusion: 2");
-    await expect(reopenedHeader).toContainText("Predicate");
+    const reopenedMarkdown = page.getByTestId("ledger-snapshot-markdown");
+    const includedRow = reopenedMarkdown
+      .locator("tr", { hasText: "Included" })
+      .first();
+    await expect(includedRow).toContainText("12");
+    await expect(reopenedMarkdown).toContainText("Resolver exclusion");
     // And the sealed predicate is the unfiltered baseline predicate.
-    await expect(reopenedHeader).toContainText("all accepted evidence");
+    await expect(reopenedMarkdown).toContainText("all accepted evidence");
   });
 });

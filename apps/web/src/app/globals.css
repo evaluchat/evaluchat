@@ -41,6 +41,25 @@
   }
 }
 
+/* BlockNote stores a block's nested content in a sibling block group. Keep
+ * details semantic in the block itself and collapse that group with its
+ * native open state. */
+[data-node-type="blockContainer"]:has(
+    [data-content-type="details"] details:not([open])
+  )
+  > [data-node-type="blockGroup"] {
+  display: none;
+}
+
+.bn-details-block {
+  width: 100%;
+}
+
+.bn-details-summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
