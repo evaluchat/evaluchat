@@ -155,8 +155,10 @@ function renderCanonicalManifest(
     );
     if (!values.length) lines.push("      {}");
     for (const [field, value] of values) {
+      const status = value?.status ?? "unavailable";
+      const declaredValue = value?.value ?? markdownValue(value);
       lines.push(
-        `      ${JSON.stringify(field)}: { status: ${JSON.stringify(value.status)}, value: ${JSON.stringify(value.value)} }`
+        `      ${JSON.stringify(field)}: { status: ${JSON.stringify(status)}, value: ${JSON.stringify(declaredValue)} }`
       );
     }
   }

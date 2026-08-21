@@ -75,4 +75,21 @@ describe("ledger snapshot markdown", () => {
     );
     expect(renderLedgerBody(snapshot, config)).not.toContain("<details");
   });
+
+  it("renders malformed missing dimension values without dropping their field", () => {
+    const malformedSnapshot = structuredClone(snapshot);
+    const contribution = (
+      malformedSnapshot.manifest as unknown as {
+        contributions: Array<{
+          dimensionValues: Record<string, unknown>;
+        }>;
+      }
+    ).contributions[0];
+    contribution.dimensionValues = { education_level: undefined };
+
+    expect(() => renderLedgerSnapshotBody(malformedSnapshot, config)).not.toThrow();
+    expect(renderLedgerSnapshotBody(malformedSnapshot, config)).toContain(
+      '"education_level": { status: "unavailable", value: "unavailable" }'
+    );
+  });
 });
