@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
   push: vi.fn(),
+  refresh: vi.fn(),
   bannerSubmit: undefined as undefined | (() => void),
   publishDialogOpen: false,
   publishSuccess: undefined as
@@ -57,7 +58,7 @@ vi.mock("react", async (importOriginal) => {
 });
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: harness.push }),
+  useRouter: () => ({ push: harness.push, refresh: harness.refresh }),
 }));
 vi.mock("lucide-react", () => ({
   ExternalLink: () => null,
@@ -232,6 +233,7 @@ describe("LedgerSnapshotCanvas", () => {
   });
 
   it("opens the dialog from the banner and replaces it with a draft PR link", () => {
+    harness.refresh.mockClear();
     manualState.enabled = true;
     manualState.index = 0;
     let markup = renderToStaticMarkup(
@@ -251,6 +253,7 @@ describe("LedgerSnapshotCanvas", () => {
       pullRequestUrl: "https://github.com/evaluchat/research/pull/85",
       pullRequestNumber: 85,
     });
+    expect(harness.refresh).toHaveBeenCalledOnce();
     manualState.index = 0;
     markup = renderToStaticMarkup(
       React.createElement(LedgerSnapshotCanvas, { item })

@@ -747,6 +747,7 @@ export function LedgerSnapshotCanvas({
           setPublication(nextPublication);
           setPullRequestActual(undefined);
           setRePublish(false);
+          router.refresh();
         }}
         rePublish={rePublish}
       />
