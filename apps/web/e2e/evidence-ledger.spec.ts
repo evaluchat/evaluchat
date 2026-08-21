@@ -258,11 +258,11 @@ test.describe("@regression evidence-ledger", () => {
       page.locator("button:has-text('Generate ledger')")
     ).toHaveCount(0);
 
-    // No claim/conclusion prose in the sealed views (chat text excluded).
+    // The sealed record is caveated, never conclusive: the explicit
+    // "does not reach a conclusion" caveat is asserted below.
     const snapshotText = await page
       .locator("#ledger-snapshot-details-panel")
       .innerText();
-    expect(snapshotText.toLowerCase()).not.toContain("conclusion");
     expect(snapshotText.toLowerCase().includes("we conclude")).toBeFalsy();
 
     // Counterevidence view shows a non-empty badge (gaps exist) and is caveated.
