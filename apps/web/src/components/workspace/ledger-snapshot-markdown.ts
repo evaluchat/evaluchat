@@ -7,6 +7,13 @@ import type {
 
 const RESEARCH_BLOB_URL = "https://github.com/evaluchat/research/blob";
 
+function escapeDetailsSummary(summary: string): string {
+  return summary
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 function compare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -243,7 +250,7 @@ export function renderLedgerSnapshotCanvasMarkdown(
       const open = heading === "Scope" ? " open" : "";
       return [
         `<details${open}>`,
-        `<summary>${summary}</summary>`,
+        `<summary>${escapeDetailsSummary(summary)}</summary>`,
         "",
         content.join("\n").trim(),
         "</details>",

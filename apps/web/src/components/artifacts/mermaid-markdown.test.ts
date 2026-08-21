@@ -67,6 +67,26 @@ describe("details markdown canvas conversion", () => {
     );
   });
 
+  it.each(["<script>", "A & B", "a > b", "</summary>"])(
+    "round-trips an escaped details summary: %s",
+    async (summary) => {
+      const editor = editorStub();
+      const input = [
+        {
+          type: "details",
+          props: { summary, open: false },
+          children: [],
+        },
+      ];
+
+      const markdown = await exportCanvasBlocksToMarkdown(editor, input);
+
+      await expect(parseMarkdownToCanvasBlocks(editor, markdown)).resolves.toEqual(
+        input
+      );
+    }
+  );
+
   it("leaves malformed and unclosed details tags to the normal markdown parser", async () => {
     const editor = editorStub();
     const markdown = "<details><summary>Broken</summary>\nNo closing tag";

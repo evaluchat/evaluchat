@@ -10,6 +10,20 @@ type DetailsSegment = {
   content: string;
 };
 
+function escapeDetailsSummary(summary: string): string {
+  return summary
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function unescapeDetailsSummary(summary: string): string {
+  return summary
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">");
+}
+
 function isInsideFencedCode(markdown: string, position: number): boolean {
   const fences = markdown.slice(0, position).match(/^\s*(```|~~~)/gm);
   return (fences?.length ?? 0) % 2 === 1;
@@ -69,7 +83,7 @@ function findDetailsSegments(markdown: string): DetailsSegment[] {
     segments.push({
       start,
       end: closing.index + closing[0].length,
-      summary: summary[1].trim(),
+      summary: unescapeDetailsSummary(summary[1].trim()),
       open,
       content: inner.slice(summary[0].length).trim(),
     });
@@ -247,7 +261,7 @@ async function blockToMarkdown(
       : "";
     return [
       `<details${props?.open ? " open" : ""}>`,
-      `<summary>${summary}</summary>`,
+      `<summary>${escapeDetailsSummary(summary)}</summary>`,
       ...(content ? ["", content] : []),
       "</details>",
     ].join("\n");
