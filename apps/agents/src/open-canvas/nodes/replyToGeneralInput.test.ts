@@ -136,7 +136,7 @@ describe("replyToGeneralInput", () => {
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
         role: "system",
-        content: expect.stringContaining("External source detection"),
+        content: expect.stringContaining("You are an AI writing coach"),
       }),
       ...state._messages,
     ]);

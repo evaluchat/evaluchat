@@ -239,6 +239,62 @@ describe("LedgerSnapshotCanvas", () => {
     expect(context.truncated?.fields).toContain("predicate");
   });
 
+  it("keeps distinct truncated dimension and value identities separate", () => {
+    const dimensionPrefix = "dimension-".repeat(10);
+    const valuePrefix = "value-".repeat(21);
+    const dimensionA = `${dimensionPrefix}a`;
+    const dimensionB = `${dimensionPrefix}b`;
+    const valueA = `${valuePrefix}a`;
+    const valueB = `${valuePrefix}b`;
+    const context = buildLedgerSnapshotAgentContext({
+      ...item,
+      snapshot: {
+        ...item.snapshot,
+        manifest: {
+          contributions: [
+            {
+              path: "evidence/a.md",
+              sourceHash: "source-a",
+              bucket: "Included",
+              dimensionValues: {
+                [dimensionA]: { status: "recorded", value: valueA },
+                [dimensionB]: { status: "recorded", value: valueA },
+              },
+              scopeValues: {},
+            },
+            {
+              path: "evidence/b.md",
+              sourceHash: "source-b",
+              bucket: "Included",
+              dimensionValues: {
+                [dimensionA]: { status: "recorded", value: valueB },
+                [dimensionB]: { status: "recorded", value: valueB },
+              },
+              scopeValues: {},
+            },
+          ],
+        },
+      },
+    });
+
+    const dimensions = Object.entries(context.contributions.perDimension);
+    expect(dimensions).toHaveLength(2);
+    expect(new Set(dimensions.map(([dimensionId]) => dimensionId)).size).toBe(
+      2
+    );
+    expect(dimensions.map(([dimensionId]) => dimensionId.length)).toEqual([
+      80, 80,
+    ]);
+    for (const [, values] of dimensions) {
+      expect(Object.keys(values)).toHaveLength(2);
+      expect(new Set(Object.keys(values)).size).toBe(2);
+      expect(Object.keys(values).map((value) => value.length)).toEqual([
+        120, 120,
+      ]);
+      expect(Object.values(values)).toEqual([1, 1]);
+    }
+  });
+
   it("drops the largest dimension summaries deterministically to fit the context budget", () => {
     const dimensionIds = Array.from(
       { length: 24 },
@@ -249,6 +305,9 @@ describe("LedgerSnapshotCanvas", () => {
       ...item,
       snapshot: {
         ...item.snapshot,
+        buckets: {
+          [`bucket-${"b".repeat(100)}`]: 24,
+        },
         manifest: {
           contributions: Array.from({ length: 24 }, (_, contributionIndex) => ({
             path: `evidence/included-${contributionIndex}.md`,
@@ -267,6 +326,10 @@ describe("LedgerSnapshotCanvas", () => {
           })),
         },
       },
+      publication: {
+        status: "draft",
+        pullRequestUrl: `https://example.test/${"p".repeat(400)}`,
+      },
     };
 
     const context = buildLedgerSnapshotAgentContext(snapshotItem);
@@ -275,8 +338,12 @@ describe("LedgerSnapshotCanvas", () => {
     expect(Object.keys(context.contributions.perDimension).length).toBeLessThan(
       24
     );
-    expect(JSON.stringify(context).length).toBeLessThanOrEqual(6000);
+    expect(JSON.stringify(context, null, 2).length).toBeLessThanOrEqual(6000);
+    expect(Object.keys(context.buckets)[0]).toHaveLength(80);
+    expect(context.publication?.prUrl).toHaveLength(300);
     expect(context.truncated?.fields).toContain("contributions.perDimension");
+    expect(context.truncated?.fields).toContain("buckets");
+    expect(context.truncated?.fields).toContain("publication.prUrl");
     expect(context).toEqual(repeatedContext);
   });
 

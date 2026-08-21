@@ -43,6 +43,8 @@ const MAX_SNAPSHOT_DIMENSION_ID_LENGTH = 80;
 const MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH = 120;
 const MAX_SNAPSHOT_GAP_PATH_LENGTH = 300;
 const MAX_SNAPSHOT_LABEL_LENGTH = 120;
+const MAX_SNAPSHOT_ID_LENGTH = 100;
+const MAX_SNAPSHOT_PUBLICATION_URL_LENGTH = 300;
 const MAX_SNAPSHOT_CONTEXT_LENGTH = 6000;
 
 function truncateSnapshotString(
@@ -55,6 +57,28 @@ function truncateSnapshotString(
 
   truncatedFields.add(field);
   return `${value.slice(0, maxLength - 1)}…`;
+}
+
+function stableKeySuffix(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36).padStart(6, "0").slice(-6);
+}
+
+function truncateSnapshotKey(
+  value: string,
+  maxLength: number,
+  field: string,
+  truncatedFields: Set<string>
+): string {
+  if (value.length <= maxLength) return value;
+
+  truncatedFields.add(field);
+  const suffix = stableKeySuffix(value);
+  return `${value.slice(0, maxLength - suffix.length - 1)}…${suffix}`;
 }
 
 function compareStrings(left: string, right: string): number {
@@ -81,42 +105,87 @@ function perDimension(
     for (const [dimensionId, value] of Object.entries(
       contribution.dimensionValues
     )) {
-      const boundedDimensionId = truncateSnapshotString(
-        dimensionId,
-        MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
-        "contributions.perDimension.dimensionId",
-        truncatedFields
-      );
       const values =
-        distributions.get(boundedDimensionId) ?? new Map<string, number>();
-      const label = truncateSnapshotString(
-        value.status === "unknown" ? "unknown" : String(value.value),
-        MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH,
-        "contributions.perDimension.value",
-        truncatedFields
-      );
+        distributions.get(dimensionId) ?? new Map<string, number>();
+      const label =
+        value.status === "unknown" ? "unknown" : String(value.value);
       values.set(label, (values.get(label) ?? 0) + 1);
-      distributions.set(boundedDimensionId, values);
+      distributions.set(dimensionId, values);
     }
   }
 
   return Object.fromEntries(
     [...distributions.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareStrings(left, right))
       .slice(0, MAX_SNAPSHOT_DIMENSIONS)
       .map(([dimensionId, values]) => [
-        dimensionId,
+        truncateSnapshotKey(
+          dimensionId,
+          MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
+          "contributions.perDimension.dimensionId",
+          truncatedFields
+        ),
         Object.fromEntries(
           [...values.entries()]
-            .sort(([left], [right]) => left.localeCompare(right))
+            .sort(([left], [right]) => compareStrings(left, right))
             .slice(0, MAX_SNAPSHOT_VALUES_PER_DIMENSION)
+            .map(([value, count]) => [
+              truncateSnapshotKey(
+                value,
+                MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH,
+                "contributions.perDimension.value",
+                truncatedFields
+              ),
+              count,
+            ])
         ),
       ])
   );
 }
 
+function boundedBuckets(
+  buckets: Record<string, number>,
+  truncatedFields: Set<string>
+): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(buckets)
+      .sort(([left], [right]) => compareStrings(left, right))
+      .map(([bucket, count]) => [
+        truncateSnapshotKey(
+          bucket,
+          MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
+          "buckets",
+          truncatedFields
+        ),
+        count,
+      ])
+  );
+}
+
 function serializedContextLength(context: LedgerSnapshotAgentContext): number {
-  return JSON.stringify(context).length;
+  return JSON.stringify(
+    {
+      kind: "ledger_snapshot",
+      ledgerId: context.ledgerId,
+      parentLedgerItemId: context.parentLedgerItemId,
+      methodId: context.methodId,
+      ...(context.methodTitle !== undefined
+        ? { methodTitle: context.methodTitle }
+        : {}),
+      methodVersion: context.methodVersion,
+      templateId: context.templateId,
+      templateVersion: context.templateVersion,
+      predicate: context.predicate,
+      sourceCommit: context.sourceCommit,
+      generatedAt: context.generatedAt,
+      buckets: context.buckets,
+      contributions: context.contributions,
+      ...(context.publication ? { publication: context.publication } : {}),
+      ...(context.truncated ? { truncated: context.truncated } : {}),
+    },
+    null,
+    2
+  ).length;
 }
 
 function applyTruncationMetadata(
@@ -197,7 +266,12 @@ export function buildLedgerSnapshotAgentContext(
 
   const context: LedgerSnapshotAgentContext = {
     kind: "ledger_snapshot",
-    ledgerId: item.snapshot.ledgerId,
+    ledgerId: truncateSnapshotString(
+      item.snapshot.ledgerId,
+      MAX_SNAPSHOT_ID_LENGTH,
+      "ledgerId",
+      truncatedFields
+    ),
     parentLedgerItemId: item.parentLedgerItemId,
     methodId: item.snapshot.methodId,
     ...(methodTitle !== undefined ? { methodTitle } : {}),
@@ -215,9 +289,19 @@ export function buildLedgerSnapshotAgentContext(
       "predicate",
       truncatedFields
     ),
-    sourceCommit: item.snapshot.sourceCommit,
-    generatedAt: item.snapshot.generatedAt,
-    buckets: item.snapshot.buckets,
+    sourceCommit: truncateSnapshotString(
+      item.snapshot.sourceCommit,
+      MAX_SNAPSHOT_ID_LENGTH,
+      "sourceCommit",
+      truncatedFields
+    ),
+    generatedAt: truncateSnapshotString(
+      item.snapshot.generatedAt,
+      MAX_SNAPSHOT_ID_LENGTH,
+      "generatedAt",
+      truncatedFields
+    ),
+    buckets: boundedBuckets(item.snapshot.buckets, truncatedFields),
     contributions: {
       included: contributions.filter(
         (contribution) => contribution.bucket === "Included"
@@ -229,7 +313,11 @@ export function buildLedgerSnapshotAgentContext(
           path: contribution.path,
           bucket: contribution.bucket,
         }))
-        .sort((left, right) => left.path.localeCompare(right.path))
+        .sort(
+          (left, right) =>
+            compareStrings(left.path, right.path) ||
+            compareStrings(left.bucket, right.bucket)
+        )
         .slice(0, MAX_SNAPSHOT_GAP_PATHS)
         .map((gap) => ({
           ...gap,
@@ -246,7 +334,14 @@ export function buildLedgerSnapshotAgentContext(
           publication: {
             status: item.publication.status,
             ...(item.publication.pullRequestUrl
-              ? { prUrl: item.publication.pullRequestUrl }
+              ? {
+                  prUrl: truncateSnapshotString(
+                    item.publication.pullRequestUrl,
+                    MAX_SNAPSHOT_PUBLICATION_URL_LENGTH,
+                    "publication.prUrl",
+                    truncatedFields
+                  ),
+                }
               : {}),
           },
         }
@@ -689,7 +784,7 @@ function DescriptiveView({
       <h2 className="font-semibold">Descriptive views</h2>
       <ul className="mt-3 space-y-1 text-sm">
         {[...counts.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
+          .sort(([a], [b]) => compareStrings(a, b))
           .map(([label, count]) => (
             <li key={label}>
               {label}: {count}
