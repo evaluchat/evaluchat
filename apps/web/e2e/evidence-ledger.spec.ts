@@ -433,7 +433,10 @@ test.describe("@regression evidence-ledger", () => {
     // snapshot was generated after it. This proves immutability of the
     // prior snapshot's sealed record + render.
     const reopenedMarkdown = page.getByTestId("ledger-snapshot-markdown");
-    await expect(reopenedMarkdown).toContainText("Included");
+    const includedRow = reopenedMarkdown
+      .locator("tr", { hasText: "Included" })
+      .first();
+    await expect(includedRow).toContainText("12");
     await expect(reopenedMarkdown).toContainText("Resolver exclusion");
     // And the sealed predicate is the unfiltered baseline predicate.
     await expect(reopenedMarkdown).toContainText("all accepted evidence");
