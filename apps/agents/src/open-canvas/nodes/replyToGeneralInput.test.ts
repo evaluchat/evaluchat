@@ -594,6 +594,16 @@ describe("replyToGeneralInput", () => {
   it("uses the Ledger Snapshot context for mixed workspace contexts", async () => {
     const state = createMockState({
       _messages: [new HumanMessage({ content: "Help me", id: "1" })],
+      formContext: {
+        templateId: "assignment-brief",
+        title: "Assignment brief",
+        description: "A brief for an assignment",
+        layoutMarkdown: "# {{title}}",
+        fields: {
+          title: { label: "Title", type: "text", required: true },
+        },
+        values: { title: "Old title" },
+      },
       ledgerContext: {
         kind: "ledger",
         methodId: "evidence-method",
@@ -630,7 +640,19 @@ describe("replyToGeneralInput", () => {
     ]);
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
+        content: expect.not.stringContaining("<form-updates>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
         content: expect.stringContaining("<ledger-snapshot-context>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("is read-only."),
       }),
       ...state._messages,
     ]);

@@ -376,13 +376,12 @@ export const replyToGeneralInput = async (
           formatLedgerContext(state.ledgerContext)
         )
       : "";
-  const ledgerSnapshotPrompt =
-    state.ledgerSnapshotContext && !state.formContext
-      ? LEDGER_SNAPSHOT_INSTRUCTIONS.replace(
-          "{ledgerSnapshotContext}",
-          formatLedgerSnapshotContext(state.ledgerSnapshotContext)
-        )
-      : "";
+  const ledgerSnapshotPrompt = state.ledgerSnapshotContext
+    ? LEDGER_SNAPSHOT_INSTRUCTIONS.replace(
+        "{ledgerSnapshotContext}",
+        formatLedgerSnapshotContext(state.ledgerSnapshotContext)
+      )
+    : "";
   const methodPrompt =
     state.formContext?.methodContext &&
     !state.ledgerContext &&

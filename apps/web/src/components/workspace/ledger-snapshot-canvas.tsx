@@ -306,17 +306,37 @@ export function buildLedgerSnapshotAgentContext(
       "ledgerId",
       truncatedFields
     ),
-    parentLedgerItemId: item.parentLedgerItemId,
-    methodId: item.snapshot.methodId,
+    parentLedgerItemId: truncateSnapshotString(
+      item.parentLedgerItemId,
+      MAX_SNAPSHOT_ID_LENGTH,
+      "parentLedgerItemId",
+      truncatedFields
+    ),
+    methodId: truncateSnapshotString(
+      item.snapshot.methodId,
+      MAX_SNAPSHOT_ID_LENGTH,
+      "methodId",
+      truncatedFields
+    ),
     ...(methodTitle !== undefined ? { methodTitle } : {}),
-    methodVersion: item.snapshot.methodVersion,
+    methodVersion: truncateSnapshotString(
+      item.snapshot.methodVersion,
+      MAX_SNAPSHOT_ID_LENGTH,
+      "methodVersion",
+      truncatedFields
+    ),
     templateId: truncateSnapshotString(
       item.snapshot.templateId,
       MAX_SNAPSHOT_LABEL_LENGTH,
       "templateId",
       truncatedFields
     ),
-    templateVersion: item.snapshot.templateVersion,
+    templateVersion: truncateSnapshotString(
+      item.snapshot.templateVersion,
+      MAX_SNAPSHOT_ID_LENGTH,
+      "templateVersion",
+      truncatedFields
+    ),
     predicate: truncateSnapshotString(
       item.snapshot.predicate,
       MAX_SNAPSHOT_PREDICATE_LENGTH,
@@ -366,7 +386,12 @@ export function buildLedgerSnapshotAgentContext(
     ...(item.publication
       ? {
           publication: {
-            status: item.publication.status,
+            status: truncateSnapshotString(
+              item.publication.status,
+              MAX_SNAPSHOT_LABEL_LENGTH,
+              "publication.status",
+              truncatedFields
+            ),
             ...(item.publication.pullRequestUrl
               ? {
                   prUrl: truncateSnapshotString(

@@ -239,6 +239,29 @@ describe("LedgerSnapshotCanvas", () => {
     expect(context.truncated?.fields).toContain("predicate");
   });
 
+  it("bounds scalar snapshot identifiers within the context budget", () => {
+    const context = buildLedgerSnapshotAgentContext({
+      ...item,
+      parentLedgerItemId: "p".repeat(6001),
+      snapshot: {
+        ...item.snapshot,
+        methodId: "m".repeat(6001),
+        methodVersion: "v".repeat(6001),
+        templateVersion: "t".repeat(6001),
+      },
+    });
+
+    expect(JSON.stringify(context, null, 2).length).toBeLessThanOrEqual(6000);
+    expect(context.truncated?.fields).toEqual(
+      expect.arrayContaining([
+        "parentLedgerItemId",
+        "methodId",
+        "methodVersion",
+        "templateVersion",
+      ])
+    );
+  });
+
   it("keeps FNV-colliding truncated keys separate", () => {
     const commonPrefix = "x".repeat(120);
     // These tails produce the same stableKeySuffix with the common prefix.
