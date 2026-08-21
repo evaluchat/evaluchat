@@ -145,24 +145,33 @@ function perDimension(
     }
   }
 
+  if (distributions.size > MAX_SNAPSHOT_DIMENSIONS) {
+    truncatedFields.add("contributions.perDimension.dimensionId");
+  }
+
   return Object.fromEntries(
     uniqueTruncatedSnapshotKeys(
       [...distributions.entries()]
         .sort(([left], [right]) => compareStrings(left, right))
         .slice(0, MAX_SNAPSHOT_DIMENSIONS)
-        .map(([dimensionId, values]) => [
-          dimensionId,
-          Object.fromEntries(
-            uniqueTruncatedSnapshotKeys(
-              [...values.entries()]
-                .sort(([left], [right]) => compareStrings(left, right))
-                .slice(0, MAX_SNAPSHOT_VALUES_PER_DIMENSION),
-              MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH,
-              "contributions.perDimension.value",
-              truncatedFields
-            )
-          ),
-        ]),
+        .map(([dimensionId, values]) => {
+          if (values.size > MAX_SNAPSHOT_VALUES_PER_DIMENSION) {
+            truncatedFields.add("contributions.perDimension.value");
+          }
+          return [
+            dimensionId,
+            Object.fromEntries(
+              uniqueTruncatedSnapshotKeys(
+                [...values.entries()]
+                  .sort(([left], [right]) => compareStrings(left, right))
+                  .slice(0, MAX_SNAPSHOT_VALUES_PER_DIMENSION),
+                MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH,
+                "contributions.perDimension.value",
+                truncatedFields
+              )
+            ),
+          ];
+        }),
       MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
       "contributions.perDimension.dimensionId",
       truncatedFields
@@ -361,19 +370,22 @@ export function buildLedgerSnapshotAgentContext(
         (contribution) => contribution.bucket === "Included"
       ).length,
       perDimension: perDimension(manifest, truncatedFields),
-      gaps: contributions
-        .filter((contribution) => contribution.bucket !== "Included")
-        .map((contribution) => ({
-          path: contribution.path,
-          bucket: contribution.bucket,
-        }))
-        .sort(
-          (left, right) =>
-            compareStrings(left.path, right.path) ||
-            compareStrings(left.bucket, right.bucket)
-        )
-        .slice(0, MAX_SNAPSHOT_GAP_PATHS)
-        .map((gap) => ({
+      gaps: (() => {
+        const gaps = contributions
+          .filter((contribution) => contribution.bucket !== "Included")
+          .map((contribution) => ({
+            path: contribution.path,
+            bucket: contribution.bucket,
+          }))
+          .sort(
+            (left, right) =>
+              compareStrings(left.path, right.path) ||
+              compareStrings(left.bucket, right.bucket)
+          );
+        if (gaps.length > MAX_SNAPSHOT_GAP_PATHS) {
+          truncatedFields.add("contributions.gaps.path");
+        }
+        return gaps.slice(0, MAX_SNAPSHOT_GAP_PATHS).map((gap) => ({
           ...gap,
           path: truncateSnapshotString(
             gap.path,
@@ -381,7 +393,8 @@ export function buildLedgerSnapshotAgentContext(
             "contributions.gaps.path",
             truncatedFields
           ),
-        })),
+        }));
+      })(),
     },
     ...(item.publication
       ? {

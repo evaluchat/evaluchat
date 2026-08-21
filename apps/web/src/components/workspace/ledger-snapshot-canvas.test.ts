@@ -239,6 +239,105 @@ describe("LedgerSnapshotCanvas", () => {
     expect(context.truncated?.fields).toContain("predicate");
   });
 
+  it("records perDimension dimension count-cap truncation without exceeding the aggregate budget", () => {
+    const dimensionIds = Array.from(
+      { length: 25 },
+      (_, index) => `d${String(index).padStart(2, "0")}`
+    );
+    const context = buildLedgerSnapshotAgentContext({
+      ...item,
+      snapshot: {
+        ...item.snapshot,
+        manifest: {
+          contributions: [
+            {
+              path: "evidence/included.md",
+              sourceHash: "source",
+              bucket: "Included" as const,
+              dimensionValues: Object.fromEntries(
+                dimensionIds.map((dimensionId) => [
+                  dimensionId,
+                  { status: "recorded" as const, value: "v" },
+                ])
+              ),
+              scopeValues: {},
+            },
+          ],
+        },
+      },
+    });
+
+    expect(Object.keys(context.contributions.perDimension)).toHaveLength(24);
+    expect(JSON.stringify(context, null, 2).length).toBeLessThanOrEqual(6000);
+    expect(context.truncated?.applied).toBe(true);
+    expect(context.truncated?.fields).toContain(
+      "contributions.perDimension.dimensionId"
+    );
+    expect(context.truncated?.fields).not.toContain(
+      "contributions.perDimension"
+    );
+  });
+
+  it("records perDimension value count-cap truncation without exceeding the aggregate budget", () => {
+    const values = Array.from(
+      { length: 25 },
+      (_, index) => `v${String(index).padStart(2, "0")}`
+    );
+    const context = buildLedgerSnapshotAgentContext({
+      ...item,
+      snapshot: {
+        ...item.snapshot,
+        manifest: {
+          contributions: values.map((value, index) => ({
+            path: `evidence/included-${index}.md`,
+            sourceHash: `source-${index}`,
+            bucket: "Included" as const,
+            dimensionValues: {
+              dim: { status: "recorded" as const, value },
+            },
+            scopeValues: {},
+          })),
+        },
+      },
+    });
+
+    expect(
+      Object.keys(context.contributions.perDimension.dim ?? {})
+    ).toHaveLength(24);
+    expect(JSON.stringify(context, null, 2).length).toBeLessThanOrEqual(6000);
+    expect(context.truncated?.applied).toBe(true);
+    expect(context.truncated?.fields).toContain(
+      "contributions.perDimension.value"
+    );
+    expect(context.truncated?.fields).not.toContain(
+      "contributions.perDimension"
+    );
+  });
+
+  it("records gaps path count-cap truncation without exceeding the aggregate budget", () => {
+    const context = buildLedgerSnapshotAgentContext({
+      ...item,
+      snapshot: {
+        ...item.snapshot,
+        manifest: {
+          contributions: Array.from({ length: 51 }, (_, index) => ({
+            path: `g${String(index).padStart(2, "0")}`,
+            sourceHash: `source-${index}`,
+            bucket: "Unavailable" as const,
+            dimensionValues: {},
+            scopeValues: {},
+          })),
+        },
+      },
+    });
+
+    expect(context.contributions.gaps).toHaveLength(50);
+    expect(JSON.stringify(context, null, 2).length).toBeLessThanOrEqual(6000);
+    expect(context.truncated?.applied).toBe(true);
+    expect(context.truncated?.fields).toContain("contributions.gaps.path");
+    expect(context.truncated?.fields).not.toContain("contributions.gaps");
+  });
+
   it("bounds scalar snapshot identifiers within the context budget", () => {
     const context = buildLedgerSnapshotAgentContext({
       ...item,
