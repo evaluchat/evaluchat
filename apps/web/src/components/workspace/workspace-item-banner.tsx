@@ -25,6 +25,7 @@ export function WorkspaceItemBanner({
   submitDisabled = false,
   submitted = false,
   submitLabel,
+  submitTestId,
   extraActions,
 }: {
   item: WorkspaceItem;
@@ -33,6 +34,7 @@ export function WorkspaceItemBanner({
   submitDisabled?: boolean;
   submitted?: boolean;
   submitLabel?: string;
+  submitTestId?: string;
   extraActions?: ReactNode;
 }) {
   const methodHref = methodSpecHref(item);
@@ -107,7 +109,7 @@ export function WorkspaceItemBanner({
                 onClick={onSubmit}
                 disabled={submitDisabled}
                 className="bg-white text-[#2c3e56] hover:bg-white/90"
-                data-testid="workspace-form-banner-submit"
+                data-testid={submitTestId ?? "workspace-form-banner-submit"}
               >
                 {submitted
                   ? "Submitted"

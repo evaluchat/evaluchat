@@ -59,9 +59,7 @@ test.describe("@regression evidence-ledger", () => {
       timeout: TIMEOUTS.pageLoad,
     });
     await page.getByRole("button", { name: "Create" }).click();
-    await page
-      .getByRole("button", { name: "Evidence Ledger" })
-      .click();
+    await page.getByRole("button", { name: "Evidence Ledger" }).click();
     const search = page.getByPlaceholder(
       "Search templates, methods, or ledgers"
     );
@@ -80,7 +78,7 @@ test.describe("@regression evidence-ledger", () => {
       { timeout: 30_000 }
     );
     await card.click();
-    const createResponseBody = await createResponse.then((r) => r.json()) as {
+    const createResponseBody = (await createResponse.then((r) => r.json())) as {
       item: { id: string };
     };
     await expect(
@@ -91,12 +89,7 @@ test.describe("@regression evidence-ledger", () => {
 
   async function applyLedgerFilters(page: Page) {
     await setMultiSelectFilter(page, "education_level", ["k12"]);
-    await setRangeFilter(
-      page,
-      "collection_date",
-      "2024-01-01",
-      "2024-12-31"
-    );
+    await setRangeFilter(page, "collection_date", "2024-01-01", "2024-12-31");
   }
 
   async function assertPreviewBuckets(page: Page) {
@@ -115,12 +108,20 @@ test.describe("@regression evidence-ledger", () => {
     test.setTimeout(180_000);
     const itemId = await createLedgerViaUi(page, METHOD_ID);
     await openWorkspaceItem(page, itemId);
-    await expect(
-      page.getByTestId("ledger-canvas")
-    ).toBeVisible({ timeout: TIMEOUTS.pageLoad });
+    await expect(page.getByTestId("ledger-canvas")).toBeVisible({
+      timeout: TIMEOUTS.pageLoad,
+    });
+    const banner = page.getByTestId("workspace-item-banner");
+    await expect(banner.getByRole("link", { name: "Workspace" })).toBeVisible();
+    await expect(banner.getByTestId("generate-ledger")).toBeVisible();
+    await expect(page.getByTestId("chat-input")).toBeVisible({
+      timeout: TIMEOUTS.pageLoad,
+    });
     // Method card: Method + baseline accepted evidence.
     await expect(page.getByText("Selected Method version")).toBeVisible();
-    await expect(page.getByText(METHOD_ID, { exact: false }).first()).toBeVisible();
+    await expect(
+      page.getByText(METHOD_ID, { exact: false }).first()
+    ).toBeVisible();
     // "Accepted evidence" dd shows baseline 12 after the initial preview.
     await expect(
       page.locator("[data-testid='ledger-canvas']").getByText("12").first()
@@ -139,9 +140,9 @@ test.describe("@regression evidence-ledger", () => {
     test.setTimeout(180_000);
     const itemId = await createLedgerItemViaApi(page, METHOD_ID);
     await openWorkspaceItem(page, itemId);
-    await expect(
-      page.getByTestId("ledger-canvas")
-    ).toBeVisible({ timeout: TIMEOUTS.pageLoad });
+    await expect(page.getByTestId("ledger-canvas")).toBeVisible({
+      timeout: TIMEOUTS.pageLoad,
+    });
 
     // Filter controls exist: multi-select for education_level incl. `unknown`,
     // and date range inputs for collection_date.
@@ -178,15 +179,36 @@ test.describe("@regression evidence-ledger", () => {
     await expect(generate).toBeEnabled();
   });
 
-  test("3 · generate read-only Ledger Snapshot with 5 views", async ({
+  test("3 · agent can narrow the ledger scope", async ({ page }) => {
+    test.setTimeout(180_000);
+    const itemId = await createLedgerItemViaApi(page, METHOD_ID);
+    await openWorkspaceItem(page, itemId);
+    await expect(page.getByTestId("ledger-canvas")).toBeVisible({
+      timeout: TIMEOUTS.pageLoad,
+    });
+
+    const chatInput = page.getByTestId("chat-input");
+    await expect(chatInput).toBeVisible({ timeout: TIMEOUTS.pageLoad });
+    await chatInput.fill("Filter the ledger to education_level k12");
+    await chatInput.press("Enter");
+
+    const predicate = page
+      .locator("[data-testid='ledger-canvas'] p.font-mono")
+      .first();
+    await expect(predicate).toContainText("education_level in [k12]", {
+      timeout: 60_000,
+    });
+  });
+
+  test("4 · generate read-only Ledger Snapshot with 5 views", async ({
     page,
   }) => {
     test.setTimeout(180_000);
     const itemId = await createLedgerItemViaApi(page, METHOD_ID);
     await openWorkspaceItem(page, itemId);
-    await expect(
-      page.getByTestId("ledger-canvas")
-    ).toBeVisible({ timeout: TIMEOUTS.pageLoad });
+    await expect(page.getByTestId("ledger-canvas")).toBeVisible({
+      timeout: TIMEOUTS.pageLoad,
+    });
     await applyLedgerFilters(page);
     await page.getByRole("button", { name: "Refresh preview" }).click();
     await assertPreviewBuckets(page);
@@ -211,18 +233,21 @@ test.describe("@regression evidence-ledger", () => {
       "Comparability",
       "Counterevidence and gaps",
     ]) {
-      await expect(nav.getByRole("button", { name: new RegExp(view) })).toBeVisible();
+      await expect(
+        nav.getByRole("button", { name: new RegExp(view) })
+      ).toBeVisible();
     }
 
     // Snapshot header renders the bucket totals.
-    const header = page
-      .locator("[data-testid='ledger-snapshot-canvas'] header");
+    const header = page.locator(
+      "[data-testid='ledger-snapshot-canvas'] header"
+    );
     await expect(header).toContainText("Included: 6");
     await expect(header).toContainText("Unavailable: 2");
     await expect(header).toContainText("Resolver exclusion: 2");
 
     // No edit affordances in the snapshot.
-    await expect(page.locator("#chat-input")).toHaveCount(0);
+    await expect(page.getByTestId("chat-input")).toHaveCount(0);
     await expect(
       page.locator("button:has-text('Generate ledger')")
     ).toHaveCount(0);
@@ -232,24 +257,27 @@ test.describe("@regression evidence-ledger", () => {
       .locator("[data-testid='ledger-snapshot-canvas']")
       .innerText();
     expect(snapshotText.toLowerCase()).not.toContain("conclusion");
-    expect(
-      snapshotText.toLowerCase().includes("we conclude")
-    ).toBeFalsy();
+    expect(snapshotText.toLowerCase().includes("we conclude")).toBeFalsy();
 
     // Counterevidence view shows a non-empty badge (gaps exist) and is caveated.
     const gapsBtn = nav.getByRole("button", {
       name: /Counterevidence and gaps/,
     });
-    await expect(gapsBtn.locator('[aria-label="non-empty counterevidence"]')).toBeVisible();
+    await expect(
+      gapsBtn.locator('[aria-label="non-empty counterevidence"]')
+    ).toBeVisible();
     await gapsBtn.click();
-    await expect(page.getByText("it does not reach a conclusion")).toBeVisible();
+    await expect(
+      page.getByText("it does not reach a conclusion")
+    ).toBeVisible();
 
     // Evidence view: source links are pinned to the snapshot's source commit,
     // never `blob/main` — a later research-main change must not silently alter
     // what a sealed snapshot links to (Wave A review fix).
     await nav.getByRole("button", { name: /Evidence/ }).click();
-    const evidenceAnchors = page
-      .locator("[data-testid='ledger-snapshot-canvas'] a[href*='github.com/evaluchat/research/blob/']");
+    const evidenceAnchors = page.locator(
+      "[data-testid='ledger-snapshot-canvas'] a[href*='github.com/evaluchat/research/blob/']"
+    );
     await expect(evidenceAnchors.first()).toBeVisible({ timeout: 15_000 });
     const hrefs = await evidenceAnchors.evaluateAll((anchors) =>
       anchors.map((a) => (a as HTMLAnchorElement).href)
@@ -261,15 +289,15 @@ test.describe("@regression evidence-ledger", () => {
     }
   });
 
-  test("4 · snapshot immutability — filters/fingerprint survive regeneration", async ({
+  test("5 · snapshot immutability — filters/fingerprint survive regeneration", async ({
     page,
   }) => {
     test.setTimeout(240_000);
     const itemId = await createLedgerItemViaApi(page, METHOD_ID);
     await openWorkspaceItem(page, itemId);
-    await expect(
-      page.getByTestId("ledger-canvas")
-    ).toBeVisible({ timeout: TIMEOUTS.pageLoad });
+    await expect(page.getByTestId("ledger-canvas")).toBeVisible({
+      timeout: TIMEOUTS.pageLoad,
+    });
 
     // Baseline generate → snapshot A.
     await page.getByTestId("generate-ledger").click();
@@ -289,9 +317,9 @@ test.describe("@regression evidence-ledger", () => {
       waitUntil: "domcontentloaded",
       timeout: TIMEOUTS.pageLoad,
     });
-    await expect(
-      page.getByTestId("ledger-canvas")
-    ).toBeVisible({ timeout: TIMEOUTS.pageLoad });
+    await expect(page.getByTestId("ledger-canvas")).toBeVisible({
+      timeout: TIMEOUTS.pageLoad,
+    });
     await applyLedgerFilters(page);
     await page.getByRole("button", { name: "Refresh preview" }).click();
     await assertPreviewBuckets(page);

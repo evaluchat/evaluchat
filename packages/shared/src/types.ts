@@ -225,6 +225,31 @@ export interface FormAgentContext {
   };
 }
 
+export type LedgerAgentFilter =
+  | { control: "multi-select"; values: string[] }
+  | { control: "range"; min?: number | string; max?: number | string };
+
+export interface LedgerAgentDimension {
+  id: string;
+  role: "context" | "collection" | "method";
+  control: "multi-select" | "range";
+  options?: string[];
+  type: "text" | "number" | "date";
+}
+
+export interface LedgerAgentContext {
+  kind: "ledger";
+  methodId: string;
+  methodTitle?: string;
+  methodVersion: string;
+  templateId: string;
+  templateVersion: string;
+  dimensions: LedgerAgentDimension[];
+  filters: Record<string, LedgerAgentFilter>;
+  baselineCount?: number;
+  scope?: { buckets: Record<string, number>; predicate?: string };
+}
+
 /**
  * The metadata included in search results from Exa.
  */
@@ -251,6 +276,9 @@ export interface GraphInput {
 
   /** Current structured Form Template context for the assistant. */
   formContext?: FormAgentContext;
+
+  /** Current scoped Evidence Ledger context for the assistant. */
+  ledgerContext?: LedgerAgentContext;
 
   next?: string;
 
