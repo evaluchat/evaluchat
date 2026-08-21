@@ -297,6 +297,17 @@ test.describe("@regression evidence-ledger", () => {
     await page.route(
       "**/api/workspace/items/*/ledger/publish",
       async (route) => {
+        const request = route.request();
+        expect(request.method()).toBe("POST");
+        const body = JSON.parse(request.postData() ?? "{}");
+        expect(body).toMatchObject({
+          values: {
+            publication_authorisation: "confirmed-authorised-to-publish",
+            anonymisation_status:
+              "confirmed-no-student-identifiers-or-raw-student-material",
+            public_data_declaration: "confirmed-public-data",
+          },
+        });
         await route.fulfill({
           contentType: "application/json",
           body: JSON.stringify({
