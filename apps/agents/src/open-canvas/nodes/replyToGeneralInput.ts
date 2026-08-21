@@ -377,7 +377,7 @@ export const replyToGeneralInput = async (
         )
       : "";
   const ledgerSnapshotPrompt =
-    state.ledgerSnapshotContext && !state.formContext && !state.ledgerContext
+    state.ledgerSnapshotContext && !state.formContext
       ? LEDGER_SNAPSHOT_INSTRUCTIONS.replace(
           "{ledgerSnapshotContext}",
           formatLedgerSnapshotContext(state.ledgerSnapshotContext)

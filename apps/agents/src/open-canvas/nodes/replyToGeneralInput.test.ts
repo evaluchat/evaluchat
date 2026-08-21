@@ -591,7 +591,7 @@ describe("replyToGeneralInput", () => {
     ]);
   });
 
-  it("does not expose a mutation protocol for mixed workspace contexts", async () => {
+  it("uses the Ledger Snapshot context for mixed workspace contexts", async () => {
     const state = createMockState({
       _messages: [new HumanMessage({ content: "Help me", id: "1" })],
       ledgerContext: {
@@ -630,7 +630,25 @@ describe("replyToGeneralInput", () => {
     ]);
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
-        content: expect.not.stringContaining("<ledger-snapshot-context>"),
+        content: expect.stringContaining("<ledger-snapshot-context>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("all accepted evidence"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"included": 0'),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<ledger-updates>"),
       }),
       ...state._messages,
     ]);

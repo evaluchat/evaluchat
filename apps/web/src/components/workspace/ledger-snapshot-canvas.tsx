@@ -81,6 +81,37 @@ function truncateSnapshotKey(
   return `${value.slice(0, maxLength - suffix.length - 1)}…${suffix}`;
 }
 
+function uniqueTruncatedSnapshotKeys<T>(
+  entries: Iterable<readonly [string, T]>,
+  maxLength: number,
+  field: string,
+  truncatedFields: Set<string>
+): Array<[string, T]> {
+  const takenKeys = new Set<string>();
+  const occurrences = new Map<string, number>();
+
+  return Array.from(entries, ([value, entry]) => {
+    const displayKey = truncateSnapshotKey(
+      value,
+      maxLength,
+      field,
+      truncatedFields
+    );
+    let occurrence = occurrences.get(displayKey) ?? 1;
+    let uniqueKey = displayKey;
+
+    while (takenKeys.has(uniqueKey)) {
+      occurrence += 1;
+      const occurrenceSuffix = `~${occurrence}`;
+      uniqueKey = `${displayKey.slice(0, maxLength - occurrenceSuffix.length)}${occurrenceSuffix}`;
+    }
+
+    occurrences.set(displayKey, occurrence);
+    takenKeys.add(uniqueKey);
+    return [uniqueKey, entry];
+  });
+}
+
 function compareStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -115,31 +146,27 @@ function perDimension(
   }
 
   return Object.fromEntries(
-    [...distributions.entries()]
-      .sort(([left], [right]) => compareStrings(left, right))
-      .slice(0, MAX_SNAPSHOT_DIMENSIONS)
-      .map(([dimensionId, values]) => [
-        truncateSnapshotKey(
+    uniqueTruncatedSnapshotKeys(
+      [...distributions.entries()]
+        .sort(([left], [right]) => compareStrings(left, right))
+        .slice(0, MAX_SNAPSHOT_DIMENSIONS)
+        .map(([dimensionId, values]) => [
           dimensionId,
-          MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
-          "contributions.perDimension.dimensionId",
-          truncatedFields
-        ),
-        Object.fromEntries(
-          [...values.entries()]
-            .sort(([left], [right]) => compareStrings(left, right))
-            .slice(0, MAX_SNAPSHOT_VALUES_PER_DIMENSION)
-            .map(([value, count]) => [
-              truncateSnapshotKey(
-                value,
-                MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH,
-                "contributions.perDimension.value",
-                truncatedFields
-              ),
-              count,
-            ])
-        ),
-      ])
+          Object.fromEntries(
+            uniqueTruncatedSnapshotKeys(
+              [...values.entries()]
+                .sort(([left], [right]) => compareStrings(left, right))
+                .slice(0, MAX_SNAPSHOT_VALUES_PER_DIMENSION),
+              MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH,
+              "contributions.perDimension.value",
+              truncatedFields
+            )
+          ),
+        ]),
+      MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
+      "contributions.perDimension.dimensionId",
+      truncatedFields
+    )
   );
 }
 
@@ -148,17 +175,14 @@ function boundedBuckets(
   truncatedFields: Set<string>
 ): Record<string, number> {
   return Object.fromEntries(
-    Object.entries(buckets)
-      .sort(([left], [right]) => compareStrings(left, right))
-      .map(([bucket, count]) => [
-        truncateSnapshotKey(
-          bucket,
-          MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
-          "buckets",
-          truncatedFields
-        ),
-        count,
-      ])
+    uniqueTruncatedSnapshotKeys(
+      Object.entries(buckets).sort(([left], [right]) =>
+        compareStrings(left, right)
+      ),
+      MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
+      "buckets",
+      truncatedFields
+    )
   );
 }
 
@@ -239,6 +263,16 @@ function enforceSnapshotContextBudget(
       1
     );
     truncatedFields.add("contributions.gaps");
+    applyTruncationMetadata(context, truncatedFields);
+  }
+
+  while (
+    serializedContextLength(context) > MAX_SNAPSHOT_CONTEXT_LENGTH &&
+    Object.keys(context.buckets).length > 0
+  ) {
+    const bucketKeys = Object.keys(context.buckets).sort(compareStrings);
+    delete context.buckets[bucketKeys[bucketKeys.length - 1]];
+    truncatedFields.add("buckets");
     applyTruncationMetadata(context, truncatedFields);
   }
 }
