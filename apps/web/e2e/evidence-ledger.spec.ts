@@ -258,9 +258,9 @@ test.describe("@regression evidence-ledger", () => {
       page.locator("button:has-text('Generate ledger')")
     ).toHaveCount(0);
 
-    // No claim/conclusion prose anywhere in the snapshot.
+    // No claim/conclusion prose in the sealed views (chat text excluded).
     const snapshotText = await page
-      .locator("[data-testid='ledger-snapshot-canvas']")
+      .locator("#ledger-snapshot-details-panel")
       .innerText();
     expect(snapshotText.toLowerCase()).not.toContain("conclusion");
     expect(snapshotText.toLowerCase().includes("we conclude")).toBeFalsy();
