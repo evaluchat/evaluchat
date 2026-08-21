@@ -549,7 +549,7 @@ export function LedgerSnapshotCanvas({
         `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/publish/status`,
         { method: "POST", credentials: "include" }
       );
-      const body = (await response.json()) as {
+      const body = (await response.json().catch(() => ({}))) as {
         publication?: NonNullable<LedgerSnapshotWorkspaceItem["publication"]>;
         actual?: { state?: string; merged?: boolean };
       };

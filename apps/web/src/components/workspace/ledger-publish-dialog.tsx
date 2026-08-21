@@ -65,7 +65,7 @@ export function LedgerPublishDialog({
           ),
         }
       );
-      const body = (await response.json()) as {
+      const body = (await response.json().catch(() => ({}))) as {
         publication?: Publication;
         error?: string;
         reason?: string;
