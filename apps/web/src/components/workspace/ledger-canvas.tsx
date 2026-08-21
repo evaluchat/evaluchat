@@ -255,6 +255,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
 
   useEffect(() => {
     if (
+      configItemId !== item.id ||
       kickedOffItem.current === item.id ||
       !preview ||
       !selectedAssistant ||
@@ -290,10 +291,24 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
           variant: "destructive",
         });
       });
-  }, [getStreamInput, graphData, item.id, preview, selectedAssistant, toast]);
+  }, [
+    configItemId,
+    getStreamInput,
+    graphData,
+    item.id,
+    preview,
+    selectedAssistant,
+    toast,
+  ]);
 
   useEffect(() => {
-    if (graphData.isStreaming || !graphData.messages.length) return;
+    if (
+      configItemId !== item.id ||
+      graphData.isStreaming ||
+      !graphData.messages.length
+    ) {
+      return;
+    }
     const result = findLatestLedgerUpdate(graphData.messages, dimensions);
     if (!result) return;
     const { message: assistantMessage, parsed } = result;
@@ -315,7 +330,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
           : message
       )
     );
-  }, [config, dimensions, graphData, refresh]);
+  }, [config, configItemId, dimensions, graphData, item.id, refresh]);
 
   useEffect(() => {
     return () => {
