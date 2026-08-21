@@ -142,6 +142,66 @@ describe("POST /api/threads/{id}/runs workspace policy", () => {
     expect(response.status).toBe(200);
     expect(forwardedBody(fetchMock).metadata).not.toHaveProperty("evidence");
   });
+
+  it("allows thread-create for an owned ledger workspace item (no 403)", async () => {
+    harness.getWorkspaceItem.mockResolvedValue({
+      id: "wi_ledger",
+      ownerId: "user-1",
+      kind: "ledger",
+      ledgerConfig: { methodId: "method_a", templateId: "evidence-template" },
+    });
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/threads") && init?.method === "POST") {
+          return jsonResponse(200, { thread_id: "thread-new" });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/threads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          metadata: { workspace_item_id: "wi_ledger" },
+          config: { configurable: {} },
+        }),
+      })
+    );
+
+    // Thread-create for an owned ledger item must NOT be rejected by the
+    // supportsWorkspaceThreads guard (issue #108 regression).
+    expect(response.status).not.toBe(403);
+    expect(response.status).toBe(200);
+    expect(forwardedBody(fetchMock).metadata.workspace_item_id).toBe(
+      "wi_ledger"
+    );
+  });
+
+  it("rejects thread-create for an unowned/invalid workspace_item_id (403)", async () => {
+    harness.getWorkspaceItem.mockResolvedValue(undefined);
+    const fetchMock = vi.fn(async () => {
+      throw new Error("must not forward unowned thread-create");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/threads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          metadata: { workspace_item_id: "wi_not_owned" },
+          config: { configurable: {} },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 function createRequest(path: string, body: Record<string, unknown>) {
