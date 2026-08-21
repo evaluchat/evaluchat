@@ -247,7 +247,7 @@ export function BuildingSection() {
           </OpenCanvasButton>
           <a
             className="btn btn-outline"
-            href="https://knowledge.evaluchat.org"
+            href="https://knowledge.evaluchat.org/concepts/overview.html"
             target="_blank"
             rel="noopener noreferrer"
           >
