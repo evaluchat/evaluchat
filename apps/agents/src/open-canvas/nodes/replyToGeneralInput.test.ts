@@ -451,6 +451,121 @@ describe("replyToGeneralInput", () => {
     ]);
   });
 
+  it("includes only the read-only Ledger Snapshot summary", async () => {
+    const state = createMockState({
+      _messages: [
+        new HumanMessage({
+          content: "Summarise the evidence and gaps",
+          id: "1",
+        }),
+      ],
+      ledgerSnapshotContext: {
+        kind: "ledger_snapshot",
+        ledgerId: "ledger_demo",
+        parentLedgerItemId: "wi_ledger",
+        methodId: "evidence-method",
+        methodTitle: "Evidence method",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "2.0.0",
+        predicate: "education_level in [k12]",
+        sourceCommit: "abc123",
+        generatedAt: "2026-08-19T12:00:00.000Z",
+        buckets: { Included: 6, Unknown: 2, Unavailable: 2 },
+        contributions: {
+          included: 12,
+          perDimension: {
+            education_level: { higher_ed: 2, k12: 4 },
+          },
+          gaps: [{ path: "evidence/missing-study.md", bucket: "Unavailable" }],
+        },
+        publication: {
+          status: "draft",
+          prUrl: "https://github.com/evaluchat/research/pull/42",
+        },
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("<ledger-snapshot-context>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"sourceCommit": "abc123"'),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining('"bucket": "Unavailable"'),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("machine-readable update block"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<ledger-updates>"),
+      }),
+      ...state._messages,
+    ]);
+  });
+
+  it("does not expose a mutation protocol for mixed workspace contexts", async () => {
+    const state = createMockState({
+      _messages: [new HumanMessage({ content: "Help me", id: "1" })],
+      ledgerContext: {
+        kind: "ledger",
+        methodId: "evidence-method",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "2.0.0",
+        dimensions: [],
+        filters: {},
+      },
+      ledgerSnapshotContext: {
+        kind: "ledger_snapshot",
+        ledgerId: "ledger_demo",
+        parentLedgerItemId: "wi_ledger",
+        methodId: "evidence-method",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "2.0.0",
+        predicate: "all accepted evidence",
+        sourceCommit: "abc123",
+        generatedAt: "2026-08-19T12:00:00.000Z",
+        buckets: {},
+        contributions: { included: 0, perDimension: {}, gaps: [] },
+      },
+    });
+    const config = createMockConfig({ assistant_id: "test-123" });
+
+    await replyToGeneralInput(state, config);
+
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<ledger-updates>"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("<ledger-snapshot-context>"),
+      }),
+      ...state._messages,
+    ]);
+  });
+
   it("does not add the ledger protocol when no ledger context is set", async () => {
     const state = createMockState({
       _messages: [new HumanMessage({ content: "Help me", id: "1" })],

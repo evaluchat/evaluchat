@@ -9,7 +9,8 @@ export function supportsWorkspaceThreads(item: WorkspaceItem): boolean {
     item.kind === "form_template" ||
     item.kind === "method" ||
     item.kind === "method_participant" ||
-    item.kind === "ledger"
+    item.kind === "ledger" ||
+    item.kind === "ledger_snapshot"
   );
 }
 

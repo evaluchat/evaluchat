@@ -143,6 +143,42 @@ describe("POST /api/threads/{id}/runs workspace policy", () => {
     expect(forwardedBody(fetchMock).metadata).not.toHaveProperty("evidence");
   });
 
+  it("allows thread-create for an owned Ledger Snapshot workspace item", async () => {
+    harness.getWorkspaceItem.mockResolvedValue({
+      id: "wi_snapshot",
+      ownerId: "user-1",
+      kind: "ledger_snapshot",
+      snapshot: { ledgerId: "ledger_a" },
+      config: { methodId: "method_a", templateId: "evidence-template" },
+    });
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/threads") && init?.method === "POST") {
+          return jsonResponse(200, { thread_id: "thread-snapshot" });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/threads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          metadata: { workspace_item_id: "wi_snapshot" },
+          config: { configurable: {} },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(forwardedBody(fetchMock).metadata.workspace_item_id).toBe(
+      "wi_snapshot"
+    );
+  });
+
   it("allows thread-create for an owned ledger workspace item (no 403)", async () => {
     harness.getWorkspaceItem.mockResolvedValue({
       id: "wi_ledger",
