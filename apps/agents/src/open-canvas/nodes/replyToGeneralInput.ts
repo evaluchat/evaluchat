@@ -269,6 +269,7 @@ export const replyToGeneralInput = async (
 
   if (
     isCoachingPhase &&
+    !state.ledgerSnapshotContext &&
     !state.formContext?.methodContext &&
     latestStudentMessage !== undefined &&
     detectHollowInput(latestStudentMessage)

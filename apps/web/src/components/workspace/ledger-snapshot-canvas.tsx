@@ -109,7 +109,9 @@ export function buildLedgerSnapshotAgentContext(
     generatedAt: item.snapshot.generatedAt,
     buckets: item.snapshot.buckets,
     contributions: {
-      included: contributions.length,
+      included: contributions.filter(
+        (contribution) => contribution.bucket === "Included"
+      ).length,
       perDimension: perDimension(manifest),
       gaps: contributions
         .filter((contribution) => contribution.bucket !== "Included")

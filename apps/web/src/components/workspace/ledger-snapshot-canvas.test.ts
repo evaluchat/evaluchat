@@ -214,7 +214,7 @@ describe("LedgerSnapshotCanvas", () => {
       sourceCommit: "commit",
       generatedAt: "2026-08-19T12:00:00.000Z",
       contributions: {
-        included: 2,
+        included: 1,
         perDimension: { education_level: { k12: 1 } },
         gaps: [{ path: "evidence/missing.md", bucket: "Unavailable" }],
       },
