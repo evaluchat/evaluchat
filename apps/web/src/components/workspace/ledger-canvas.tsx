@@ -111,6 +111,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
   const { setThreadId } = useThreadContext();
   const { selectedAssistant } = useAssistantContext();
   const [config, setConfig] = useState<LedgerConfig>(item.ledgerConfig);
+  const [configItemId, setConfigItemId] = useState(item.id);
   const [preview, setPreview] = useState<Preview>();
   const [template, setTemplate] = useState<EvidenceLedgerTemplate>();
   const [previewKey, setPreviewKey] = useState<string>();
@@ -133,22 +134,25 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
 
   const saveDraft = useCallback(
     (configToSave: LedgerConfig) => {
-      const savePromise = fetch(
-        `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/config`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ config: configToSave }),
-        }
-      )
-        .then((response) => {
-          if (!response.ok)
-            throw new Error("Could not save ledger config draft");
-        })
-        .catch((error) => {
-          console.warn("Could not save ledger config draft", error);
-        });
+      const savePromise = (draftSavePromise.current ?? Promise.resolve()).then(
+        () =>
+          fetch(
+            `/api/workspace/items/${encodeURIComponent(item.id)}/ledger/config`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ config: configToSave }),
+            }
+          )
+            .then((response) => {
+              if (!response.ok)
+                throw new Error("Could not save ledger config draft");
+            })
+            .catch((error) => {
+              console.warn("Could not save ledger config draft", error);
+            })
+      );
       draftSavePromise.current = savePromise;
       void savePromise.finally(() => {
         if (draftSavePromise.current === savePromise) {
@@ -201,6 +205,17 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
   );
 
   useEffect(() => {
+    setConfig(item.ledgerConfig);
+    setConfigItemId(item.id);
+    setPreview(undefined);
+    setTemplate(undefined);
+    setPreviewKey(undefined);
+    lastAppliedUpdate.current = null;
+    // Item config changes are user edits; reset only at an item boundary.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  useEffect(() => {
     void refresh(item.ledgerConfig);
     // An initial server preview supplies both baseline and template metadata.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,11 +232,19 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
   }, [item.id]);
 
   useEffect(() => {
+    if (configItemId !== item.id) return;
     graphData.setLedgerContext(
       buildLedgerAgentContext(item, config, preview, template)
     );
     return () => graphData.setLedgerContext(undefined);
-  }, [config, graphData.setLedgerContext, item, preview, template]);
+  }, [
+    config,
+    configItemId,
+    graphData.setLedgerContext,
+    item,
+    preview,
+    template,
+  ]);
 
   const getStreamInput = useCallback(
     () => ({
@@ -301,6 +324,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
   }, [flushPendingDraftSave]);
 
   useEffect(() => {
+    if (configItemId !== item.id) return;
     if (configKey === keyFor(item.ledgerConfig)) return;
     const configToSave = config;
     const timeout = window.setTimeout(() => {
@@ -317,7 +341,7 @@ export function LedgerCanvas({ item }: { item: LedgerWorkspaceItem }) {
         pendingDraftSave.current = undefined;
       }
     };
-  }, [config, configKey, item.ledgerConfig, saveDraft]);
+  }, [config, configItemId, configKey, item.id, item.ledgerConfig, saveDraft]);
 
   const groups = [
     ["Context", dimensions.filter((dimension) => dimension.role === "context")],
