@@ -225,6 +225,59 @@ export interface FormAgentContext {
   };
 }
 
+export type LedgerAgentFilter =
+  | { control: "multi-select"; values: string[] }
+  | { control: "range"; min?: number | string; max?: number | string };
+
+export interface LedgerAgentDimension {
+  id: string;
+  role: "context" | "collection" | "method";
+  control: "multi-select" | "range";
+  options?: string[];
+  type: "text" | "number" | "date";
+}
+
+export interface LedgerAgentContext {
+  kind: "ledger";
+  methodId: string;
+  methodTitle?: string;
+  methodVersion: string;
+  templateId: string;
+  templateVersion: string;
+  dimensions: LedgerAgentDimension[];
+  filters: Record<string, LedgerAgentFilter>;
+  baselineCount?: number;
+  scope?: { buckets: Record<string, number>; predicate?: string };
+}
+
+/**
+ * A compact, read-only view of a sealed Evidence Ledger snapshot for the
+ * assistant. The resolver manifest and its contribution rows deliberately do
+ * not cross this boundary: callers provide only aggregate distributions and
+ * the paths needed to discuss recorded gaps.
+ */
+export interface LedgerSnapshotAgentContext {
+  kind: "ledger_snapshot";
+  ledgerId: string;
+  parentLedgerItemId: string;
+  methodId: string;
+  methodTitle?: string;
+  methodVersion: string;
+  templateId: string;
+  templateVersion: string;
+  predicate: string;
+  sourceCommit: string;
+  generatedAt: string;
+  buckets: Record<string, number>;
+  contributions: {
+    included: number;
+    perDimension: Record<string, Record<string, number>>;
+    gaps: Array<{ path: string; bucket: string }>;
+  };
+  publication?: { status: string; prUrl?: string };
+  truncated?: { applied: boolean; fields: string[] };
+}
+
 /**
  * The metadata included in search results from Exa.
  */
@@ -251,6 +304,12 @@ export interface GraphInput {
 
   /** Current structured Form Template context for the assistant. */
   formContext?: FormAgentContext;
+
+  /** Current scoped Evidence Ledger context for the assistant. */
+  ledgerContext?: LedgerAgentContext;
+
+  /** Current sealed Evidence Ledger Snapshot context for the assistant. */
+  ledgerSnapshotContext?: LedgerSnapshotAgentContext;
 
   next?: string;
 

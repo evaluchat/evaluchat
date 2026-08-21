@@ -5,6 +5,8 @@ import {
 } from "./thread-policy";
 import type {
   FormWorkspaceItem,
+  LedgerWorkspaceItem,
+  LedgerSnapshotWorkspaceItem,
   MarkdownWorkspaceItem,
   MethodParticipantWorkspaceItem,
 } from "./types";
@@ -87,6 +89,84 @@ describe("enforceWorkspaceThreadPolicy", () => {
         "platform-assistant"
       ).config.configurable.systemPrompt
     ).toBe("trusted guidance");
+  });
+
+  it("allows assistant threads for Ledger workspace items", () => {
+    const ledgerItem: LedgerWorkspaceItem = {
+      id: "wi_ledger",
+      ownerId: "user_owned",
+      kind: "ledger",
+      status: "active",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+      snapshotIds: [],
+      ledgerConfig: {
+        methodId: "method_a",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "1.0.0",
+        filters: [],
+      },
+      source: {
+        methodId: "method_a",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "1.0.0",
+        sourceCommit: "sha256:source",
+      },
+    };
+
+    expect(supportsWorkspaceThreads(ledgerItem)).toBe(true);
+  });
+
+  it("allows assistant threads for sealed Ledger Snapshot workspace items", () => {
+    const snapshotItem: LedgerSnapshotWorkspaceItem = {
+      id: "wi_snapshot",
+      ownerId: "user_owned",
+      kind: "ledger_snapshot",
+      status: "active",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+      parentLedgerItemId: "wi_ledger",
+      config: {
+        methodId: "method_a",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "1.0.0",
+        filters: [],
+      },
+      snapshot: {
+        ledgerId: "ledger_a",
+        methodId: "method_a",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "1.0.0",
+        filters: [],
+        manifest: { contributions: [] },
+        inputFingerprint: "sha256:input",
+        renderHash: "sha256:render",
+        buckets: {
+          Included: 0,
+          "Outside declared scope": 0,
+          Unknown: 0,
+          Unavailable: 0,
+          "Resolver exclusion": 0,
+        },
+        predicate: "all accepted evidence",
+        generatedAt: "2026-08-20T00:00:00.000Z",
+        resolverVersion: "1.0.0",
+        sourceCommit: "source-commit",
+      },
+      source: {
+        methodId: "method_a",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "1.0.0",
+        sourceCommit: "source-commit",
+      },
+    };
+
+    expect(supportsWorkspaceThreads(snapshotItem)).toBe(true);
   });
 
   it("injects the assignment prompt for method participant threads", () => {

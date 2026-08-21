@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ClipboardList, FileText, FlaskConical, Trash2 } from "lucide-react";
+import {
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  ListChecks,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateWorkspaceItemDialog } from "./create-workspace-item-dialog";
 import type { WorkspaceItem } from "@/lib/workspace/types";
@@ -36,9 +42,11 @@ function WorkspaceItemTypeIcon({ item }: { item: WorkspaceItem }) {
   const Icon =
     item.kind === "form_template"
       ? ClipboardList
-      : item.kind === "method" || item.kind === "method_participant"
-        ? FlaskConical
-        : FileText;
+      : item.kind === "ledger" || item.kind === "ledger_snapshot"
+        ? ListChecks
+        : item.kind === "method" || item.kind === "method_participant"
+          ? FlaskConical
+          : FileText;
 
   return (
     <TooltipProvider>

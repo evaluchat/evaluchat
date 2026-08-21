@@ -8,7 +8,9 @@ export function supportsWorkspaceThreads(item: WorkspaceItem): boolean {
     item.kind === "markdown_template" ||
     item.kind === "form_template" ||
     item.kind === "method" ||
-    item.kind === "method_participant"
+    item.kind === "method_participant" ||
+    item.kind === "ledger" ||
+    item.kind === "ledger_snapshot"
   );
 }
 
@@ -37,6 +39,9 @@ function assistantGuidance(item: WorkspaceItem): string {
       methodParticipantAsAssignment(item),
       item.apparatusConfiguration
     );
+  }
+  if (item.kind === "ledger" || item.kind === "ledger_snapshot") {
+    return "";
   }
   return item.templateSnapshot.assistantGuidance;
 }

@@ -11,16 +11,31 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useWorkspaceItem } from "@/contexts/WorkspaceItemContext";
 import { convertToOpenAIFormat } from "@/lib/convert_messages";
 import { OC_HIDE_FROM_UI_KEY } from "@opencanvas/shared/constants";
-import type { MarkdownWorkspaceItem } from "@/lib/workspace/types";
+import {
+  FINDING_STARTER_TEMPLATE_ID,
+  type MarkdownWorkspaceItem,
+} from "@/lib/workspace/types";
 import { workspaceItemTitle } from "@/lib/workspace/display";
 import { WorkspaceItemBanner } from "./workspace-item-banner";
 import { WorkspaceItemDeleteDialog } from "./workspace-item-delete-dialog";
+import { FindingLedgerPickerDialog } from "./finding-ledger-picker";
 import { FormWorkspaceCanvas } from "./form-workspace-canvas";
 import { MethodParticipantCanvas } from "./method-participant-canvas";
 import { MethodRunCanvas } from "./method-run-canvas";
 import { EvidenceCanvas } from "./evidence-canvas";
+import { LedgerCanvas } from "./ledger-canvas";
+import { LedgerSnapshotCanvas } from "./ledger-snapshot-canvas";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import {
+  getArtifactContent,
+  isArtifactMarkdownContent,
+} from "@opencanvas/shared/utils/artifacts";
+import {
+  insertLedgerReference,
+  type MergedLedger,
+} from "@/lib/workspace/ledger-reference";
 
 function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
   const { user } = useUserContext();
@@ -33,6 +48,92 @@ function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
   const kickedOffItem = useRef<string | null>(null);
   const [abandonOpen, setAbandonOpen] = useState(false);
   const [isAbandoning, setIsAbandoning] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isFinding = item.source.templateId === FINDING_STARTER_TEMPLATE_ID;
+
+  function currentMarkdown(): string {
+    if (!graphData.artifact) return item.templateSnapshot.initialMarkdown;
+    const content = getArtifactContent(graphData.artifact);
+    return isArtifactMarkdownContent(content)
+      ? content.fullMarkdown
+      : item.templateSnapshot.initialMarkdown;
+  }
+
+  function applyMarkdown(next: string) {
+    if (!graphData.artifact) {
+      graphData.setArtifact({
+        currentIndex: 1,
+        contents: [
+          {
+            index: 1,
+            type: "text",
+            title: item.templateSnapshot.title,
+            fullMarkdown: next,
+          },
+        ],
+      });
+    } else {
+      const current = getArtifactContent(graphData.artifact);
+      graphData.setArtifact({
+        ...graphData.artifact,
+        contents: graphData.artifact.contents.map((content) =>
+          content.index === current.index && content.type === "text"
+            ? { ...content, fullMarkdown: next }
+            : content
+        ),
+      });
+    }
+    graphData.setUpdateRenderedArtifactRequired(true);
+  }
+
+  function citeLedger(ledger: MergedLedger) {
+    applyMarkdown(insertLedgerReference(currentMarkdown(), ledger));
+  }
+
+  async function submitFinding() {
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(
+        `/api/workspace/items/${encodeURIComponent(item.id)}/finding/submit`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ markdown: currentMarkdown() }),
+        }
+      );
+      const body = (await response.json()) as {
+        error?: string;
+        issues?: { message: string }[];
+      };
+      if (!response.ok) {
+        toast({
+          title: "Finding is not ready to submit",
+          description:
+            body.issues?.map((issue) => issue.message).join(" ") ||
+            body.error ||
+            "Validation failed.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Finding checks passed",
+        description:
+          "Linked ledgers and research questions resolved. Create the research PR when you are ready.",
+      });
+    } catch (error) {
+      console.error("Failed to validate finding", error);
+      toast({
+        title: "Could not validate finding",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   async function abandonItem() {
     setIsAbandoning(true);
@@ -135,9 +236,32 @@ function MarkdownWorkspaceCanvas({ item }: { item: MarkdownWorkspaceItem }) {
           <WorkspaceItemBanner
             item={item}
             onAbandon={() => setAbandonOpen(true)}
+            onSubmit={isFinding ? () => void submitFinding() : undefined}
+            submitDisabled={isSubmitting}
+            submitLabel="Submit finding"
+            extraActions={
+              isFinding ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPickerOpen(true)}
+                  className="border-white/35 bg-transparent text-white hover:bg-white/12 hover:text-white"
+                  data-testid="cite-published-ledger"
+                >
+                  Cite published ledger
+                </Button>
+              ) : undefined
+            }
           />
         }
       />
+      {isFinding && (
+        <FindingLedgerPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          onSelect={citeLedger}
+        />
+      )}
       <WorkspaceItemDeleteDialog
         open={abandonOpen}
         onOpenChange={setAbandonOpen}
@@ -163,6 +287,14 @@ export function WorkspaceCanvas() {
   }
 
   const evidenceThreadId = searchParams.get("evidence");
+  if (item.kind === "ledger") {
+    return <LedgerCanvas item={item} />;
+  }
+
+  if (item.kind === "ledger_snapshot") {
+    return <LedgerSnapshotCanvas item={item} />;
+  }
+
   if (item.kind === "method" && evidenceThreadId) {
     return <EvidenceCanvas item={item} threadId={evidenceThreadId} />;
   }

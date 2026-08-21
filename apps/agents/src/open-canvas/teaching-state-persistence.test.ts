@@ -70,6 +70,27 @@ describe("Teaching state persistence", () => {
     expect(cleaned.formContext).toEqual(formContext);
   });
 
+  it("cleanState should clear derived Ledger Snapshot context", () => {
+    const cleaned = cleanState({
+      ledgerSnapshotContext: {
+        kind: "ledger_snapshot",
+        ledgerId: "ledger_demo",
+        parentLedgerItemId: "wi_ledger",
+        methodId: "method_a",
+        methodVersion: "1.0.0",
+        templateId: "evidence-template",
+        templateVersion: "1.0.0",
+        predicate: "all accepted evidence",
+        sourceCommit: "abc123",
+        generatedAt: "2026-08-19T12:00:00.000Z",
+        buckets: { Included: 3 },
+        contributions: { included: 3, perDimension: {}, gaps: [] },
+      },
+    } as any);
+
+    expect(cleaned).toHaveProperty("ledgerSnapshotContext", undefined);
+  });
+
   it("assessThesis output should include phase_state when thesis passes", () => {
     // This is a contract test: the assessThesis node must return phase_state
     // when the thesis passes, so LangGraph can update the channel

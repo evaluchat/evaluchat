@@ -130,6 +130,35 @@ describe("apparatus mirror generator", () => {
     });
   });
 
+  it("mirrors declared ledger dimensions and missing semantics", () => {
+    const root = researchRoot();
+    writeMethod(root, "ai-assisted-essay", methodFrontmatter);
+    writeEvidenceTemplate(
+      root,
+      "ai-assisted-essay",
+      evidenceTemplateFrontmatter.replace(
+        "    options: [about-right]",
+        `    options: [about-right, unknown]
+    missing_semantics: unknown
+    ledger_dimension:
+      role: context
+      control: multi-select`,
+      ),
+    );
+
+    const artifact = buildApparatusMirror(root);
+    expect(artifact.apparatuses[0].evidence_template).toMatchObject({
+      fields: {
+        threshold_fit: {
+          type: "select",
+          options: ["about-right", "unknown"],
+          missing_semantics: "unknown",
+          ledger_dimension: { role: "context", control: "multi-select" },
+        },
+      },
+    });
+  });
+
   it("does not read the retired apparatus/ path", () => {
     const root = researchRoot();
     const retired = path.join(
@@ -216,6 +245,77 @@ knobs:
     expect(() => buildApparatusMirror(invalidFieldTypeRoot)).toThrow(
       /evidence_template fields\.observations\.type/,
     );
+  });
+
+  it("rejects select evidence template fields with non-string options", () => {
+    const root = researchRoot();
+    writeMethod(root, "ai-assisted-essay", methodFrontmatter);
+    writeEvidenceTemplate(
+      root,
+      "ai-assisted-essay",
+      evidenceTemplateFrontmatter.replace(
+        "options: [about-right]",
+        "options: [about-right, 1]",
+      ),
+    );
+
+    expect(() => buildApparatusMirror(root)).toThrow(
+      /evidence_template fields\.threshold_fit\.options must contain only strings/,
+    );
+  });
+
+  it("rejects invalid ledger dimension declarations", () => {
+    const cases = [
+      {
+        replacement: `type: textarea
+    ledger_dimension:
+      role: context
+      control: multi-select`,
+        expected:
+          /ledger_dimension is only allowed on select, date, and number/,
+      },
+      {
+        replacement: `type: select
+    options: [about-right]
+    ledger_dimension:
+      role: outcome
+      control: multi-select`,
+        expected:
+          /ledger_dimension\.role must be one of context, method, collection/,
+      },
+      {
+        replacement: `type: select
+    options: [about-right]
+    ledger_dimension:
+      role: context
+      control: range`,
+        expected:
+          /ledger_dimension\.control must be multi-select for select fields/,
+      },
+      {
+        replacement: `type: number
+    options: [1, 2]
+    ledger_dimension:
+      role: collection
+      control: range`,
+        expected: /options must not be present for range controls/,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const root = researchRoot();
+      writeMethod(root, "ai-assisted-essay", methodFrontmatter);
+      writeEvidenceTemplate(
+        root,
+        "ai-assisted-essay",
+        evidenceTemplateFrontmatter.replace(
+          "type: textarea",
+          testCase.replacement,
+        ),
+      );
+
+      expect(() => buildApparatusMirror(root)).toThrow(testCase.expected);
+    }
   });
 
   it("rejects an evidence template with a non-string default_stage", () => {

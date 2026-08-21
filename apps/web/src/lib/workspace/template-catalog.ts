@@ -3,6 +3,13 @@ import { join } from "node:path";
 import { z } from "zod";
 import generatedCatalog from "../../../data/template-catalog.json";
 import generatedPlatformCatalog from "../../../data/platform-template-catalog.json";
+import { FINDING_STARTER_TEMPLATE_ID } from "./types";
+
+export { FINDING_STARTER_TEMPLATE_ID };
+
+export function isFindingStarterTemplate(id: string): boolean {
+  return id === FINDING_STARTER_TEMPLATE_ID;
+}
 
 const FormFieldSchema = z
   .object({

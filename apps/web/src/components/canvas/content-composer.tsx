@@ -53,7 +53,14 @@ export interface ContentComposerChatInterfaceProps {
   minimalCanvas?: boolean;
   hideQuickStartButtons?: boolean;
   quickStartPrompts?: string[];
-  getStreamInput?: () => Pick<GraphInput, "artifact" | "formContext">;
+  getStreamInput?: () => Pick<
+    GraphInput,
+    | "artifact"
+    | "formContext"
+    | "ledgerContext"
+    | "ledgerSnapshotContext"
+    | "next"
+  >;
 }
 
 export function ContentComposerChatInterfaceComponent(

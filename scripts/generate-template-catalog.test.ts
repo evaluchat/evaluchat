@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildCatalog, parseTemplate } from "./generate-template-catalog";
+import {
+  buildCatalog,
+  mergeCatalogs,
+  parseTemplate,
+} from "./generate-template-catalog";
 
 const temporaryDirectories: string[] = [];
 
@@ -221,5 +225,65 @@ assistant:
     expect(catalog.templates.map((entry) => entry.id)).toEqual([
       "getting-started",
     ]);
+  });
+
+  it("merges local workspace markdown starters by id", () => {
+    const knowledge = templateDirectory();
+    fs.writeFileSync(
+      path.join(knowledge, "starter.md"),
+      `---
+type: Markdown Template
+id: getting-started
+version: 1.0.0
+locale: en
+title: Getting Started
+description: A starter.
+template_kind: markdown
+assistant:
+  guidance: Reviewed guidance.
+---
+
+# Hello
+`,
+    );
+    const workspace = templateDirectory();
+    fs.writeFileSync(
+      path.join(workspace, "finding-starter.md"),
+      `---
+type: Markdown Template
+id: finding-starter
+version: 1.0.0
+locale: en
+title: Finding starter
+description: Cite published ledgers.
+template_kind: markdown
+assistant:
+  guidance: Do not suggest a claim.
+---
+
+---
+type: Finding
+research_questions: []
+evidence_ledgers: []
+---
+
+# Title
+`,
+    );
+    const merged = mergeCatalogs(
+      buildCatalog(knowledge),
+      buildCatalog(workspace, { sourcePathPrefix: "templates/workspace" }),
+    );
+    expect(merged.templates.map((entry) => entry.id)).toEqual([
+      "finding-starter",
+      "getting-started",
+    ]);
+    const finding = merged.templates.find(
+      (entry) => entry.id === "finding-starter",
+    );
+    expect(finding?.templateKind).toBe("markdown");
+    if (finding?.templateKind !== "markdown") return;
+    expect(finding.initialMarkdown).toContain("type: Finding");
+    expect(finding.sourcePath).toBe("templates/workspace/finding-starter.md");
   });
 });

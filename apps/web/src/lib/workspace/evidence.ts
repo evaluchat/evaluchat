@@ -87,7 +87,7 @@ export function normalizeEvidenceTemplate(
 > {
   const fields: Record<string, FormFieldDefinition> = {};
   for (const [id, rawDefinition] of Object.entries(template.fields)) {
-    const definition = isRecord(rawDefinition) ? rawDefinition : {};
+    const definition = rawDefinition;
     const type = definition.type;
     if (
       type !== "text" &&
@@ -128,6 +128,12 @@ export function normalizeEvidenceTemplate(
       field.options = definition.options.filter(
         (option): option is string => typeof option === "string"
       );
+    }
+    if (definition.ledger_dimension) {
+      field.ledgerDimension = definition.ledger_dimension;
+    }
+    if (definition.missing_semantics !== undefined) {
+      field.missingSemantics = definition.missing_semantics;
     }
     fields[id] = field;
   }

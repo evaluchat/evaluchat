@@ -1,11 +1,11 @@
 import { isAutoMergeEligibleStage, shouldAutoMergeEvidence } from "./evidence";
 
 const GITHUB_API = "https://api.github.com";
-const RESEARCH_REPOSITORY = "evaluchat/research";
+export const RESEARCH_REPOSITORY = "evaluchat/research";
 
 type GithubJson = Record<string, any>;
 
-function githubHeaders(): HeadersInit {
+export function githubHeaders(): HeadersInit {
   const token = process.env.VALERY_GITHUB_TOKEN;
   if (!token) throw new Error("VALERY_GITHUB_TOKEN is not configured");
   return {
@@ -16,7 +16,7 @@ function githubHeaders(): HeadersInit {
   };
 }
 
-async function githubRequest(
+export async function githubRequest(
   path: string,
   init: RequestInit = {}
 ): Promise<GithubJson> {
@@ -65,7 +65,7 @@ async function sleep(milliseconds: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function waitForOkfLint(
+export async function waitForOkfLint(
   sha: string
 ): Promise<{ passed: boolean; conclusion?: string }> {
   const attempts = Math.max(
@@ -103,6 +103,270 @@ async function waitForOkfLint(
     if (attempt + 1 < attempts && intervalMs > 0) await sleep(intervalMs);
   }
   return { passed: false };
+}
+
+export type GithubResearchWriteAccess = {
+  allowed: boolean;
+  login?: string;
+  reason?: "missing_identity" | "missing_write_access";
+};
+
+/**
+ * The token-backed GitHub identity is the identity used for the subsequent
+ * branch, commit, and PR calls. Check its collaborator permission before a
+ * public write so a failed publish cannot leave a branch behind.
+ */
+export async function getGithubResearchWriteAccess(): Promise<GithubResearchWriteAccess> {
+  let identity: GithubJson;
+  try {
+    identity = await githubRequest("/user", { method: "GET" });
+  } catch {
+    return { allowed: false, reason: "missing_identity" };
+  }
+  const login = identity.login;
+  if (typeof login !== "string" || !login) {
+    return { allowed: false, reason: "missing_identity" };
+  }
+  try {
+    const permission = await githubRequest(
+      `/repos/${RESEARCH_REPOSITORY}/collaborators/${encodeURIComponent(login)}/permission`,
+      { method: "GET" }
+    );
+    const level = permission.permission;
+    if (["admin", "maintain", "write"].includes(level)) {
+      return { allowed: true, login };
+    }
+  } catch {
+    // GitHub returns 404 for a non-collaborator; it remains an access denial.
+  }
+  return { allowed: false, login, reason: "missing_write_access" };
+}
+
+export type LedgerPullRequestStatus = {
+  state: "open" | "closed";
+  merged: boolean;
+  mergedAt?: string;
+};
+
+export async function getLedgerPullRequestStatus(
+  pullRequestNumber: number
+): Promise<LedgerPullRequestStatus> {
+  const pullRequest = await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/pulls/${pullRequestNumber}`,
+    { method: "GET" }
+  );
+  const state = pullRequest.state === "closed" ? "closed" : "open";
+  const merged =
+    pullRequest.merged === true || typeof pullRequest.merged_at === "string";
+  return {
+    state,
+    merged,
+    ...(typeof pullRequest.merged_at === "string"
+      ? { mergedAt: pullRequest.merged_at }
+      : {}),
+  };
+}
+
+export type OpenLedgerPullRequestInput = {
+  ledgerId: string;
+  inputFingerprint: string;
+  filePath: string;
+  markdown: string;
+  body: string;
+  /** Verified by the publish route against the sealed snapshot's rendered body. */
+  renderHashMatches: boolean;
+  /** Set only after server-side publication declarations have been validated. */
+  consentConfirmed: boolean;
+  /** Immutable source revision named by the sealed snapshot. */
+  sourceCommit: string;
+  /** A closed prior publication needs a distinct branch, never a force-push. */
+  retry?: number;
+};
+
+export type OpenLedgerPullRequestResult = {
+  number: number;
+  url: string;
+  branch: string;
+  status: "draft" | "merged";
+  mergedAt?: string;
+  lintConclusion?: string;
+  /** An automatic merge failure leaves the draft PR available for human merge. */
+  autoMergeError?: string;
+};
+
+export function ledgerBranch(input: OpenLedgerPullRequestInput): string {
+  const fingerprint = input.inputFingerprint.replace(/^sha256:/, "");
+  const suffix = input.retry && input.retry > 1 ? `-retry-${input.retry}` : "";
+  return `ledger/${safeBranchPart(input.ledgerId)}-${safeBranchPart(fingerprint.slice(0, 12))}${suffix}`;
+}
+
+function isPinnedCommitSha(value: string): boolean {
+  return /^[0-9a-f]{40}$/i.test(value);
+}
+
+/**
+ * Require the pinned source revision to resolve in the main lineage, not just
+ * to look like a commit id. A comparison result of `behind` or `identical`
+ * means the source commit is an ancestor of the main revision used for this PR.
+ */
+async function sourceCommitIsOnMainLineage(
+  sourceCommit: string,
+  mainSha: string
+): Promise<boolean> {
+  if (!isPinnedCommitSha(sourceCommit)) return false;
+  try {
+    const comparison = await githubRequest(
+      `/repos/${RESEARCH_REPOSITORY}/compare/${encodeURIComponent(sourceCommit)}...${encodeURIComponent(mainSha)}`,
+      { method: "GET" }
+    );
+    return ["behind", "identical"].includes(comparison.status);
+  } catch {
+    // An absent commit, a non-comparable revision, or a GitHub read failure is
+    // not sufficient evidence for automatic publication. Leave the draft open.
+    return false;
+  }
+}
+
+function approvalBody(input: OpenLedgerPullRequestInput): string {
+  return [
+    "Auto-approved: system-generated Evidence Ledger (evaluation of evaluchat ledger service). Integrity criteria met (render_hash deterministic, source_commit pinned, consent confirmed, okf-lint pass).",
+    `Fingerprint: ${input.inputFingerprint}`,
+  ].join("\n");
+}
+
+/**
+ * Create exactly one immutable ledger file in a draft PR. Draft PRs are kept
+ * deliberately: GitHub permits their review and squash merge, while a failed
+ * integrity gate still leaves the established human-review workflow intact.
+ */
+export async function openLedgerPullRequest(
+  input: OpenLedgerPullRequestInput
+): Promise<OpenLedgerPullRequestResult> {
+  const branch = ledgerBranch(input);
+  const baseRef = await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/git/ref/heads/main`,
+    { method: "GET" }
+  );
+  const baseSha = baseRef.object?.sha;
+  if (typeof baseSha !== "string" || !baseSha) {
+    throw new Error("Research main branch did not return a commit SHA");
+  }
+  await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/git/refs`,
+    jsonBody({ ref: `refs/heads/${branch}`, sha: baseSha })
+  );
+  await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/contents/${input.filePath}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: `docs(evidence-ledger): ${input.ledgerId} snapshot ${input.inputFingerprint.replace(/^sha256:/, "").slice(0, 12)}`,
+        content: Buffer.from(input.markdown, "utf8").toString("base64"),
+        branch,
+      }),
+    }
+  );
+  const pullRequest = await githubRequest(
+    `/repos/${RESEARCH_REPOSITORY}/pulls`,
+    jsonBody({
+      title: `docs(evidence-ledger): ${input.ledgerId}`,
+      head: branch,
+      base: "main",
+      draft: true,
+      body: input.body,
+    })
+  );
+  const number = pullRequest.number;
+  const url = pullRequest.html_url;
+  const headSha = pullRequest.head?.sha;
+  if (
+    typeof number !== "number" ||
+    typeof url !== "string" ||
+    typeof headSha !== "string" ||
+    !headSha
+  ) {
+    throw new Error("GitHub pull request response was incomplete");
+  }
+  const lint = await waitForOkfLint(headSha);
+  const baseResult = {
+    number,
+    url,
+    branch,
+    status: "draft" as const,
+    lintConclusion: lint.conclusion,
+  };
+
+  if (!lint.passed || !input.renderHashMatches || !input.consentConfirmed) {
+    return baseResult;
+  }
+
+  const sourceCommitValid = await sourceCommitIsOnMainLineage(
+    input.sourceCommit,
+    baseSha
+  );
+  if (!sourceCommitValid) return baseResult;
+
+  try {
+    await githubRequest(`/repos/${RESEARCH_REPOSITORY}/pulls/${number}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draft: false }),
+    });
+    await githubRequest(
+      `/repos/${RESEARCH_REPOSITORY}/pulls/${number}/reviews`,
+      jsonBody({ event: "APPROVE", body: approvalBody(input) })
+    );
+    const merge = await githubRequest(
+      `/repos/${RESEARCH_REPOSITORY}/pulls/${number}/merge`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merge_method: "squash", sha: headSha }),
+      }
+    );
+    if (merge.merged !== true) {
+      throw new Error(
+        `GitHub did not merge ledger pull request: ${String(merge.message || "merge was not completed")}`
+      );
+    }
+    let mergedAt =
+      typeof merge.merged_at === "string" ? merge.merged_at : undefined;
+    if (!mergedAt) {
+      try {
+        mergedAt = (await getLedgerPullRequestStatus(number)).mergedAt;
+      } catch {
+        // The merge response is authoritative. Retain a publication timestamp
+        // even if the follow-up read is temporarily unavailable; the status
+        // refresh route will reconcile it with GitHub's merged_at value.
+      }
+    }
+    return {
+      ...baseResult,
+      status: "merged",
+      mergedAt: mergedAt || new Date().toISOString(),
+    };
+  } catch (error) {
+    try {
+      const status = await getLedgerPullRequestStatus(number);
+      if (status.merged) {
+        return {
+          ...baseResult,
+          status: "merged",
+          mergedAt: status.mergedAt,
+        };
+      }
+    } catch {
+      // Preserve the recoverable draft fallback when GitHub cannot confirm it.
+    }
+    // The PR and approval remain visible for a human to complete the merge.
+    // Return draft state so the route can persist that recoverable fallback.
+    return {
+      ...baseResult,
+      autoMergeError:
+        error instanceof Error ? error.message : "Automatic merge failed",
+    };
+  }
 }
 
 export type OpenEvidencePullRequestInput = {

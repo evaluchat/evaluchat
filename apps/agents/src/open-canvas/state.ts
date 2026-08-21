@@ -15,6 +15,8 @@ import {
   TextEditSummary,
   ApparatusConfiguration,
   FormAgentContext,
+  LedgerAgentContext,
+  LedgerSnapshotAgentContext,
 } from "@opencanvas/shared/types";
 import {
   Annotation,
@@ -94,6 +96,10 @@ export const OpenCanvasGraphAnnotation = Annotation.Root({
   artifact: Annotation<ArtifactV3>,
   /** Current structured Form Template context, when this is a Form workspace. */
   formContext: Annotation<FormAgentContext | undefined>,
+  /** Current scoped Evidence Ledger context, when this is a Ledger workspace. */
+  ledgerContext: Annotation<LedgerAgentContext | undefined>,
+  /** Current sealed Evidence Ledger snapshot context, when viewing a snapshot. */
+  ledgerSnapshotContext: Annotation<LedgerSnapshotAgentContext | undefined>,
   /**
    * The next node to route to. Only used for the first routing node/conditional edge.
    */

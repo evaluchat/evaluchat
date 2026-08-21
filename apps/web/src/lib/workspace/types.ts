@@ -1,6 +1,14 @@
-import type { ApparatusConfiguration } from "@opencanvas/shared";
+import type {
+  ApparatusConfiguration,
+  LedgerConfig,
+  LedgerDimension,
+  LedgerMissingSemantics,
+  LedgerPublicationRef,
+  LedgerSnapshotData,
+} from "@opencanvas/shared";
 
 export const DEFAULT_WORKSPACE_TEMPLATE_ID = "evaluchat-getting-started";
+export const FINDING_STARTER_TEMPLATE_ID = "finding-starter";
 export const DEFAULT_METHOD_PROFILE_ID = "canonical-constrained-dialogue";
 
 export type FormFieldType =
@@ -26,6 +34,8 @@ export type FormFieldDefinition = {
   max?: number;
   minDate?: string;
   maxDate?: string;
+  ledgerDimension?: LedgerDimension;
+  missingSemantics?: LedgerMissingSemantics;
 };
 
 export type FormValue = string | number | string[];
@@ -188,13 +198,42 @@ export type MethodParticipantWorkspaceItem = WorkspaceItemBase & {
   };
 };
 
+export type LedgerSource = {
+  methodId: string;
+  methodVersion: string;
+  templateId: string;
+  templateVersion: string;
+  sourceCommit: string;
+  methodTitle?: string;
+  baselineAcceptedEvidenceCount?: number;
+};
+
+export type LedgerWorkspaceItem = Omit<WorkspaceItemBase, "source"> & {
+  kind: "ledger";
+  ledgerConfig: LedgerConfig;
+  snapshotIds: string[];
+  source: LedgerSource;
+};
+
+export type LedgerSnapshotWorkspaceItem = Omit<WorkspaceItemBase, "source"> & {
+  kind: "ledger_snapshot";
+  parentLedgerItemId: string;
+  snapshot: LedgerSnapshotData;
+  /** Present after a draft research PR has been created. */
+  publication?: LedgerPublicationRef;
+  config: LedgerConfig;
+  source: LedgerSource;
+};
+
 export type FormBackedWorkspaceItem = FormWorkspaceItem | MethodWorkspaceItem;
 
 export type WorkspaceItem =
   | MarkdownWorkspaceItem
   | FormWorkspaceItem
   | MethodWorkspaceItem
-  | MethodParticipantWorkspaceItem;
+  | MethodParticipantWorkspaceItem
+  | LedgerWorkspaceItem
+  | LedgerSnapshotWorkspaceItem;
 
 export type WorkspaceManifest = {
   initialized: boolean;
