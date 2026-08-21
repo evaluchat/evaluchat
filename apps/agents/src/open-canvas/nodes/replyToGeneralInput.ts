@@ -134,6 +134,25 @@ modify an artifact. Do not emit a machine-readable update block: this snapshot
 is read-only.
 `;
 
+const SNAPSHOT_BASE_PROMPT = `You are an AI assistant helping a user understand a sealed Evidence Ledger snapshot.
+
+{cursorContext}
+`;
+
+const ESSAY_BASE_PROMPT = `You are an AI writing coach helping a student with their essay assignment.
+
+{phaseInstructions}
+{cursorContext}
+
+The student has generated artifacts in the past. Use the following artifacts as context when responding to the students question.
+
+You also have the following reflections on style guidelines and general memories/facts about the user to use when generating your response.
+<reflections>
+{reflections}
+</reflections>
+
+{currentArtifactPrompt}`;
+
 function formatLedgerSnapshotContext(
   context: LedgerSnapshotAgentContext
 ): string {
@@ -155,6 +174,7 @@ function formatLedgerSnapshotContext(
       buckets: context.buckets,
       contributions: context.contributions,
       ...(context.publication ? { publication: context.publication } : {}),
+      ...(context.truncated ? { truncated: context.truncated } : {}),
     },
     null,
     2
@@ -297,52 +317,47 @@ export const replyToGeneralInput = async (
     }
   }
 
-  const prompt = `You are an AI writing coach helping a student with their essay assignment.
+  const basePrompt = state.ledgerSnapshotContext
+    ? SNAPSHOT_BASE_PROMPT
+    : ESSAY_BASE_PROMPT.replace("{phaseInstructions}", phaseInstructions);
+  const formattedSnapshotPrompt = state.ledgerSnapshotContext
+    ? basePrompt.replace("{cursorContext}", cursorContext)
+    : "";
+  let formattedPrompt = "";
 
-${phaseInstructions}
-{cursorContext}
+  if (!state.ledgerSnapshotContext) {
+    const currentArtifactContent = state.artifact
+      ? getArtifactContent(state.artifact)
+      : undefined;
+    const store = ensureStoreInConfig(config);
+    const assistantId = config.configurable?.assistant_id;
+    if (!assistantId) {
+      throw new Error("`assistant_id` not found in configurable");
+    }
+    const memoryNamespace = [
+      "memories",
+      config.configurable?.supabase_user_id ?? "anonymous",
+      assistantId,
+    ];
+    const memoryKey = "reflection";
+    const memories = await store.get(memoryNamespace, memoryKey);
+    const memoriesAsString = memories?.value
+      ? formatReflections(memories.value as Reflections)
+      : "No reflections found.";
 
-The student has generated artifacts in the past. Use the following artifacts as context when responding to the students question.
-
-You also have the following reflections on style guidelines and general memories/facts about the user to use when generating your response.
-<reflections>
-{reflections}
-</reflections>
-
-{currentArtifactPrompt}`;
-
-  const currentArtifactContent = state.artifact
-    ? getArtifactContent(state.artifact)
-    : undefined;
-
-  const store = ensureStoreInConfig(config);
-  const assistantId = config.configurable?.assistant_id;
-  if (!assistantId) {
-    throw new Error("`assistant_id` not found in configurable");
+    formattedPrompt = basePrompt
+      .replace("{reflections}", memoriesAsString)
+      .replace(
+        "{currentArtifactPrompt}",
+        currentArtifactContent
+          ? formatArtifactContentWithTemplate(
+              CURRENT_ARTIFACT_PROMPT,
+              currentArtifactContent
+            )
+          : NO_ARTIFACT_PROMPT
+      )
+      .replace("{cursorContext}", cursorContext);
   }
-  const memoryNamespace = [
-    "memories",
-    config.configurable?.supabase_user_id ?? "anonymous",
-    assistantId,
-  ];
-  const memoryKey = "reflection";
-  const memories = await store.get(memoryNamespace, memoryKey);
-  const memoriesAsString = memories?.value
-    ? formatReflections(memories.value as Reflections)
-    : "No reflections found.";
-
-  const formattedPrompt = prompt
-    .replace("{reflections}", memoriesAsString)
-    .replace(
-      "{currentArtifactPrompt}",
-      currentArtifactContent
-        ? formatArtifactContentWithTemplate(
-            CURRENT_ARTIFACT_PROMPT,
-            currentArtifactContent
-          )
-        : NO_ARTIFACT_PROMPT
-    )
-    .replace("{cursorContext}", cursorContext);
 
   // These workspace contexts have distinct mutation semantics. Require one
   // mode at a time so a malformed mixed input cannot expose an update protocol
@@ -379,14 +394,17 @@ You also have the following reflections on style guidelines and general memories
       : "";
 
   const userSystemPrompt = optionallyGetSystemPromptFromConfig(config);
-  const fullSystemPrompt = [
-    userSystemPrompt,
-    formattedPrompt,
-    formPrompt,
-    ledgerPrompt,
-    ledgerSnapshotPrompt,
-    methodPrompt,
-  ]
+  const fullSystemPrompt = (
+    state.ledgerSnapshotContext
+      ? [userSystemPrompt, formattedSnapshotPrompt, ledgerSnapshotPrompt]
+      : [
+          userSystemPrompt,
+          formattedPrompt,
+          formPrompt,
+          ledgerPrompt,
+          methodPrompt,
+        ]
+  )
     .filter(Boolean)
     .join("\n\n---\n\n");
 

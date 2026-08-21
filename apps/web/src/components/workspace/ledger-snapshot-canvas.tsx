@@ -38,6 +38,28 @@ type View = (typeof VIEWS)[number];
 const MAX_SNAPSHOT_DIMENSIONS = 24;
 const MAX_SNAPSHOT_VALUES_PER_DIMENSION = 24;
 const MAX_SNAPSHOT_GAP_PATHS = 50;
+const MAX_SNAPSHOT_PREDICATE_LENGTH = 500;
+const MAX_SNAPSHOT_DIMENSION_ID_LENGTH = 80;
+const MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH = 120;
+const MAX_SNAPSHOT_GAP_PATH_LENGTH = 300;
+const MAX_SNAPSHOT_LABEL_LENGTH = 120;
+const MAX_SNAPSHOT_CONTEXT_LENGTH = 6000;
+
+function truncateSnapshotString(
+  value: string,
+  maxLength: number,
+  field: string,
+  truncatedFields: Set<string>
+): string {
+  if (value.length <= maxLength) return value;
+
+  truncatedFields.add(field);
+  return `${value.slice(0, maxLength - 1)}…`;
+}
+
+function compareStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 function manifestFor(
   item: LedgerSnapshotWorkspaceItem
@@ -49,7 +71,8 @@ function manifestFor(
 }
 
 function perDimension(
-  manifest: EvidenceLedgerManifest | undefined
+  manifest: EvidenceLedgerManifest | undefined,
+  truncatedFields: Set<string>
 ): LedgerSnapshotAgentContext["contributions"]["perDimension"] {
   const distributions = new Map<string, Map<string, number>>();
 
@@ -58,12 +81,22 @@ function perDimension(
     for (const [dimensionId, value] of Object.entries(
       contribution.dimensionValues
     )) {
+      const boundedDimensionId = truncateSnapshotString(
+        dimensionId,
+        MAX_SNAPSHOT_DIMENSION_ID_LENGTH,
+        "contributions.perDimension.dimensionId",
+        truncatedFields
+      );
       const values =
-        distributions.get(dimensionId) ?? new Map<string, number>();
-      const label =
-        value.status === "unknown" ? "unknown" : String(value.value);
+        distributions.get(boundedDimensionId) ?? new Map<string, number>();
+      const label = truncateSnapshotString(
+        value.status === "unknown" ? "unknown" : String(value.value),
+        MAX_SNAPSHOT_DIMENSION_VALUE_LENGTH,
+        "contributions.perDimension.value",
+        truncatedFields
+      );
       values.set(label, (values.get(label) ?? 0) + 1);
-      distributions.set(dimensionId, values);
+      distributions.set(boundedDimensionId, values);
     }
   }
 
@@ -82,6 +115,65 @@ function perDimension(
   );
 }
 
+function serializedContextLength(context: LedgerSnapshotAgentContext): number {
+  return JSON.stringify(context).length;
+}
+
+function applyTruncationMetadata(
+  context: LedgerSnapshotAgentContext,
+  truncatedFields: Set<string>
+): void {
+  if (truncatedFields.size === 0) return;
+
+  context.truncated = {
+    applied: true,
+    fields: [...truncatedFields].sort(compareStrings),
+  };
+}
+
+function enforceSnapshotContextBudget(
+  context: LedgerSnapshotAgentContext,
+  truncatedFields: Set<string>
+): void {
+  while (
+    serializedContextLength(context) > MAX_SNAPSHOT_CONTEXT_LENGTH &&
+    Object.keys(context.contributions.perDimension).length > 0
+  ) {
+    const [dimensionId] = Object.entries(
+      context.contributions.perDimension
+    ).sort(([leftId, leftValues], [rightId, rightValues]) => {
+      const sizeDifference =
+        JSON.stringify([rightId, rightValues]).length -
+        JSON.stringify([leftId, leftValues]).length;
+      return sizeDifference || compareStrings(leftId, rightId);
+    })[0];
+    delete context.contributions.perDimension[dimensionId];
+    truncatedFields.add("contributions.perDimension");
+    applyTruncationMetadata(context, truncatedFields);
+  }
+
+  while (
+    serializedContextLength(context) > MAX_SNAPSHOT_CONTEXT_LENGTH &&
+    context.contributions.gaps.length > 0
+  ) {
+    const [largestGap] = [...context.contributions.gaps].sort((left, right) => {
+      const sizeDifference =
+        JSON.stringify(right).length - JSON.stringify(left).length;
+      return (
+        sizeDifference ||
+        compareStrings(left.path, right.path) ||
+        compareStrings(left.bucket, right.bucket)
+      );
+    });
+    context.contributions.gaps.splice(
+      context.contributions.gaps.indexOf(largestGap),
+      1
+    );
+    truncatedFields.add("contributions.gaps");
+    applyTruncationMetadata(context, truncatedFields);
+  }
+}
+
 /**
  * Derive a bounded conversational summary from a sealed snapshot. In
  * particular, never expose contribution rows or the source manifest to the
@@ -92,19 +184,37 @@ export function buildLedgerSnapshotAgentContext(
 ): LedgerSnapshotAgentContext {
   const manifest = manifestFor(item);
   const contributions = manifest?.contributions ?? [];
+  const truncatedFields = new Set<string>();
+  const methodTitle =
+    item.source.methodTitle === undefined
+      ? undefined
+      : truncateSnapshotString(
+          item.source.methodTitle,
+          MAX_SNAPSHOT_LABEL_LENGTH,
+          "methodTitle",
+          truncatedFields
+        );
 
-  return {
+  const context: LedgerSnapshotAgentContext = {
     kind: "ledger_snapshot",
     ledgerId: item.snapshot.ledgerId,
     parentLedgerItemId: item.parentLedgerItemId,
     methodId: item.snapshot.methodId,
-    ...(item.source.methodTitle !== undefined
-      ? { methodTitle: item.source.methodTitle }
-      : {}),
+    ...(methodTitle !== undefined ? { methodTitle } : {}),
     methodVersion: item.snapshot.methodVersion,
-    templateId: item.snapshot.templateId,
+    templateId: truncateSnapshotString(
+      item.snapshot.templateId,
+      MAX_SNAPSHOT_LABEL_LENGTH,
+      "templateId",
+      truncatedFields
+    ),
     templateVersion: item.snapshot.templateVersion,
-    predicate: item.snapshot.predicate,
+    predicate: truncateSnapshotString(
+      item.snapshot.predicate,
+      MAX_SNAPSHOT_PREDICATE_LENGTH,
+      "predicate",
+      truncatedFields
+    ),
     sourceCommit: item.snapshot.sourceCommit,
     generatedAt: item.snapshot.generatedAt,
     buckets: item.snapshot.buckets,
@@ -112,7 +222,7 @@ export function buildLedgerSnapshotAgentContext(
       included: contributions.filter(
         (contribution) => contribution.bucket === "Included"
       ).length,
-      perDimension: perDimension(manifest),
+      perDimension: perDimension(manifest, truncatedFields),
       gaps: contributions
         .filter((contribution) => contribution.bucket !== "Included")
         .map((contribution) => ({
@@ -120,7 +230,16 @@ export function buildLedgerSnapshotAgentContext(
           bucket: contribution.bucket,
         }))
         .sort((left, right) => left.path.localeCompare(right.path))
-        .slice(0, MAX_SNAPSHOT_GAP_PATHS),
+        .slice(0, MAX_SNAPSHOT_GAP_PATHS)
+        .map((gap) => ({
+          ...gap,
+          path: truncateSnapshotString(
+            gap.path,
+            MAX_SNAPSHOT_GAP_PATH_LENGTH,
+            "contributions.gaps.path",
+            truncatedFields
+          ),
+        })),
     },
     ...(item.publication
       ? {
@@ -133,6 +252,11 @@ export function buildLedgerSnapshotAgentContext(
         }
       : {}),
   };
+
+  applyTruncationMetadata(context, truncatedFields);
+  enforceSnapshotContextBudget(context, truncatedFields);
+
+  return context;
 }
 
 export function LedgerSnapshotCanvas({

@@ -275,6 +275,7 @@ export interface LedgerSnapshotAgentContext {
     gaps: Array<{ path: string; bucket: string }>;
   };
   publication?: { status: string; prUrl?: string };
+  truncated?: { applied: boolean; fields: string[] };
 }
 
 /**

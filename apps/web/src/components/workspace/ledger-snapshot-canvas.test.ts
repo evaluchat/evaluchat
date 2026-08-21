@@ -224,6 +224,62 @@ describe("LedgerSnapshotCanvas", () => {
     expect(JSON.stringify(context)).not.toContain("secret-gap-hash");
   });
 
+  it("truncates oversized snapshot strings and records the affected fields", () => {
+    const context = buildLedgerSnapshotAgentContext({
+      ...item,
+      snapshot: {
+        ...item.snapshot,
+        predicate: "p".repeat(501),
+      },
+    });
+
+    expect(context.predicate).toHaveLength(500);
+    expect(context.predicate).toMatch(/…$/);
+    expect(context.truncated).toMatchObject({ applied: true });
+    expect(context.truncated?.fields).toContain("predicate");
+  });
+
+  it("drops the largest dimension summaries deterministically to fit the context budget", () => {
+    const dimensionIds = Array.from(
+      { length: 24 },
+      (_, dimensionIndex) =>
+        `dimension-${String(dimensionIndex).padStart(2, "0")}-${"d".repeat(60)}`
+    );
+    const snapshotItem = {
+      ...item,
+      snapshot: {
+        ...item.snapshot,
+        manifest: {
+          contributions: Array.from({ length: 24 }, (_, contributionIndex) => ({
+            path: `evidence/included-${contributionIndex}.md`,
+            sourceHash: `source-${contributionIndex}`,
+            bucket: "Included" as const,
+            dimensionValues: Object.fromEntries(
+              dimensionIds.map((dimensionId) => [
+                dimensionId,
+                {
+                  status: "recorded" as const,
+                  value: `value-${String(contributionIndex).padStart(2, "0")}-${"v".repeat(110)}`,
+                },
+              ])
+            ),
+            scopeValues: {},
+          })),
+        },
+      },
+    };
+
+    const context = buildLedgerSnapshotAgentContext(snapshotItem);
+    const repeatedContext = buildLedgerSnapshotAgentContext(snapshotItem);
+
+    expect(Object.keys(context.contributions.perDimension).length).toBeLessThan(
+      24
+    );
+    expect(JSON.stringify(context).length).toBeLessThanOrEqual(6000);
+    expect(context.truncated?.fields).toContain("contributions.perDimension");
+    expect(context).toEqual(repeatedContext);
+  });
+
   it("labels unpublished, draft, and merged states", () => {
     const draft = { status: "draft" as const, pullRequestNumber: 85 };
     expect(publicationStatusText()).toBe("Unpublished");

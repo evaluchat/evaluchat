@@ -133,6 +133,13 @@ describe("replyToGeneralInput", () => {
       }),
       ...state._messages,
     ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("External source detection"),
+      }),
+      ...state._messages,
+    ]);
   });
 
   it("should include submitted phase instructions when phase_state is submitted", async () => {
@@ -510,6 +517,24 @@ describe("replyToGeneralInput", () => {
     expect(mockModel.invoke).toHaveBeenCalledWith([
       expect.objectContaining({
         content: expect.stringContaining("machine-readable update block"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.stringContaining("education_level in [k12]"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("External source detection"),
+      }),
+      ...state._messages,
+    ]);
+    expect(mockModel.invoke).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: expect.not.stringContaining("writing coach"),
       }),
       ...state._messages,
     ]);
