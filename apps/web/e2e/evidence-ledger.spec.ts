@@ -238,13 +238,15 @@ test.describe("@regression evidence-ledger", () => {
       "Evidence",
       "Descriptive distributions",
       "Comparability",
-      "Counterevidence and gaps",
       "Canonical manifest",
     ]) {
       await expect(
-        summaries.getByText(section, { exact: false })
+        summaries.getByText(section, { exact: true })
       ).toBeVisible();
     }
+    await expect(
+      summaries.getByText(/^Counterevidence and gaps \(\d+\)$/)
+    ).toBeVisible();
     await expect(markdown.locator("details")).toHaveCount(6);
     await expect(markdown.locator("details[open]")).toHaveCount(1);
 
