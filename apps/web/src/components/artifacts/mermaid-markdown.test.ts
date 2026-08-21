@@ -26,6 +26,16 @@ function editorStub() {
   };
 }
 
+const escapedDetailsSummaries = [
+  "<script>",
+  "A & B",
+  "a > b",
+  "</summary>",
+  "&lt;",
+  "&gt;",
+  "&amp;",
+];
+
 describe("details markdown canvas conversion", () => {
   it("round-trips nested details content and a table", async () => {
     const editor = editorStub();
@@ -67,7 +77,7 @@ describe("details markdown canvas conversion", () => {
     );
   });
 
-  it.each(["<script>", "A & B", "a > b", "</summary>"])(
+  it.each(escapedDetailsSummaries)(
     "round-trips an escaped details summary: %s",
     async (summary) => {
       const editor = editorStub();

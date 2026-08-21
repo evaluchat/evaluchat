@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   index: 0,
   slots: [] as Array<{ value: unknown }>,
   actions: {} as Record<string, () => void>,
+  dialogOpenChange: undefined as undefined | ((open: boolean) => void),
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -32,7 +33,16 @@ vi.mock("react", async (importOriginal) => {
 });
 
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children }: { children: React.ReactNode }) => children,
+  Dialog: ({
+    children,
+    onOpenChange,
+  }: {
+    children: React.ReactNode;
+    onOpenChange: (open: boolean) => void;
+  }) => {
+    state.dialogOpenChange = onOpenChange;
+    return children;
+  },
   DialogContent: ({ children, ...props }: React.ComponentProps<"div">) =>
     React.createElement("div", props, children),
   DialogDescription: ({ children }: { children: React.ReactNode }) =>
@@ -113,6 +123,7 @@ describe("LedgerPublishDialog", () => {
     state.index = 0;
     state.slots = [];
     state.actions = {};
+    state.dialogOpenChange = undefined;
     vi.unstubAllGlobals();
   });
 
@@ -160,5 +171,59 @@ describe("LedgerPublishDialog", () => {
         "No branch or pull request was created"
       );
     });
+  });
+
+  it("keeps a pending publish dialog open until its request resolves", async () => {
+    let resolveResponse: (response: {
+      ok: boolean;
+      json: () => Promise<{
+        publication: { status: "draft"; pullRequestNumber: number };
+      }>;
+    }) => void;
+    const pendingResponse = new Promise<{
+      ok: boolean;
+      json: () => Promise<{
+        publication: { status: "draft"; pullRequestNumber: number };
+      }>;
+    }>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const fetchMock = vi.fn(() => pendingResponse);
+    vi.stubGlobal("fetch", fetchMock);
+    const onOpenChange = vi.fn();
+    const onPublished = vi.fn();
+    const renderPendingDialog = () => {
+      state.index = 0;
+      return renderToStaticMarkup(
+        React.createElement(LedgerPublishDialog, {
+          item,
+          open: true,
+          onOpenChange,
+          onPublished,
+        })
+      );
+    };
+
+    state.enabled = true;
+    state.slots = [{ value: true }, { value: true }, { value: true }];
+    renderPendingDialog();
+    state.actions["ledger-confirm-publish"]!();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+
+    expect(renderPendingDialog()).toMatch(
+      /<button[^>]*disabled=""[^>]*>Cancel<\/button>/
+    );
+    state.dialogOpenChange!(false);
+    state.dialogOpenChange!(true);
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    resolveResponse!({
+      ok: true,
+      json: async () => ({
+        publication: { status: "draft", pullRequestNumber: 85 },
+      }),
+    });
+    await vi.waitFor(() => expect(onPublished).toHaveBeenCalledOnce());
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

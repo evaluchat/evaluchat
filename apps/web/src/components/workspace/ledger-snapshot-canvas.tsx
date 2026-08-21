@@ -447,8 +447,8 @@ export function LedgerSnapshotCanvas({
   const bootstrappedItem = useRef<string | null>(null);
   const kickedOffItem = useRef<string | null>(null);
   const snapshotContext = useMemo(
-    () => buildLedgerSnapshotAgentContext(item),
-    [item]
+    () => buildLedgerSnapshotAgentContext({ ...item, publication }),
+    [item, publication]
   );
   const snapshotMarkdown = useMemo(
     () => renderLedgerSnapshotCanvasMarkdown(item.snapshot, item.config),

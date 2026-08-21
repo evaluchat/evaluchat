@@ -18,10 +18,11 @@ function escapeDetailsSummary(summary: string): string {
 }
 
 function unescapeDetailsSummary(summary: string): string {
-  return summary
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">");
+  const entities = { amp: "&", lt: "<", gt: ">" } as const;
+  return summary.replace(
+    /&(amp|lt|gt);/g,
+    (_match, entity: keyof typeof entities) => entities[entity]
+  );
 }
 
 function isInsideFencedCode(markdown: string, position: number): boolean {

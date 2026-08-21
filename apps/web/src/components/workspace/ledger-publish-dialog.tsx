@@ -99,7 +99,13 @@ export function LedgerPublishDialog({
   const declarationsComplete = authorised && anonymised && publicData;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && isPublishing) return;
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent
         className="sm:max-w-lg"
         data-testid="ledger-publish-dialog"
@@ -151,7 +157,11 @@ export function LedgerPublishDialog({
           </p>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isPublishing}
+          >
             Cancel
           </Button>
           <Button

@@ -15,6 +15,7 @@ const harness = vi.hoisted(() => ({
         pullRequestNumber?: number;
         mergedAt?: string;
       }) => void),
+  getStreamInput: undefined as undefined | (() => unknown),
   graphData: {
     clearState: vi.fn(),
     setChatStarted: vi.fn(),
@@ -32,6 +33,11 @@ const manualState = vi.hoisted(() => ({
   enabled: false,
   index: 0,
   slots: [] as Array<{ value: unknown }>,
+  memoIndex: 0,
+  memoSlots: [] as Array<{
+    dependencies: React.DependencyList;
+    value: unknown;
+  }>,
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -53,6 +59,23 @@ vi.mock("react", async (importOriginal) => {
               : update;
         },
       ];
+    },
+    useMemo<T>(factory: () => T, dependencies: React.DependencyList) {
+      if (!manualState.enabled) return actual.useMemo(factory, dependencies);
+      const index = manualState.memoIndex++;
+      const slot = manualState.memoSlots[index];
+      if (
+        slot &&
+        slot.dependencies.length === dependencies.length &&
+        slot.dependencies.every((dependency, i) =>
+          Object.is(dependency, dependencies[i])
+        )
+      ) {
+        return slot.value as T;
+      }
+      const value = factory();
+      manualState.memoSlots[index] = { dependencies, value };
+      return value;
     },
   };
 });
@@ -80,8 +103,14 @@ vi.mock("@/components/NoSSRWrapper", () => ({
   default: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@/components/canvas/content-composer", () => ({
-  ContentComposerChatInterface: () =>
-    React.createElement("div", { "data-testid": "chat-composer" }),
+  ContentComposerChatInterface: ({
+    getStreamInput,
+  }: {
+    getStreamInput: () => unknown;
+  }) => {
+    harness.getStreamInput = getStreamInput;
+    return React.createElement("div", { "data-testid": "chat-composer" });
+  },
 }));
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children, ...props }: React.ComponentProps<"button">) =>
@@ -266,6 +295,57 @@ describe("LedgerSnapshotCanvas", () => {
     manualState.enabled = false;
     manualState.index = 0;
     manualState.slots = [];
+    manualState.memoIndex = 0;
+    manualState.memoSlots = [];
+  });
+
+  it("updates the chat context after a draft PR is published", () => {
+    manualState.enabled = true;
+    manualState.index = 0;
+    manualState.slots = [];
+    manualState.memoIndex = 0;
+    manualState.memoSlots = [];
+
+    renderToStaticMarkup(React.createElement(LedgerSnapshotCanvas, { item }));
+    expect(
+      (
+        harness.getStreamInput!() as {
+          ledgerSnapshotContext: { publication?: unknown };
+        }
+      ).ledgerSnapshotContext.publication
+    ).toBeUndefined();
+
+    harness.bannerSubmit!();
+    manualState.index = 0;
+    manualState.memoIndex = 0;
+    renderToStaticMarkup(React.createElement(LedgerSnapshotCanvas, { item }));
+    harness.publishSuccess!({
+      status: "draft",
+      pullRequestUrl: "https://github.com/evaluchat/research/pull/85",
+      pullRequestNumber: 85,
+    });
+
+    manualState.index = 0;
+    manualState.memoIndex = 0;
+    renderToStaticMarkup(React.createElement(LedgerSnapshotCanvas, { item }));
+    expect(
+      (
+        harness.getStreamInput!() as {
+          ledgerSnapshotContext: {
+            publication?: { status: string; prUrl?: string };
+          };
+        }
+      ).ledgerSnapshotContext.publication
+    ).toEqual({
+      status: "draft",
+      prUrl: "https://github.com/evaluchat/research/pull/85",
+    });
+
+    manualState.enabled = false;
+    manualState.index = 0;
+    manualState.slots = [];
+    manualState.memoIndex = 0;
+    manualState.memoSlots = [];
   });
 
   it("moves published state and its pull request link into the banner", () => {
