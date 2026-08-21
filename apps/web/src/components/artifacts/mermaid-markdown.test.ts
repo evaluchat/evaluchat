@@ -81,9 +81,9 @@ describe("details markdown canvas conversion", () => {
 
       const markdown = await exportCanvasBlocksToMarkdown(editor, input);
 
-      await expect(parseMarkdownToCanvasBlocks(editor, markdown)).resolves.toEqual(
-        input
-      );
+      await expect(
+        parseMarkdownToCanvasBlocks(editor, markdown)
+      ).resolves.toEqual(input);
     }
   );
 

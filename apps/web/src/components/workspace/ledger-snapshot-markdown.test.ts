@@ -87,7 +87,9 @@ describe("ledger snapshot markdown", () => {
     ).contributions[0];
     contribution.dimensionValues = { education_level: undefined };
 
-    expect(() => renderLedgerSnapshotBody(malformedSnapshot, config)).not.toThrow();
+    expect(() =>
+      renderLedgerSnapshotBody(malformedSnapshot, config)
+    ).not.toThrow();
     expect(renderLedgerSnapshotBody(malformedSnapshot, config)).toContain(
       '"education_level": { status: "unavailable", value: "unavailable" }'
     );
