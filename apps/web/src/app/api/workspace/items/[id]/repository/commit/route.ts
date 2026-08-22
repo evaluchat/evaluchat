@@ -9,6 +9,7 @@ import { getGithubInstallationRepository } from "@/lib/workspace/research-reposi
 import { readGithubResearchCredentials } from "@/lib/workspace/research-repository/credentials";
 import {
   commitArtifactBlobs,
+  getRepositoryBranchHead,
   StaleRepositoryError,
 } from "@/lib/workspace/research-repository/git-adapter";
 import {
@@ -20,8 +21,11 @@ import {
   claimRepositoryOperation,
   completeRepositoryOperation,
   failRepositoryOperation,
+  recordRepositoryOperationResult,
   RepositoryOperationInProgressError,
+  startRepositoryOperation,
 } from "@/lib/workspace/research-repository/operations";
+import { repositoryRouteErrorDetails } from "@/lib/workspace/research-repository/route-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -100,8 +104,8 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     if (error instanceof RepositoryLayoutError) {
       return json(
-        { error: error.code.toLowerCase() },
-        error.code === "ARTIFACT_TOO_LARGE" ? 413 : 400
+        { error: error.code },
+        error.code === "ARTIFACT_TOO_LARGE" ? 413 : 422
       );
     }
     throw error;
@@ -115,6 +119,25 @@ export async function POST(request: Request, context: RouteContext) {
       idempotencyKey: body.idempotencyKey,
       artifactIds: [artifact.artifactId],
       baseCommitSha: body.baseCommitSha,
+      getCurrentHeadCommitSha: async () => {
+        const credentials = await readGithubResearchCredentials(auth.user.id);
+        if (
+          !credentials ||
+          credentials.installationId !== item.binding.installationId ||
+          !credentials.repositoryIds.includes(item.binding.repositoryId)
+        ) {
+          throw new Error("Research repository is disconnected");
+        }
+        const repository = await getGithubInstallationRepository(
+          item.binding.installationId,
+          item.binding.repositoryId
+        );
+        return getRepositoryBranchHead(
+          item.binding.installationId,
+          repository,
+          item.binding.branch
+        );
+      },
     });
   } catch (error) {
     if (error instanceof RepositoryOperationInProgressError) {
@@ -122,16 +145,63 @@ export async function POST(request: Request, context: RouteContext) {
     }
     console.error(
       "[github-research] failed to claim repository operation",
-      error
+      repositoryRouteErrorDetails(item.id, error)
     );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
     return json({ error: "Could not commit repository artifact" }, 500);
   }
 
-  if (operation.status === "succeeded") {
+  if (
+    (operation.status === "succeeded" || operation.status === "failed") &&
+    operation.resultCommitSha
+  ) {
+    try {
+      if (item.binding.headCommitSha !== operation.resultCommitSha) {
+        await updateResearchRepositoryBindingHead(
+          auth.user.id,
+          item.id,
+          operation.resultCommitSha
+        );
+      }
+    } catch (error) {
+      console.error(
+        "[github-research] failed to repair repository binding head",
+        repositoryRouteErrorDetails(item.id, error)
+      );
+      if (error instanceof RepositoryLayoutError) {
+        return json({ error: error.code }, 422);
+      }
+      return json({ error: "Could not record repository commit" }, 500);
+    }
     return json({
       operationId: operation.operationId,
       commitSha: operation.resultCommitSha,
     });
+  }
+  if (operation.status === "failed") {
+    const errorCode = operation.errorCode ?? "REPOSITORY_OPERATION_FAILED";
+    return json(
+      { error: errorCode.toLowerCase() },
+      errorCode === "STALE_REPOSITORY" ||
+        errorCode === "REPOSITORY_DISCONNECTED"
+        ? 409
+        : 500
+    );
+  }
+
+  try {
+    operation = await startRepositoryOperation(auth.user.id, operation);
+  } catch (error) {
+    console.error(
+      "[github-research] failed to start repository operation",
+      repositoryRouteErrorDetails(item.id, error)
+    );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
+    return json({ error: "Could not commit repository artifact" }, 500);
   }
 
   let credentials;
@@ -149,8 +219,11 @@ export async function POST(request: Request, context: RouteContext) {
     }
     console.error(
       "[github-research] failed to read repository credentials",
-      error
+      repositoryRouteErrorDetails(item.id, error)
     );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
     return json({ error: "Could not authorize research repository" }, 500);
   }
   if (
@@ -212,7 +285,7 @@ export async function POST(request: Request, context: RouteContext) {
     } catch (storeError) {
       console.error(
         "[github-research] failed to record commit failure",
-        storeError
+        repositoryRouteErrorDetails(item.id, storeError)
       );
     }
     if (stale) {
@@ -226,9 +299,68 @@ export async function POST(request: Request, context: RouteContext) {
     }
     console.error(
       "[github-research] failed to commit repository artifact",
-      error
+      repositoryRouteErrorDetails(item.id, error)
     );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
     return json({ error: "Could not commit repository artifact" }, 500);
+  }
+
+  try {
+    operation = await recordRepositoryOperationResult(
+      auth.user.id,
+      operation,
+      commitSha
+    );
+  } catch (error) {
+    try {
+      await failRepositoryOperation(
+        auth.user.id,
+        operation,
+        "COMMIT_LANDED_RESULT_RECORD_FAILED",
+        commitSha
+      );
+    } catch (storeError) {
+      console.error(
+        "[github-research] failed to record landed commit failure",
+        repositoryRouteErrorDetails(item.id, storeError)
+      );
+    }
+    console.error(
+      "[github-research] failed to record landed repository commit",
+      repositoryRouteErrorDetails(item.id, error)
+    );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
+    return json({ error: "Could not record repository commit" }, 500);
+  }
+
+  try {
+    await updateResearchRepositoryBindingHead(auth.user.id, item.id, commitSha);
+  } catch (error) {
+    try {
+      await failRepositoryOperation(
+        auth.user.id,
+        operation,
+        "COMMIT_LANDED_HEAD_UPDATE_FAILED",
+        commitSha
+      );
+    } catch (storeError) {
+      console.error(
+        "[github-research] failed to record binding-head failure",
+        repositoryRouteErrorDetails(item.id, storeError)
+      );
+    }
+    console.error(
+      "[github-research] failed to update repository binding head",
+      repositoryRouteErrorDetails(item.id, error)
+    );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
+    return json({ error: "Could not record repository commit" }, 500);
   }
 
   try {
@@ -237,10 +369,28 @@ export async function POST(request: Request, context: RouteContext) {
       operation,
       commitSha
     );
-    await updateResearchRepositoryBindingHead(auth.user.id, item.id, commitSha);
     return json({ operationId: completed.operationId, commitSha });
   } catch (error) {
-    console.error("[github-research] failed to persist commit result", error);
+    try {
+      await failRepositoryOperation(
+        auth.user.id,
+        operation,
+        "COMMIT_LANDED_OPERATION_COMPLETE_FAILED",
+        commitSha
+      );
+    } catch (storeError) {
+      console.error(
+        "[github-research] failed to record completion failure",
+        repositoryRouteErrorDetails(item.id, storeError)
+      );
+    }
+    console.error(
+      "[github-research] failed to complete repository operation",
+      repositoryRouteErrorDetails(item.id, error)
+    );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
     return json({ error: "Could not record repository commit" }, 500);
   }
 }

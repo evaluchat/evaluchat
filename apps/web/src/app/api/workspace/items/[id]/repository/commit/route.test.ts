@@ -16,8 +16,11 @@ const harness = vi.hoisted(() => {
     readCredentials: vi.fn(),
     updateHead: vi.fn(),
     getRepository: vi.fn(),
+    getHead: vi.fn(),
     commitArtifacts: vi.fn(),
     claimOperation: vi.fn(),
+    startOperation: vi.fn(),
+    recordResult: vi.fn(),
     completeOperation: vi.fn(),
     failOperation: vi.fn(),
   };
@@ -41,10 +44,13 @@ vi.mock("@/lib/workspace/research-repository/github-app", () => ({
 }));
 vi.mock("@/lib/workspace/research-repository/git-adapter", () => ({
   commitArtifactBlobs: harness.commitArtifacts,
+  getRepositoryBranchHead: harness.getHead,
   StaleRepositoryError: harness.StaleRepositoryError,
 }));
 vi.mock("@/lib/workspace/research-repository/operations", () => ({
   claimRepositoryOperation: harness.claimOperation,
+  startRepositoryOperation: harness.startOperation,
+  recordRepositoryOperationResult: harness.recordResult,
   completeRepositoryOperation: harness.completeOperation,
   failRepositoryOperation: harness.failOperation,
   RepositoryOperationInProgressError:
@@ -52,6 +58,7 @@ vi.mock("@/lib/workspace/research-repository/operations", () => ({
 }));
 
 import { POST } from "./route";
+import { RepositoryLayoutError } from "@/lib/workspace/research-repository/layout";
 
 const baseCommitSha = "a".repeat(40);
 const resultCommitSha = "b".repeat(40);
@@ -64,6 +71,7 @@ const item = {
     repositoryId: 101,
     branch: "evaluchat/workspace",
     layoutVersion: "1.0",
+    headCommitSha: baseCommitSha,
   },
 };
 const pendingOperation = {
@@ -81,6 +89,13 @@ const succeededOperation = {
   ...pendingOperation,
   status: "succeeded",
   resultCommitSha,
+};
+const runningOperation = { ...pendingOperation, status: "running" };
+const landedOperation = { ...runningOperation, resultCommitSha };
+const failedWithResultOperation = {
+  ...landedOperation,
+  status: "failed",
+  errorCode: "COMMIT_LANDED_HEAD_UPDATE_FAILED",
 };
 
 function request() {
@@ -123,6 +138,8 @@ describe("POST repository artifact commit", () => {
       name: "private",
     });
     harness.claimOperation.mockResolvedValue(pendingOperation);
+    harness.startOperation.mockResolvedValue(runningOperation);
+    harness.recordResult.mockResolvedValue(landedOperation);
     harness.commitArtifacts.mockResolvedValue(resultCommitSha);
     harness.completeOperation.mockResolvedValue(succeededOperation);
     harness.updateHead.mockResolvedValue(undefined);
@@ -173,12 +190,59 @@ describe("POST repository artifact commit", () => {
     );
     const storeFacingCalls = JSON.stringify({
       claim: harness.claimOperation.mock.calls,
+      start: harness.startOperation.mock.calls,
+      recordResult: harness.recordResult.mock.calls,
       complete: harness.completeOperation.mock.calls,
       fail: harness.failOperation.mock.calls,
       updateHead: harness.updateHead.mock.calls,
     });
     expect(storeFacingCalls).not.toContain("unique file text");
     expect(storeFacingCalls).not.toContain("Update index");
+  });
+
+  it("repairs a stale binding head when replaying a succeeded operation", async () => {
+    harness.claimOperation.mockResolvedValue(succeededOperation);
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      operationId: "operation-one",
+      commitSha: resultCommitSha,
+    });
+    expect(harness.updateHead).toHaveBeenCalledWith(
+      "user-1",
+      "workspace-one",
+      resultCommitSha
+    );
+    expect(harness.commitArtifacts).not.toHaveBeenCalled();
+  });
+
+  it("fails a landed commit when the head update fails and repairs it on replay", async () => {
+    harness.claimOperation
+      .mockResolvedValueOnce(pendingOperation)
+      .mockResolvedValueOnce(failedWithResultOperation);
+    harness.updateHead
+      .mockRejectedValueOnce(new Error("Store unavailable"))
+      .mockResolvedValueOnce(undefined);
+
+    const first = await POST(request(), context);
+    const replay = await POST(request(), context);
+
+    expect(first.status).toBe(500);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({
+      operationId: "operation-one",
+      commitSha: resultCommitSha,
+    });
+    expect(harness.failOperation).toHaveBeenCalledWith(
+      "user-1",
+      landedOperation,
+      "COMMIT_LANDED_HEAD_UPDATE_FAILED",
+      resultCommitSha
+    );
+    expect(harness.updateHead).toHaveBeenCalledTimes(2);
+    expect(harness.completeOperation).not.toHaveBeenCalled();
   });
 
   it("returns a stale conflict with the current remote head", async () => {
@@ -195,8 +259,35 @@ describe("POST repository artifact commit", () => {
     });
     expect(harness.failOperation).toHaveBeenCalledWith(
       "user-1",
-      pendingOperation,
+      runningOperation,
       "STALE_REPOSITORY"
     );
+  });
+
+  it("returns a redacted 4xx layout error without logging its path", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    harness.commitArtifacts.mockRejectedValue(
+      new RepositoryLayoutError(
+        "SYMLINK_ARTIFACT",
+        "unsafe private/path/notes.lnk"
+      )
+    );
+
+    try {
+      const response = await POST(request(), context);
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: "SYMLINK_ARTIFACT" });
+      expect(consoleError).toHaveBeenLastCalledWith(
+        "[github-research] failed to commit repository artifact",
+        { workspaceId: "workspace-one", code: "SYMLINK_ARTIFACT" }
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "private/path"
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

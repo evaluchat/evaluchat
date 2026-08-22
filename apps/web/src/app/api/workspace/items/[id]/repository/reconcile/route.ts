@@ -10,11 +10,14 @@ import {
 import { getGithubInstallationRepository } from "@/lib/workspace/research-repository/github-app";
 import { readGithubResearchCredentials } from "@/lib/workspace/research-repository/credentials";
 import { listRepositoryArtifactRefs } from "@/lib/workspace/research-repository/git-adapter";
+import { RepositoryLayoutError } from "@/lib/workspace/research-repository/layout";
 import {
   claimRepositoryOperation,
   completeRepositoryOperation,
   failRepositoryOperation,
+  startRepositoryOperation,
 } from "@/lib/workspace/research-repository/operations";
+import { repositoryRouteErrorDetails } from "@/lib/workspace/research-repository/route-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +69,7 @@ export async function POST(_request: Request, context: RouteContext) {
       idempotencyKey: `reconcile-${randomUUID()}`,
       artifactIds: result.artifacts.map((artifact) => artifact.artifactId),
     });
+    operation = await startRepositoryOperation(auth.user.id, operation);
     await updateResearchRepositoryBindingHead(
       auth.user.id,
       item.id,
@@ -96,11 +100,17 @@ export async function POST(_request: Request, context: RouteContext) {
       } catch (storeError) {
         console.error(
           "[github-research] failed to record reconcile failure",
-          storeError
+          repositoryRouteErrorDetails(item.id, storeError)
         );
       }
     }
-    console.error("[github-research] failed to reconcile repository", error);
+    console.error(
+      "[github-research] failed to reconcile repository",
+      repositoryRouteErrorDetails(item.id, error)
+    );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
     return json({ error: "Could not reconcile research repository" }, 500);
   }
 }

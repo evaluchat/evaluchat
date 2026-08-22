@@ -5,6 +5,8 @@ import { getWorkspaceItem } from "@/lib/workspace/store";
 import { readGithubResearchCredentials } from "@/lib/workspace/research-repository/credentials";
 import { getGithubInstallationRepository } from "@/lib/workspace/research-repository/github-app";
 import { listRepositoryArtifactRefs } from "@/lib/workspace/research-repository/git-adapter";
+import { RepositoryLayoutError } from "@/lib/workspace/research-repository/layout";
+import { repositoryRouteErrorDetails } from "@/lib/workspace/research-repository/route-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -56,8 +58,11 @@ export async function GET(_request: Request, context: RouteContext) {
   } catch (error) {
     console.error(
       "[github-research] failed to list repository artifacts",
-      error
+      repositoryRouteErrorDetails(item.id, error)
     );
+    if (error instanceof RepositoryLayoutError) {
+      return json({ error: error.code }, 422);
+    }
     return json({ error: "Could not load repository artifacts" }, 500);
   }
 }

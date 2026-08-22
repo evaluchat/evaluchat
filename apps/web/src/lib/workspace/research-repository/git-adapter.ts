@@ -34,6 +34,14 @@ export class StaleRepositoryError extends Error {
   }
 }
 
+export async function getRepositoryBranchHead(
+  installationId: number,
+  repository: GithubRepositoryCoordinates,
+  branch: string
+): Promise<string> {
+  return getGithubRepositoryBranchHead(installationId, repository, branch);
+}
+
 type TreeEntry = {
   path: string;
   mode: string;

@@ -29,6 +29,7 @@ vi.mock("@/lib/workspace/research-repository/git-adapter", () => ({
 }));
 
 import { GET } from "./route";
+import { RepositoryLayoutError } from "@/lib/workspace/research-repository/layout";
 
 const context = { params: Promise.resolve({ id: "workspace-one" }) };
 const item = {
@@ -86,5 +87,32 @@ describe("GET repository artifacts", () => {
       "evaluchat/workspace",
       "1.0"
     );
+  });
+
+  it("returns a redacted 4xx layout error without logging its path", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    harness.listArtifacts.mockRejectedValue(
+      new RepositoryLayoutError(
+        "SYMLINK_ARTIFACT",
+        "unsafe private/path/notes.lnk"
+      )
+    );
+
+    try {
+      const response = await GET(new Request("http://localhost"), context);
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: "SYMLINK_ARTIFACT" });
+      expect(consoleError).toHaveBeenCalledWith(
+        "[github-research] failed to list repository artifacts",
+        { workspaceId: "workspace-one", code: "SYMLINK_ARTIFACT" }
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "private/path"
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

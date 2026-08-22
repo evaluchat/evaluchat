@@ -9,6 +9,7 @@ const harness = vi.hoisted(() => ({
   getRepository: vi.fn(),
   listArtifacts: vi.fn(),
   claimOperation: vi.fn(),
+  startOperation: vi.fn(),
   completeOperation: vi.fn(),
   failOperation: vi.fn(),
 }));
@@ -34,11 +35,13 @@ vi.mock("@/lib/workspace/research-repository/git-adapter", () => ({
 }));
 vi.mock("@/lib/workspace/research-repository/operations", () => ({
   claimRepositoryOperation: harness.claimOperation,
+  startRepositoryOperation: harness.startOperation,
   completeRepositoryOperation: harness.completeOperation,
   failRepositoryOperation: harness.failOperation,
 }));
 
 import { POST } from "./route";
+import { RepositoryLayoutError } from "@/lib/workspace/research-repository/layout";
 
 const headCommitSha = "b".repeat(40);
 const artifacts = [{ artifactId: "index", path: "index.md" }];
@@ -58,6 +61,7 @@ const operation = {
   idempotencyKey: "reconcile-idempotency-key",
   status: "pending",
 };
+const runningOperation = { ...operation, status: "running" };
 
 describe("POST repository reconcile", () => {
   beforeEach(() => {
@@ -80,6 +84,7 @@ describe("POST repository reconcile", () => {
       commitSha: headCommitSha,
     });
     harness.claimOperation.mockResolvedValue(operation);
+    harness.startOperation.mockResolvedValue(runningOperation);
     harness.updateHead.mockResolvedValue(undefined);
     harness.completeOperation.mockResolvedValue({
       ...operation,
@@ -122,7 +127,7 @@ describe("POST repository reconcile", () => {
     );
     expect(harness.completeOperation).toHaveBeenCalledWith(
       "user-1",
-      operation,
+      runningOperation,
       headCommitSha
     );
     expect(await response.json()).toMatchObject({
@@ -132,5 +137,32 @@ describe("POST repository reconcile", () => {
       },
       artifacts,
     });
+  });
+
+  it("returns a redacted 4xx layout error without logging its path", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    harness.listArtifacts.mockRejectedValue(
+      new RepositoryLayoutError(
+        "SYMLINK_ARTIFACT",
+        "unsafe private/path/notes.lnk"
+      )
+    );
+
+    try {
+      const response = await POST(new Request("http://localhost"), context);
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: "SYMLINK_ARTIFACT" });
+      expect(consoleError).toHaveBeenLastCalledWith(
+        "[github-research] failed to reconcile repository",
+        { workspaceId: "workspace-one", code: "SYMLINK_ARTIFACT" }
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "private/path"
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

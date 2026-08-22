@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { Client } from "@langchain/langgraph-sdk";
 import {
   RepositoryOperationSchema,
@@ -8,6 +8,7 @@ import { LANGGRAPH_API_URL } from "@/constants";
 import { withUserLock } from "./credentials";
 
 export const GITHUB_RESEARCH_OPERATIONS_ROOT = "github_research_operations";
+export const REPOSITORY_OPERATION_LEASE_MS = 5 * 60 * 1000;
 
 export class RepositoryOperationInProgressError extends Error {
   constructor(public readonly operation: RepositoryOperation) {
@@ -34,6 +35,24 @@ function operationKey(idempotencyKey: string): string {
     .digest("hex")}`;
 }
 
+function operationId(idempotencyKey: string): string {
+  return `op_${createHash("sha256")
+    .update(idempotencyKey)
+    .digest("hex")
+    .slice(0, 16)}`;
+}
+
+async function writeOperation(
+  userId: string,
+  operation: RepositoryOperation
+): Promise<void> {
+  await client().store.putItem(
+    repositoryOperationsNamespace(userId),
+    operationKey(operation.idempotencyKey),
+    operation
+  );
+}
+
 async function readOperation(
   userId: string,
   idempotencyKey: string
@@ -54,18 +73,70 @@ export async function claimRepositoryOperation(
     idempotencyKey: string;
     artifactIds: string[];
     baseCommitSha?: string;
+    getCurrentHeadCommitSha?: () => Promise<string>;
   }
 ): Promise<RepositoryOperation> {
   return withUserLock(userId, async () => {
     const existing = await readOperation(userId, input.idempotencyKey);
-    if (existing?.status === "succeeded") return existing;
+    if (existing?.status === "succeeded" || existing?.status === "failed") {
+      return existing;
+    }
     if (existing?.status === "pending" || existing?.status === "running") {
-      throw new RepositoryOperationInProgressError(existing);
+      const updatedAt = Date.parse(existing.updatedAt);
+      if (
+        Number.isFinite(updatedAt) &&
+        Date.now() - updatedAt < REPOSITORY_OPERATION_LEASE_MS
+      ) {
+        throw new RepositoryOperationInProgressError(existing);
+      }
+      if (!input.getCurrentHeadCommitSha) {
+        throw new RepositoryOperationInProgressError(existing);
+      }
+
+      const currentHeadCommitSha = await input.getCurrentHeadCommitSha();
+      const now = new Date().toISOString();
+      if (
+        existing.resultCommitSha &&
+        currentHeadCommitSha === existing.resultCommitSha
+      ) {
+        const completed = RepositoryOperationSchema.parse({
+          ...existing,
+          status: "succeeded",
+          errorCode: undefined,
+          updatedAt: now,
+        });
+        await writeOperation(userId, completed);
+        return completed;
+      }
+      if (
+        existing.baseCommitSha &&
+        currentHeadCommitSha === existing.baseCommitSha
+      ) {
+        const reclaimed = RepositoryOperationSchema.parse({
+          ...existing,
+          status: "pending",
+          resultCommitSha: undefined,
+          errorCode: undefined,
+          updatedAt: now,
+        });
+        await writeOperation(userId, reclaimed);
+        return reclaimed;
+      }
+
+      const failed = RepositoryOperationSchema.parse({
+        ...existing,
+        status: "failed",
+        resultCommitSha: undefined,
+        errorCode: "STALE_REPOSITORY",
+        updatedAt: now,
+      });
+      await writeOperation(userId, failed);
+      return failed;
     }
 
     const now = new Date().toISOString();
     const operation = RepositoryOperationSchema.parse({
-      operationId: `operation-${randomUUID()}`,
+      operationId: operationId(input.idempotencyKey),
       workspaceId: input.workspaceId,
       kind: input.kind,
       idempotencyKey: input.idempotencyKey,
@@ -75,12 +146,54 @@ export async function claimRepositoryOperation(
       createdAt: now,
       updatedAt: now,
     });
-    await client().store.putItem(
-      repositoryOperationsNamespace(userId),
-      operationKey(input.idempotencyKey),
-      operation
-    );
+    // withUserLock only serializes bookkeeping in this process. Deterministic
+    // Store identity prevents cross-instance claims from replacing one another;
+    // the non-forced GitHub ref update remains the authoritative mutation CAS.
+    await writeOperation(userId, operation);
     return operation;
+  });
+}
+
+export async function startRepositoryOperation(
+  userId: string,
+  operation: RepositoryOperation
+): Promise<RepositoryOperation> {
+  return withUserLock(userId, async () => {
+    const current = await readOperation(userId, operation.idempotencyKey);
+    if (!current || current.operationId !== operation.operationId) {
+      throw new Error("Repository operation is no longer current");
+    }
+    if (current.status !== "pending") return current;
+    const running = RepositoryOperationSchema.parse({
+      ...current,
+      status: "running",
+      updatedAt: new Date().toISOString(),
+    });
+    await writeOperation(userId, running);
+    return running;
+  });
+}
+
+export async function recordRepositoryOperationResult(
+  userId: string,
+  operation: RepositoryOperation,
+  resultCommitSha: string
+): Promise<RepositoryOperation> {
+  return withUserLock(userId, async () => {
+    const current = await readOperation(userId, operation.idempotencyKey);
+    if (!current || current.operationId !== operation.operationId) {
+      throw new Error("Repository operation is no longer current");
+    }
+    if (current.status !== "running") {
+      throw new Error("Repository operation is not running");
+    }
+    const landed = RepositoryOperationSchema.parse({
+      ...current,
+      resultCommitSha,
+      updatedAt: new Date().toISOString(),
+    });
+    await writeOperation(userId, landed);
+    return landed;
   });
 }
 
@@ -94,6 +207,13 @@ export async function completeRepositoryOperation(
     if (!current || current.operationId !== operation.operationId) {
       throw new Error("Repository operation is no longer current");
     }
+    if (current.status === "succeeded") return current;
+    if (current.status === "failed") {
+      throw new Error("Repository operation has already failed");
+    }
+    if (current.status !== "running") {
+      throw new Error("Repository operation is not running");
+    }
     const completed = RepositoryOperationSchema.parse({
       ...current,
       status: "succeeded",
@@ -101,11 +221,7 @@ export async function completeRepositoryOperation(
       errorCode: undefined,
       updatedAt: new Date().toISOString(),
     });
-    await client().store.putItem(
-      repositoryOperationsNamespace(userId),
-      operationKey(operation.idempotencyKey),
-      completed
-    );
+    await writeOperation(userId, completed);
     return completed;
   });
 }
@@ -113,25 +229,25 @@ export async function completeRepositoryOperation(
 export async function failRepositoryOperation(
   userId: string,
   operation: RepositoryOperation,
-  errorCode: string
+  errorCode: string,
+  resultCommitSha?: string
 ): Promise<RepositoryOperation> {
   return withUserLock(userId, async () => {
     const current = await readOperation(userId, operation.idempotencyKey);
     if (!current || current.operationId !== operation.operationId) {
       throw new Error("Repository operation is no longer current");
     }
+    if (current.status === "succeeded" || current.status === "failed") {
+      return current;
+    }
     const failed = RepositoryOperationSchema.parse({
       ...current,
       status: "failed",
-      resultCommitSha: undefined,
+      resultCommitSha: resultCommitSha ?? current.resultCommitSha,
       errorCode,
       updatedAt: new Date().toISOString(),
     });
-    await client().store.putItem(
-      repositoryOperationsNamespace(userId),
-      operationKey(operation.idempotencyKey),
-      failed
-    );
+    await writeOperation(userId, failed);
     return failed;
   });
 }

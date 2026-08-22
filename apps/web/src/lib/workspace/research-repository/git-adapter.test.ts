@@ -137,7 +137,7 @@ describe("GitHub repository Git Data adapter", () => {
     ).rejects.toMatchObject({ currentHeadCommitSha: refreshedHead });
   });
 
-  it("walks the branch tree and reloads managed blob content", async () => {
+  it("ignores unsafe unmanaged names while loading only managed blobs", async () => {
     harness.request.mockImplementation(async (route: string) => {
       if (route === "GET /repos/{owner}/{repo}/git/commits/{commit_sha}") {
         return { data: { tree: { sha: baseTreeSha } } };
@@ -148,7 +148,13 @@ describe("GitHub repository Git Data adapter", () => {
             tree: [
               { path: "index.md", mode: "100644", type: "blob", sha: blobSha },
               {
-                path: "unmanaged.txt",
+                path: "notes.lnk",
+                mode: "100644",
+                type: "blob",
+                sha: treeSha,
+              },
+              {
+                path: "foo->bar.md",
                 mode: "100644",
                 type: "blob",
                 sha: treeSha,
@@ -185,5 +191,20 @@ describe("GitHub repository Git Data adapter", () => {
       "GET /repos/{owner}/{repo}/git/blobs/{file_sha}",
       expect.objectContaining({ file_sha: blobSha })
     );
+  });
+
+  it("rejects an unsafe sibling in a managed commit", async () => {
+    await expect(
+      commitArtifactBlobs(99, repository, "evaluchat/workspace", {
+        message: "Update index",
+        baseSha,
+        files: [
+          { path: "index.md", content: "# Updated\n" },
+          { path: "notes.lnk", content: "unsafe" },
+        ],
+      })
+    ).rejects.toThrow(/Symbolic-link-looking/);
+    expect(harness.getHead).not.toHaveBeenCalled();
+    expect(harness.request).not.toHaveBeenCalled();
   });
 });

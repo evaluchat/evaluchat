@@ -108,7 +108,6 @@ export function identifyRepositoryArtifactPath(
   layoutVersion = "1.0"
 ): RepositoryArtifactIdentity | undefined {
   assertLayoutVersion(layoutVersion);
-  assertSafeRepositoryArtifactPath(path);
 
   for (const artifact of FIXED_ARTIFACTS.values()) {
     if (artifact.path === path) return artifact;

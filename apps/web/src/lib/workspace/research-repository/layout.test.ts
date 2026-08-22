@@ -68,6 +68,13 @@ describe("research repository layout 1.0", () => {
     );
   });
 
+  it.each(["notes.lnk", "foo->bar.md", "methods/../private.md"])(
+    "ignores unmanaged discovery path %s",
+    (path) => {
+      expect(identifyRepositoryArtifactPath(path)).toBeUndefined();
+    }
+  );
+
   it("rejects executable names, executable modes, and symlink modes", () => {
     expect(() => resolveRepositoryArtifactPath("payload.exe")).toThrow(
       RepositoryLayoutError
