@@ -125,6 +125,14 @@ jobs:
       - name: Build all packages
         run: yarn build
 
+  docs-allowlist:
+    name: Check docs/ allowlist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify docs/ contains only allowed paths
+        run: bash scripts/check-docs-allowlist.sh
+
   template-catalog:
     name: Verify public template catalog snapshot
     permissions:
