@@ -86,7 +86,7 @@ function encryptionKeyRing(): [string, ...string[]] {
 // single-instance handling for strict cross-instance exclusion.
 const userOperationTails = new Map<string, Promise<void>>();
 
-async function withUserLock<T>(
+export async function withUserLock<T>(
   userId: string,
   operation: () => Promise<T>
 ): Promise<T> {

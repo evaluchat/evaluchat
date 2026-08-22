@@ -1949,6 +1949,33 @@ export async function getWorkspaceItem(
   return enrichWorkspaceItem(item);
 }
 
+export async function updateResearchRepositoryBindingHead(
+  userId: string,
+  itemId: string,
+  headCommitSha: string
+): Promise<ResearchRepositoryWorkspaceItem> {
+  return withUserLock(userId, async () => {
+    const manifest = await readManifest(userId);
+    const item = manifest.items[itemId];
+    if (
+      !item ||
+      item.ownerId !== userId ||
+      item.status !== "active" ||
+      item.kind !== "research_repository"
+    ) {
+      throw new WorkspaceItemNotFoundError();
+    }
+    const updated = ResearchRepositoryWorkspaceItemSchema.parse({
+      ...item,
+      updatedAt: new Date().toISOString(),
+      binding: { ...item.binding, headCommitSha },
+    });
+    manifest.items[itemId] = updated;
+    await writeManifest(userId, manifest);
+    return updated;
+  });
+}
+
 /** Read a sealed snapshot owned by the active workspace user. */
 export async function getLedgerSnapshotItem(
   userId: string,
