@@ -10,6 +10,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@opencanvas/shared/research-repository": path.resolve(
+        __dirname,
+        "../../packages/shared/src/research-repository.ts"
+      ),
       "@opencanvas/shared/github-research/crypto": path.resolve(
         __dirname,
         "../../packages/shared/src/github-research/crypto.ts"

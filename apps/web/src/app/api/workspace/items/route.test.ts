@@ -5,7 +5,12 @@ const harness = vi.hoisted(() => ({
   UnsupportedMethodError: class UnsupportedMethodError extends Error {},
   UnsupportedTemplateError: class UnsupportedTemplateError extends Error {},
   LedgerNotReadyError: class LedgerNotReadyError extends Error {},
+  ResearchRepositoryBindingError: class ResearchRepositoryBindingError extends Error {
+    code = "repository_public";
+  },
+  enabled: vi.fn(),
   verifyUserAuthenticated: vi.fn(),
+  createResearchRepositoryItem: vi.fn(),
   createWorkspaceItem: vi.fn(),
   createMethodWorkspaceItem: vi.fn(),
   createLedgerWorkspaceItem: vi.fn(),
@@ -16,10 +21,15 @@ const harness = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/verify_user_server", () => ({
   verifyUserAuthenticated: harness.verifyUserAuthenticated,
 }));
+vi.mock("@/lib/research-workspaces-enabled.server", () => ({
+  isGithubResearchWorkspacesEnabled: harness.enabled,
+}));
 vi.mock("@/lib/workspace/store", () => ({
   UnsupportedMethodError: harness.UnsupportedMethodError,
   UnsupportedTemplateError: harness.UnsupportedTemplateError,
   LedgerNotReadyError: harness.LedgerNotReadyError,
+  ResearchRepositoryBindingError: harness.ResearchRepositoryBindingError,
+  createResearchRepositoryItem: harness.createResearchRepositoryItem,
   createWorkspaceItem: harness.createWorkspaceItem,
   createMethodWorkspaceItem: harness.createMethodWorkspaceItem,
   createLedgerWorkspaceItem: harness.createLedgerWorkspaceItem,
@@ -49,8 +59,11 @@ describe("POST /api/workspace/items", () => {
   beforeEach(() => {
     harness.verifyUserAuthenticated.mockReset();
     harness.createWorkspaceItem.mockReset();
+    harness.createResearchRepositoryItem.mockReset();
     harness.createMethodWorkspaceItem.mockReset();
     harness.createLedgerWorkspaceItem.mockReset();
+    harness.enabled.mockReset();
+    harness.enabled.mockReturnValue(true);
     harness.verifyUserAuthenticated.mockResolvedValue({
       user: { id: "user-1" },
     });
@@ -83,6 +96,43 @@ describe("POST /api/workspace/items", () => {
       "user-1",
       "ledger-demo-method"
     );
+  });
+
+  it("creates a private research repository item", async () => {
+    harness.createResearchRepositoryItem.mockResolvedValue({
+      id: "wi_repository",
+      kind: "research_repository",
+    });
+
+    const response = await POST(
+      request({
+        kind: "research_repository",
+        installationId: 99,
+        repositoryId: 101,
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(harness.createResearchRepositoryItem).toHaveBeenCalledWith(
+      "user-1",
+      { installationId: 99, repositoryId: 101 }
+    );
+  });
+
+  it("returns 404 for research repositories while the flag is off", async () => {
+    harness.enabled.mockReturnValue(false);
+
+    const response = await POST(
+      request({
+        kind: "research_repository",
+        installationId: 99,
+        repositoryId: 101,
+      })
+    );
+
+    expect(response.status).toBe(404);
+    expect(harness.createResearchRepositoryItem).not.toHaveBeenCalled();
+    expect(harness.verifyUserAuthenticated).not.toHaveBeenCalled();
   });
 
   it("rejects an empty body", async () => {
