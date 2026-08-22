@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const harness = vi.hoisted(() => ({
@@ -58,6 +58,10 @@ describe("GET /api/workspace/github/callback", () => {
     });
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("returns 404 while the feature flag is off", async () => {
     harness.enabled.mockReturnValue(false);
     expect((await GET(request())).status).toBe(404);
@@ -95,11 +99,41 @@ describe("GET /api/workspace/github/callback", () => {
     );
     expect(harness.storeGithubResearchCredentials).toHaveBeenCalledWith(
       "user-1",
-      expect.objectContaining({ installationId: 99, oauthCode: "code-1" })
+      expect.objectContaining({ installationId: 99 })
     );
+    expect(
+      harness.storeGithubResearchCredentials.mock.calls[0]?.[1]
+    ).not.toHaveProperty("oauthCode");
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
       "http://localhost/workspace/settings?github=connected"
+    );
+  });
+
+  it("logs only an error message when the OAuth callback fails", async () => {
+    const error = Object.assign(new Error("exchange failed"), {
+      request: { body: { client_secret: "must-not-leak" } },
+    });
+    harness.exchangeGithubOAuthCode.mockRejectedValue(error);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost/workspace/settings?github=error"
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[github-research] OAuth callback failed",
+      "exchange failed"
+    );
+    expect(
+      consoleError.mock.calls.flat().every((value) => typeof value === "string")
+    ).toBe(true);
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "must-not-leak"
     );
   });
 });

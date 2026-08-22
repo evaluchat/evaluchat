@@ -68,11 +68,13 @@ export async function GET(request: NextRequest) {
       installationId: connection.installationId,
       repositoryIds: connection.repositoryIds,
       displayMetadata: connection.displayMetadata,
-      oauthCode: code,
     });
     return NextResponse.redirect(appRedirect(request, "connected"));
   } catch (error) {
-    console.error("[github-research] OAuth callback failed", error);
+    console.error(
+      "[github-research] OAuth callback failed",
+      error instanceof Error ? error.message : "unknown error"
+    );
     return NextResponse.redirect(appRedirect(request, "error"));
   }
 }

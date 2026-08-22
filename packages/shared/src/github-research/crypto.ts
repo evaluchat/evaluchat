@@ -32,7 +32,7 @@ function decodeCiphertext(value: string): Buffer {
   }
   const decoded = Buffer.from(value, "base64");
   if (
-    decoded.length < IV_LENGTH + AUTH_TAG_LENGTH + 1 ||
+    decoded.length < IV_LENGTH + AUTH_TAG_LENGTH ||
     decoded.toString("base64") !== value
   ) {
     throw new Error("Invalid GitHub research encrypted payload");
@@ -86,25 +86,46 @@ export function encryptGithubResearchSecret(
   };
 }
 
-/** Decrypt an envelope. Throws for malformed, tampered, or wrong-key input. */
+export type GithubResearchDecryptionResult = {
+  plaintext: string;
+  reencrypted: boolean;
+  envelope: GithubResearchEncryptedEnvelope;
+};
+
+/**
+ * Decrypt an envelope with the active key or a previous rotation key. Values
+ * read with a previous key are returned re-encrypted under the active key.
+ */
 export function decryptGithubResearchSecret(
   value: unknown,
-  keyHex: string
-): string {
-  const key = parseEncryptionKey(keyHex);
+  activeKeyHex: string,
+  ...previousKeyHexes: string[]
+): GithubResearchDecryptionResult {
   const envelope = parseEnvelope(value);
-  if (envelope.kid !== githubResearchEncryptionKeyId(keyHex)) {
+  const keyHex = [activeKeyHex, ...previousKeyHexes].find(
+    (candidate) => envelope.kid === githubResearchEncryptionKeyId(candidate)
+  );
+  if (!keyHex) {
     throw new Error("Unknown GitHub research encryption key id");
   }
 
+  const key = parseEncryptionKey(keyHex);
   const payload = decodeCiphertext(envelope.ct);
   const iv = payload.subarray(0, IV_LENGTH);
   const authTag = payload.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
   const ciphertext = payload.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
   const decipher = createDecipheriv("aes-256-gcm", key, iv);
   decipher.setAuthTag(authTag);
-  return Buffer.concat([
+  const plaintext = Buffer.concat([
     decipher.update(ciphertext),
     decipher.final(),
   ]).toString("utf8");
+  const reencrypted = keyHex !== activeKeyHex;
+  return {
+    plaintext,
+    reencrypted,
+    envelope: reencrypted
+      ? encryptGithubResearchSecret(plaintext, activeKeyHex)
+      : envelope,
+  };
 }

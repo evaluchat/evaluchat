@@ -21,7 +21,28 @@ describe("GitHub research credential crypto", () => {
       ct: expect.any(String),
     });
     expect(encrypted.ct).not.toContain(plaintext);
-    expect(decryptGithubResearchSecret(encrypted, TEST_KEY)).toBe(plaintext);
+    expect(decryptGithubResearchSecret(encrypted, TEST_KEY)).toEqual({
+      plaintext,
+      reencrypted: false,
+      envelope: encrypted,
+    });
+  });
+
+  it("round-trips an empty plaintext", () => {
+    const encrypted = encryptGithubResearchSecret("", TEST_KEY);
+    expect(decryptGithubResearchSecret(encrypted, TEST_KEY).plaintext).toBe("");
+  });
+
+  it("decrypts with a previous key and re-encrypts with the active key", () => {
+    const encrypted = encryptGithubResearchSecret("secret", OTHER_KEY);
+    const result = decryptGithubResearchSecret(encrypted, TEST_KEY, OTHER_KEY);
+
+    expect(result.plaintext).toBe("secret");
+    expect(result.reencrypted).toBe(true);
+    expect(result.envelope.kid).toBe(githubResearchEncryptionKeyId(TEST_KEY));
+    expect(
+      decryptGithubResearchSecret(result.envelope, TEST_KEY).plaintext
+    ).toBe("secret");
   });
 
   it("derives a deterministic key id", () => {

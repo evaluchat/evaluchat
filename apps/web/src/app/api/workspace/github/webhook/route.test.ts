@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const harness = vi.hoisted(() => ({
@@ -9,6 +9,7 @@ const harness = vi.hoisted(() => ({
   }),
   findOwners: vi.fn(),
   claimDelivery: vi.fn(),
+  releaseDelivery: vi.fn(),
   deleteCredentials: vi.fn(),
   updateInstallation: vi.fn(),
   updateRepositories: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("@/lib/research-workspaces-enabled.server", () => ({
 vi.mock("@/lib/workspace/research-repository/credentials", () => ({
   findGithubCredentialOwnersByInstallationId: harness.findOwners,
   claimGithubWebhookDelivery: harness.claimDelivery,
+  releaseGithubWebhookDelivery: harness.releaseDelivery,
   deleteGithubResearchCredentials: harness.deleteCredentials,
   updateGithubInstallation: harness.updateInstallation,
   updateGithubInstallationRepositories: harness.updateRepositories,
@@ -56,6 +58,11 @@ describe("POST /api/workspace/github/webhook", () => {
     harness.verify.mockResolvedValue(true);
     harness.findOwners.mockResolvedValue(["user-1"]);
     harness.claimDelivery.mockResolvedValue(true);
+    harness.releaseDelivery.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("returns 404 while the feature flag is off", async () => {
@@ -121,6 +128,51 @@ describe("POST /api/workspace/github/webhook", () => {
       "user-1",
       [102],
       [101]
+    );
+  });
+
+  it("does not clear repositories when an installation event omits them", async () => {
+    const response = await POST(
+      request(
+        { action: "suspend", installation: { id: 99 } },
+        {},
+        "installation"
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(harness.updateInstallation).not.toHaveBeenCalled();
+  });
+
+  it("replaces repository ids when an installation event includes them", async () => {
+    const response = await POST(
+      request(
+        {
+          action: "created",
+          installation: { id: 99 },
+          repositories: [{ id: 102, full_name: "private/name" }],
+        },
+        {},
+        "installation"
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(harness.updateInstallation).toHaveBeenCalledWith("user-1", 99, [
+      102,
+    ]);
+  });
+
+  it("releases a delivery claim when handling fails and returns 500", async () => {
+    harness.recordPush.mockRejectedValue(new Error("store unavailable"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await POST(request({ installation: { id: 99 } }));
+
+    expect(response.status).toBe(500);
+    expect(harness.releaseDelivery).toHaveBeenCalledWith(
+      "user-1",
+      "delivery-1"
     );
   });
 });

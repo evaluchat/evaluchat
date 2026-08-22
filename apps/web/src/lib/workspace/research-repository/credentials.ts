@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Client } from "@langchain/langgraph-sdk";
 import {
   decryptGithubResearchSecret,
@@ -13,6 +13,8 @@ export const GITHUB_RESEARCH_CREDENTIALS_KEY = "credentials";
 
 const OAUTH_STATE_TTL_MINUTES = 10;
 const WEBHOOK_DELIVERY_TTL_MINUTES = 7 * 24 * 60;
+const IDENTIFIER_HMAC_DOMAIN = "github-research-identifier-hmac";
+const SEARCH_PAGE_SIZE = 100;
 
 export type GithubResearchCredentialRecord = {
   accessTokenEnc: GithubResearchEncryptedEnvelope;
@@ -23,7 +25,6 @@ export type GithubResearchCredentialRecord = {
   repositoryIds: number[];
   displayMetadataEnc: GithubResearchEncryptedEnvelope;
   githubUserIdHash: string;
-  oauthCodeHash?: string;
   connectedAt: string;
   updatedAt: string;
   lastPush?: {
@@ -63,13 +64,73 @@ function encryptionKey(): string {
   return value;
 }
 
+/**
+ * Rotate by moving the current key into the comma-separated previous-key list
+ * before activating its replacement. Keep previous keys configured until reads
+ * have rewritten all envelopes; records with an unconfigured kid are deleted so
+ * the user can reconnect instead of receiving persistent server errors.
+ */
+function encryptionKeyRing(): [string, ...string[]] {
+  const activeKey = encryptionKey();
+  const previousKeys = (
+    process.env.GITHUB_RESEARCH_TOKEN_ENCRYPTION_PREVIOUS_KEYS ?? ""
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value && value !== activeKey);
+  return [activeKey, ...new Set(previousKeys)];
+}
+
+// LangGraph Store has no compare-and-swap. This serializes mutations only
+// within one running application instance; deployments still need sticky or
+// single-instance handling for strict cross-instance exclusion.
+const userOperationTails = new Map<string, Promise<void>>();
+
+async function withUserLock<T>(
+  userId: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const predecessor = userOperationTails.get(userId) ?? Promise.resolve();
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = predecessor.then(() => gate);
+  userOperationTails.set(userId, tail);
+  await predecessor;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (userOperationTails.get(userId) === tail) {
+      userOperationTails.delete(userId);
+    }
+  }
+}
+
 export function githubResearchCredentialsNamespace(userId: string): string[] {
   if (!userId || userId.includes(".")) throw new Error("Invalid user id");
   return [GITHUB_RESEARCH_CREDENTIALS_ROOT, userId];
 }
 
+function hashGithubCredentialIdentifierWithKey(
+  value: string,
+  keyHex: string
+): string {
+  if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) {
+    throw new Error(
+      "GITHUB_RESEARCH_TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes)"
+    );
+  }
+  const hmacKey = createHash("sha256")
+    .update(Buffer.from(keyHex, "hex"))
+    .update(`\0${IDENTIFIER_HMAC_DOMAIN}`, "utf8")
+    .digest();
+  return createHmac("sha256", hmacKey).update(value, "utf8").digest("hex");
+}
+
 export function hashGithubCredentialIdentifier(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
+  return hashGithubCredentialIdentifierWithKey(value, encryptionKey());
 }
 
 function equalHashes(left: string, right: string): boolean {
@@ -133,25 +194,45 @@ export async function consumeGithubOAuthState(
   userId: string,
   state: string
 ): Promise<string | null> {
-  const namespace = githubResearchCredentialsNamespace(userId);
-  const stateHash = hashGithubCredentialIdentifier(state);
-  const key = stateKey(stateHash);
-  const item = await client().store.getItem(namespace, key);
-  if (!item) return null;
-  await client().store.deleteItem(namespace, key);
+  return withUserLock(userId, async () => {
+    const namespace = githubResearchCredentialsNamespace(userId);
+    const keyRing = encryptionKeyRing();
+    let stateHash: string | undefined;
+    let key: string | undefined;
+    let item: { value?: unknown } | null | undefined;
+    for (const encryptionKey of keyRing) {
+      const candidateHash = hashGithubCredentialIdentifierWithKey(
+        state,
+        encryptionKey
+      );
+      const candidateKey = stateKey(candidateHash);
+      const candidateItem = await client().store.getItem(
+        namespace,
+        candidateKey
+      );
+      if (candidateItem) {
+        stateHash = candidateHash;
+        key = candidateKey;
+        item = candidateItem;
+        break;
+      }
+    }
+    if (!item || !stateHash || !key) return null;
+    await client().store.deleteItem(namespace, key);
 
-  const value = item.value as Partial<StoredOAuthState> | undefined;
-  if (
-    !value ||
-    typeof value.stateHash !== "string" ||
-    !equalHashes(value.stateHash, stateHash) ||
-    typeof value.expiresAt !== "string" ||
-    new Date(value.expiresAt).getTime() <= Date.now() ||
-    !value.verifierEnc
-  ) {
-    return null;
-  }
-  return decryptGithubResearchSecret(value.verifierEnc, encryptionKey());
+    const value = item.value as Partial<StoredOAuthState> | undefined;
+    if (
+      !value ||
+      typeof value.stateHash !== "string" ||
+      !equalHashes(value.stateHash, stateHash) ||
+      typeof value.expiresAt !== "string" ||
+      new Date(value.expiresAt).getTime() <= Date.now() ||
+      !value.verifierEnc
+    ) {
+      return null;
+    }
+    return decryptGithubResearchSecret(value.verifierEnc, ...keyRing).plaintext;
+  });
 }
 
 export async function storeGithubResearchCredentials(
@@ -161,41 +242,44 @@ export async function storeGithubResearchCredentials(
     installationId?: number;
     repositoryIds: number[];
     displayMetadata: Record<string, unknown> & { githubUserId: number };
-    oauthCode?: string;
   }
 ): Promise<void> {
-  const key = encryptionKey();
-  const now = new Date().toISOString();
-  const record: GithubResearchCredentialRecord = {
-    accessTokenEnc: encryptGithubResearchSecret(input.tokens.accessToken, key),
-    refreshTokenEnc: input.tokens.refreshToken
-      ? encryptGithubResearchSecret(input.tokens.refreshToken, key)
-      : undefined,
-    accessTokenExpiresAt: input.tokens.expiresAt,
-    refreshTokenExpiresAt: input.tokens.refreshTokenExpiresAt,
-    installationId: input.installationId,
-    repositoryIds: [...new Set(input.repositoryIds)].sort(
-      (left, right) => left - right
-    ),
-    displayMetadataEnc: encryptGithubResearchSecret(
-      JSON.stringify(input.displayMetadata),
-      key
-    ),
-    githubUserIdHash: hashGithubCredentialIdentifier(
-      String(input.displayMetadata.githubUserId)
-    ),
-    oauthCodeHash: input.oauthCode
-      ? hashGithubCredentialIdentifier(input.oauthCode)
-      : undefined,
-    connectedAt: now,
-    updatedAt: now,
-  };
-  await client().store.putItem(
-    githubResearchCredentialsNamespace(userId),
-    GITHUB_RESEARCH_CREDENTIALS_KEY,
-    record,
-    { index: ["installationId", "githubUserIdHash"] }
-  );
+  await withUserLock(userId, async () => {
+    const key = encryptionKey();
+    const now = new Date().toISOString();
+    const existing = await readGithubResearchCredentialRecord(userId);
+    const record: GithubResearchCredentialRecord = {
+      accessTokenEnc: encryptGithubResearchSecret(
+        input.tokens.accessToken,
+        key
+      ),
+      refreshTokenEnc: input.tokens.refreshToken
+        ? encryptGithubResearchSecret(input.tokens.refreshToken, key)
+        : undefined,
+      accessTokenExpiresAt: input.tokens.expiresAt,
+      refreshTokenExpiresAt: input.tokens.refreshTokenExpiresAt,
+      installationId: input.installationId,
+      repositoryIds: [...new Set(input.repositoryIds)].sort(
+        (left, right) => left - right
+      ),
+      displayMetadataEnc: encryptGithubResearchSecret(
+        JSON.stringify(input.displayMetadata),
+        key
+      ),
+      githubUserIdHash: hashGithubCredentialIdentifier(
+        String(input.displayMetadata.githubUserId)
+      ),
+      connectedAt: existing?.connectedAt ?? now,
+      updatedAt: now,
+      lastPush: existing?.lastPush,
+    };
+    await client().store.putItem(
+      githubResearchCredentialsNamespace(userId),
+      GITHUB_RESEARCH_CREDENTIALS_KEY,
+      record,
+      { index: ["installationId", "githubUserIdHash"] }
+    );
+  });
 }
 
 export async function readGithubResearchCredentialRecord(
@@ -211,49 +295,113 @@ export async function readGithubResearchCredentialRecord(
 export async function readGithubResearchCredentials(
   userId: string
 ): Promise<DecryptedGithubResearchCredentials | null> {
-  const record = await readGithubResearchCredentialRecord(userId);
-  if (!record) return null;
-  const key = encryptionKey();
-  const rawMetadata = decryptGithubResearchSecret(
-    record.displayMetadataEnc,
-    key
-  );
-  const metadata = JSON.parse(rawMetadata) as unknown;
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    throw new Error("Invalid encrypted GitHub display metadata");
-  }
-  return {
-    tokens: {
-      accessToken: decryptGithubResearchSecret(record.accessTokenEnc, key),
-      refreshToken: record.refreshTokenEnc
-        ? decryptGithubResearchSecret(record.refreshTokenEnc, key)
-        : undefined,
-      expiresAt: record.accessTokenExpiresAt,
-      refreshTokenExpiresAt: record.refreshTokenExpiresAt,
-    },
-    installationId: record.installationId,
-    repositoryIds: record.repositoryIds,
-    displayMetadata: metadata as Record<string, unknown>,
-  };
+  return withUserLock(userId, async () => {
+    const record = await readGithubResearchCredentialRecord(userId);
+    if (!record) return null;
+    const keyRing = encryptionKeyRing();
+    try {
+      const metadataResult = decryptGithubResearchSecret(
+        record.displayMetadataEnc,
+        ...keyRing
+      );
+      const accessTokenResult = decryptGithubResearchSecret(
+        record.accessTokenEnc,
+        ...keyRing
+      );
+      const refreshTokenResult = record.refreshTokenEnc
+        ? decryptGithubResearchSecret(record.refreshTokenEnc, ...keyRing)
+        : undefined;
+      const metadata = JSON.parse(metadataResult.plaintext) as unknown;
+      if (
+        !metadata ||
+        typeof metadata !== "object" ||
+        Array.isArray(metadata)
+      ) {
+        throw new Error("Invalid encrypted GitHub display metadata");
+      }
+      const metadataRecord = metadata as Record<string, unknown>;
+      if (
+        metadataResult.reencrypted ||
+        accessTokenResult.reencrypted ||
+        refreshTokenResult?.reencrypted
+      ) {
+        await client().store.putItem(
+          githubResearchCredentialsNamespace(userId),
+          GITHUB_RESEARCH_CREDENTIALS_KEY,
+          {
+            ...record,
+            displayMetadataEnc: metadataResult.envelope,
+            accessTokenEnc: accessTokenResult.envelope,
+            refreshTokenEnc: refreshTokenResult?.envelope,
+            githubUserIdHash:
+              typeof metadataRecord.githubUserId === "number"
+                ? hashGithubCredentialIdentifierWithKey(
+                    String(metadataRecord.githubUserId),
+                    keyRing[0]
+                  )
+                : record.githubUserIdHash,
+            updatedAt: new Date().toISOString(),
+          },
+          { index: ["installationId", "githubUserIdHash"] }
+        );
+      }
+      return {
+        tokens: {
+          accessToken: accessTokenResult.plaintext,
+          refreshToken: refreshTokenResult?.plaintext,
+          expiresAt: record.accessTokenExpiresAt,
+          refreshTokenExpiresAt: record.refreshTokenExpiresAt,
+        },
+        installationId: record.installationId,
+        repositoryIds: record.repositoryIds,
+        displayMetadata: metadataRecord,
+      };
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "Unknown GitHub research encryption key id"
+      ) {
+        await client().store.deleteItem(
+          githubResearchCredentialsNamespace(userId),
+          GITHUB_RESEARCH_CREDENTIALS_KEY
+        );
+        return null;
+      }
+      throw error;
+    }
+  });
 }
 
 export async function deleteGithubResearchCredentials(
   userId: string
 ): Promise<void> {
-  await client().store.deleteItem(
-    githubResearchCredentialsNamespace(userId),
-    GITHUB_RESEARCH_CREDENTIALS_KEY
-  );
+  await withUserLock(userId, async () => {
+    await client().store.deleteItem(
+      githubResearchCredentialsNamespace(userId),
+      GITHUB_RESEARCH_CREDENTIALS_KEY
+    );
+  });
 }
 
 export async function findGithubCredentialOwnersByInstallationId(
   installationId: number
 ): Promise<string[]> {
-  const response = await client().store.searchItems(
-    [GITHUB_RESEARCH_CREDENTIALS_ROOT],
-    { filter: { installationId }, limit: 100 }
-  );
-  return response.items
+  const items = [];
+  let offset = 0;
+  while (true) {
+    const response = await client().store.searchItems(
+      [GITHUB_RESEARCH_CREDENTIALS_ROOT],
+      {
+        filter: { installationId },
+        limit: SEARCH_PAGE_SIZE,
+        offset,
+      }
+    );
+    items.push(...response.items);
+    if (response.items.length < SEARCH_PAGE_SIZE) break;
+    offset += response.items.length;
+  }
+  return items
     .filter(
       (item) =>
         item.key === GITHUB_RESEARCH_CREDENTIALS_KEY &&
@@ -268,17 +416,48 @@ export async function claimGithubWebhookDelivery(
   userId: string,
   deliveryId: string
 ): Promise<boolean> {
-  const namespace = githubResearchCredentialsNamespace(userId);
-  const deliveryHash = hashGithubCredentialIdentifier(deliveryId);
-  const key = webhookDeliveryKey(deliveryHash);
-  if (await client().store.getItem(namespace, key)) return false;
-  await client().store.putItem(
-    namespace,
-    key,
-    { deliveryHash, receivedAt: new Date().toISOString() },
-    { index: false, ttl: WEBHOOK_DELIVERY_TTL_MINUTES }
-  );
-  return true;
+  return withUserLock(userId, async () => {
+    const namespace = githubResearchCredentialsNamespace(userId);
+    const keyRing = encryptionKeyRing();
+    for (const key of keyRing) {
+      const knownHash = hashGithubCredentialIdentifierWithKey(deliveryId, key);
+      if (
+        await client().store.getItem(namespace, webhookDeliveryKey(knownHash))
+      ) {
+        return false;
+      }
+    }
+    const deliveryHash = hashGithubCredentialIdentifierWithKey(
+      deliveryId,
+      keyRing[0]
+    );
+    await client().store.putItem(
+      namespace,
+      webhookDeliveryKey(deliveryHash),
+      { deliveryHash, receivedAt: new Date().toISOString() },
+      { index: false, ttl: WEBHOOK_DELIVERY_TTL_MINUTES }
+    );
+    return true;
+  });
+}
+
+export async function releaseGithubWebhookDelivery(
+  userId: string,
+  deliveryId: string
+): Promise<void> {
+  await withUserLock(userId, async () => {
+    const namespace = githubResearchCredentialsNamespace(userId);
+    for (const key of encryptionKeyRing()) {
+      const deliveryHash = hashGithubCredentialIdentifierWithKey(
+        deliveryId,
+        key
+      );
+      await client().store.deleteItem(
+        namespace,
+        webhookDeliveryKey(deliveryHash)
+      );
+    }
+  });
 }
 
 async function updateCredentialRecord(
@@ -287,14 +466,16 @@ async function updateCredentialRecord(
     record: GithubResearchCredentialRecord
   ) => GithubResearchCredentialRecord
 ): Promise<void> {
-  const record = await readGithubResearchCredentialRecord(userId);
-  if (!record) return;
-  await client().store.putItem(
-    githubResearchCredentialsNamespace(userId),
-    GITHUB_RESEARCH_CREDENTIALS_KEY,
-    { ...update(record), updatedAt: new Date().toISOString() },
-    { index: ["installationId", "githubUserIdHash"] }
-  );
+  await withUserLock(userId, async () => {
+    const record = await readGithubResearchCredentialRecord(userId);
+    if (!record) return;
+    await client().store.putItem(
+      githubResearchCredentialsNamespace(userId),
+      GITHUB_RESEARCH_CREDENTIALS_KEY,
+      { ...update(record), updatedAt: new Date().toISOString() },
+      { index: ["installationId", "githubUserIdHash"] }
+    );
+  });
 }
 
 export async function updateGithubInstallation(

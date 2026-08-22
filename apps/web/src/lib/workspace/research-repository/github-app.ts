@@ -133,7 +133,6 @@ export function buildGithubAuthorizationUrl(options: {
     "redirect_uri",
     options.redirectUrl ?? githubResearchOAuthRedirectUrl()
   );
-  url.searchParams.set("scope", "repo");
   url.searchParams.set("state", options.state);
   url.searchParams.set("code_challenge", options.challenge);
   url.searchParams.set("code_challenge_method", "S256");
@@ -199,49 +198,70 @@ export async function resolveGithubResearchConnection(
   requestedInstallationId?: number
 ): Promise<GithubResearchConnection> {
   const octokit = createGithubUserOctokit(accessToken);
-  const [userResponse, installationResponse] = await Promise.all([
+  const [userResponse, installations] = await Promise.all([
     octokit.request("GET /user", {
       headers: { "x-github-api-version": GITHUB_API_VERSION },
     }),
-    octokit.request("GET /user/installations", {
-      per_page: 100,
-      headers: { "x-github-api-version": GITHUB_API_VERSION },
-    }),
+    octokit.paginate(
+      "GET /user/installations",
+      {
+        per_page: 100,
+        headers: { "x-github-api-version": GITHUB_API_VERSION },
+      },
+      (response: { data: unknown }) => {
+        const data = response.data as { installations?: unknown };
+        return Array.isArray(data.installations)
+          ? (data.installations as GithubInstallation[])
+          : [];
+      }
+    ),
   ]);
   const user = userResponse.data as GithubUserResponse;
   if (typeof user.id !== "number" || typeof user.login !== "string") {
     throw new Error("GitHub returned invalid user metadata");
   }
 
-  const installationData = installationResponse.data as {
-    installations?: unknown;
-  };
-  const installations = Array.isArray(installationData.installations)
-    ? (installationData.installations as GithubInstallation[])
-    : [];
-  const installation = installations.find(
-    (entry) =>
+  const availableInstallations = (installations as GithubInstallation[]).filter(
+    (entry): entry is GithubInstallation & { id: number } =>
       typeof entry.id === "number" &&
-      (requestedInstallationId === undefined ||
-        entry.id === requestedInstallationId)
+      Number.isSafeInteger(entry.id) &&
+      entry.id > 0
   );
-  const installationId =
-    typeof installation?.id === "number" ? installation.id : undefined;
+  let installation: (GithubInstallation & { id: number }) | undefined;
+  if (requestedInstallationId !== undefined) {
+    installation = availableInstallations.find(
+      (entry) => entry.id === requestedInstallationId
+    );
+    if (!installation) {
+      throw new Error(
+        "Requested GitHub installation is not available to this user"
+      );
+    }
+  } else if (availableInstallations.length > 1) {
+    throw new Error(
+      "Multiple GitHub installations are available; select one explicitly"
+    );
+  } else {
+    [installation] = availableInstallations;
+  }
+  const installationId = installation?.id;
 
   let repositories: GithubRepository[] = [];
   if (installationId !== undefined) {
-    const response = await octokit.request(
+    repositories = await octokit.paginate(
       "GET /user/installations/{installation_id}/repositories",
       {
         installation_id: installationId,
         per_page: 100,
         headers: { "x-github-api-version": GITHUB_API_VERSION },
+      },
+      (response: { data: unknown }) => {
+        const data = response.data as { repositories?: unknown };
+        return Array.isArray(data.repositories)
+          ? (data.repositories as GithubRepository[])
+          : [];
       }
     );
-    const data = response.data as { repositories?: unknown };
-    repositories = Array.isArray(data.repositories)
-      ? (data.repositories as GithubRepository[])
-      : [];
   }
   const displayRepositories = repositories
     .filter(

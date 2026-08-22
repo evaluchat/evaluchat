@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
   request: vi.fn(),
+  paginate: vi.fn(),
   auth: vi.fn(),
   Octokit: vi.fn(function OctokitMock() {
-    return { request: harness.request, auth: harness.auth };
+    return {
+      request: harness.request,
+      paginate: harness.paginate,
+      auth: harness.auth,
+    };
   }),
   createAppAuth: vi.fn(),
 }));
@@ -35,6 +40,7 @@ beforeEach(() => {
   vi.stubEnv("GITHUB_RESEARCH_APP_ID", "1234");
   vi.stubEnv("GITHUB_RESEARCH_APP_PRIVATE_KEY", "private\\nkey");
   harness.request.mockReset();
+  harness.paginate.mockReset();
   harness.auth.mockReset();
   harness.Octokit.mockClear();
   harness.createAppAuth.mockClear();
@@ -52,14 +58,14 @@ describe("GitHub App OAuth helpers", () => {
     expect(generated.challenge).toBe(createPkceChallenge(generated.verifier));
   });
 
-  it("builds the user authorization URL with repo scope and PKCE", () => {
+  it("builds the user authorization URL without an ignored scope and with PKCE", () => {
     const url = new URL(
       buildGithubAuthorizationUrl({ state: "state-1", challenge: "challenge" })
     );
     expect(url.origin + url.pathname).toBe(
       "https://github.com/login/oauth/authorize"
     );
-    expect(url.searchParams.get("scope")).toBe("repo");
+    expect(url.searchParams.has("scope")).toBe(false);
     expect(url.searchParams.get("state")).toBe("state-1");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
   });
@@ -124,18 +130,12 @@ describe("GitHub App OAuth helpers", () => {
   });
 
   it("resolves installation and repository metadata with user auth", async () => {
-    harness.request
-      .mockResolvedValueOnce({
-        data: { id: 7, login: "octo", avatar_url: "https://avatar.test/7" },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          installations: [{ id: 99, account: { login: "octo" } }],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: { repositories: [{ id: 101, full_name: "octo/private" }] },
-      });
+    harness.request.mockResolvedValueOnce({
+      data: { id: 7, login: "octo", avatar_url: "https://avatar.test/7" },
+    });
+    harness.paginate
+      .mockResolvedValueOnce([{ id: 99, account: { login: "octo" } }])
+      .mockResolvedValueOnce([{ id: 101, full_name: "octo/private" }]);
 
     await expect(
       resolveGithubResearchConnection("ghu_access", 99)
@@ -150,6 +150,40 @@ describe("GitHub App OAuth helpers", () => {
         repositories: [{ id: 101, nameWithOwner: "octo/private" }],
       },
     });
+    expect(harness.paginate).toHaveBeenNthCalledWith(
+      1,
+      "GET /user/installations",
+      expect.objectContaining({ per_page: 100 }),
+      expect.any(Function)
+    );
+    expect(harness.paginate).toHaveBeenNthCalledWith(
+      2,
+      "GET /user/installations/{installation_id}/repositories",
+      expect.objectContaining({ installation_id: 99, per_page: 100 }),
+      expect.any(Function)
+    );
+  });
+
+  it("rejects a requested installation the user cannot access", async () => {
+    harness.request.mockResolvedValue({ data: { id: 7, login: "octo" } });
+    harness.paginate.mockResolvedValue([{ id: 100 }]);
+
+    await expect(
+      resolveGithubResearchConnection("ghu_access", 99)
+    ).rejects.toThrow(
+      "Requested GitHub installation is not available to this user"
+    );
+    expect(harness.paginate).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires an explicit choice when multiple installations are available", async () => {
+    harness.request.mockResolvedValue({ data: { id: 7, login: "octo" } });
+    harness.paginate.mockResolvedValue([{ id: 99 }, { id: 100 }]);
+
+    await expect(resolveGithubResearchConnection("ghu_access")).rejects.toThrow(
+      "Multiple GitHub installations are available; select one explicitly"
+    );
+    expect(harness.paginate).toHaveBeenCalledTimes(1);
   });
 
   it("mints installation tokens just in time through app auth", async () => {

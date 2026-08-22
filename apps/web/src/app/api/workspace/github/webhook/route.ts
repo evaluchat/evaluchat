@@ -6,6 +6,7 @@ import {
   deleteGithubResearchCredentials,
   findGithubCredentialOwnersByInstallationId,
   recordGithubPush,
+  releaseGithubWebhookDelivery,
   updateGithubInstallation,
   updateGithubInstallationRepositories,
 } from "@/lib/workspace/research-repository/credentials";
@@ -59,11 +60,13 @@ async function handleDelivery(
       await deleteGithubResearchCredentials(userId);
       return;
     }
-    await updateGithubInstallation(
-      userId,
-      id,
-      repositoryIds(payload.repositories)
-    );
+    if (Array.isArray(payload.repositories)) {
+      await updateGithubInstallation(
+        userId,
+        id,
+        repositoryIds(payload.repositories)
+      );
+    }
     return;
   }
   if (event === "installation_repositories") {
@@ -160,7 +163,12 @@ export async function POST(request: NextRequest) {
     for (const userId of owners) {
       if (!(await claimGithubWebhookDelivery(userId, deliveryId))) continue;
       handled = true;
-      await handleDelivery(userId, event, payload, id);
+      try {
+        await handleDelivery(userId, event, payload, id);
+      } catch (error) {
+        await releaseGithubWebhookDelivery(userId, deliveryId);
+        throw error;
+      }
     }
     return NextResponse.json({
       accepted: true,
