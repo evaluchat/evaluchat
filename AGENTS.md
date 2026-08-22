@@ -68,3 +68,18 @@ Unit tests: `cd apps/agents && npx vitest run` and `cd packages/shared && npx vi
   backup/restore are configured.
 - Electron/Desktop work is paused. Preserve its documentation and code while
   avoiding new desktop scope during the beta release.
+
+## Documentation routing (mandatory)
+
+| Write here | Not here |
+|------------|----------|
+| README, CONTRIBUTING, `docs/contributing/` | `docs/architecture/`, `docs/research/`, `docs/*.html` |
+| Code + tests + `.env.example` | Feature ADRs, threat models, orchestration plans |
+
+Public product docs → [github.com/evaluchat/knowledge](https://github.com/evaluchat/knowledge)
+
+Public research/governance → [github.com/evaluchat/research](https://github.com/evaluchat/research)
+
+Private plans/orchestration → knowledge-catalog OKF `evaluchat` bundle
+
+Allowed paths under `docs/`: `docs/contributing/` and `docs/electron-desktop/` only. CI enforces this allowlist.

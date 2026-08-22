@@ -58,7 +58,9 @@ codedb.snapshot
 .code-review-graph/
 .demo-record/
 .kilo/
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 .cursorrules
 kilo.jsonc
 data/

@@ -1,0 +1,31 @@
+---
+description: Where to write documentation in the canvas repo
+alwaysApply: true
+---
+
+# Documentation routing
+
+This repo holds **contributor dev docs only**. Public product and research docs live elsewhere.
+
+## Write here
+
+| Location | Content |
+|----------|---------|
+| `README.md`, `CONTRIBUTING.md`, `AGENTS.md` | Quick start, workflow, agent guardrails |
+| `docs/contributing/` | Local setup, OSS dev deploy |
+| `docs/electron-desktop/` | Paused desktop runbooks |
+
+## Never write here
+
+- `docs/architecture/` — ADRs and feature design
+- `docs/research/` — threat models, governance, marketing copy
+- `docs/*.html`, `docs/assets/` — legacy static site (removed)
+- Orchestration plans or private strategy
+
+## Public surfaces
+
+- Product docs → [evaluchat/knowledge](https://github.com/evaluchat/knowledge) → knowledge.evaluchat.org
+- Research / governance → [evaluchat/research](https://github.com/evaluchat/research) → research.evaluchat.org
+- Private plans → knowledge-catalog OKF `evaluchat` bundle
+
+Code + tests + `.env.example` stay in this repo; link to public OKF concepts via `sources:` URLs when documenting shipped behavior.
