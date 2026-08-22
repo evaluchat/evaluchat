@@ -36,7 +36,11 @@ payloads. Error records use stable artifact IDs and non-content error codes.
 Webhook HMAC is validated against the raw request bytes before parsing. Only
 the minimum fields needed for an installation, installation-repositories, or
 push event are extracted. The raw body is discarded, and `X-GitHub-Delivery`
-is retained only as an idempotency key.
+is retained only as an idempotency key. Delivery-ID retention covers GitHub's
+redelivery window: at least three days for GitHub.com and at least seven days
+for GitHub Enterprise Server. An expired or unknown delivery ID triggers
+reconciliation against current repository state; Evaluchat never re-applies
+the event.
 
 ## Consequences
 

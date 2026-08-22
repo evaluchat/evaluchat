@@ -134,7 +134,10 @@ GitHub.
 ## Verification obligations for later issues
 
 - Prove repository mode performs no LangGraph checkpoint, tracing, log,
-  telemetry, local-storage, cache, backup, or queue body writes.
+  telemetry, local-storage, cache, backup, or queue body writes. Check request
+  capture, APM breadcrumbs, feature-flag context, session recording, support
+  tooling, metrics labels, and operator diagnostics explicitly as independent
+  leak sinks.
 - Assert permission manifests for both apps and reject cross-domain
   installations.
 - Exercise OAuth state replay, wrong-user state, verifier mismatch, and expiry.

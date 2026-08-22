@@ -31,6 +31,11 @@ wrong-user state. Neither authorization codes nor PKCE verifiers are written to
 logs, analytics, browser storage, or error-reporting context. A callback
 failure does not fall back to an unbound token exchange.
 
+The stored post-callback destination is either a server-defined route ID or a
+validated relative Evaluchat path. The OAuth redirect-URI allowlist constrains
+where GitHub may return the authorization response; it does not constrain the
+post-callback destination, which is validated independently.
+
 ## Consequences
 
 - Capturing an authorization code alone is insufficient to complete the flow.

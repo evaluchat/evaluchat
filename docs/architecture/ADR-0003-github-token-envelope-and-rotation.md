@@ -17,6 +17,12 @@ six months for its refresh token. GitHub rotates both values during refresh.
 
 ## Decision
 
+The authorization-code exchange accepts only an expiring user-token response.
+At issuance, the flow rejects a response missing `refresh_token`, `expires_in`,
+or `refresh_token_expires_in` and requires reauthorization. GitHub omits these
+fields when user-token expiration is disabled; Evaluchat never persists that
+non-expiring credential response.
+
 Persist access and refresh tokens only inside a dedicated server-side
 AES-256-GCM envelope. Each encrypted field records:
 
@@ -31,11 +37,22 @@ runtime environment and is never stored beside ciphertext. Authenticated
 additional data binds the envelope to its credential record, token kind, app,
 and envelope version so ciphertext cannot be swapped between records.
 
-Refresh begins before access-token expiry, is serialized per credential, and
-atomically replaces both encrypted tokens and their expiries with GitHub's
-rotated values. Old values are not retained after a successful transaction.
-Key rotation decrypts using the recorded `kid` and re-encrypts under the active
-key. Installation access tokens are generated just in time and never stored.
+Refresh begins before access-token expiry and is serialized per credential.
+GitHub rotation invalidates both the previous access token and the previous
+refresh token, so the GitHub call and local credential commit cannot be treated
+as an end-to-end atomic transaction. Before invoking GitHub rotation, Evaluchat
+writes a durable blocked marker for the credential version. A successful local
+commit atomically replaces both encrypted tokens and their expiries with
+GitHub's rotated values before clearing that marker. Old values are not retained
+after that commit.
+
+If the process fails after GitHub rotation but before the local commit,
+recovery keeps the binding blocked and reconciles which complete credential set
+GitHub actually accepts instead of assuming atomic success or failure. It
+commits the accepted rotated set if recoverable; otherwise it requires
+reauthorization. Key rotation decrypts using the recorded `kid` and re-encrypts
+under the active key. Installation access tokens are generated just in time and
+never stored.
 
 Authentication-tag failure, an unknown `kid`, refresh rejection, a missing
 rotated token, or an interrupted/ambiguous refresh fails closed. Evaluchat

@@ -34,6 +34,12 @@ switch, authorization loss, and terminal repository state. Browser extensions,
 screen capture, swap, and compromised endpoints remain outside guarantees that
 a web application can enforce and are disclosed as residual risk.
 
+App or repository-authorization revocation takes precedence over token-expiry
+draft recovery. GitHub App authorization revocation invalidates the associated
+access and refresh tokens; app or repository-authorization revocation therefore
+clears in-memory content and prevents refresh, even when refresh-token expiry
+would otherwise preserve uncommitted text briefly for copy or download.
+
 ## Consequences
 
 - Reloading loses uncommitted work; the product must make “Not committed” state
