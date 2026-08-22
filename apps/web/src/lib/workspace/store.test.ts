@@ -464,6 +464,59 @@ describe("research repository workspace items", () => {
     expect(harness.state.manifest.items[item.id]).toEqual(item);
   });
 
+  it.each([409, 422])(
+    "binds after a %i managed branch creation race",
+    async (status) => {
+      const rereadSha = "c".repeat(40);
+      harness.getGithubRepositoryBranchHead
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Not found"), { status: 404 })
+        )
+        .mockResolvedValueOnce(repositorySha)
+        .mockResolvedValueOnce(rereadSha);
+      harness.createGithubRepositoryBranch.mockRejectedValue(
+        Object.assign(new Error("Branch already exists"), { status })
+      );
+
+      const item = await createResearchRepositoryItem("user-1", {
+        repositoryId: 101,
+        installationId: 99,
+      });
+
+      expect(item.binding.headCommitSha).toBe(rereadSha);
+      expect(harness.getGithubRepositoryBranchHead).toHaveBeenCalledTimes(3);
+      expect(harness.state.manifest.items[item.id]).toEqual(item);
+    }
+  );
+
+  it.each([409, 422])(
+    "rethrows the original %i creation error when the branch reread fails",
+    async (status) => {
+      const creationError = Object.assign(new Error("Branch creation failed"), {
+        status,
+      });
+      const rereadError = Object.assign(new Error("GitHub unavailable"), {
+        status: 503,
+      });
+      harness.getGithubRepositoryBranchHead
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Not found"), { status: 404 })
+        )
+        .mockResolvedValueOnce(repositorySha)
+        .mockRejectedValueOnce(rereadError);
+      harness.createGithubRepositoryBranch.mockRejectedValue(creationError);
+
+      await expect(
+        createResearchRepositoryItem("user-1", {
+          repositoryId: 101,
+          installationId: 99,
+        })
+      ).rejects.toBe(creationError);
+      expect(harness.getGithubRepositoryBranchHead).toHaveBeenCalledTimes(3);
+      expect(harness.state.manifest).toBeUndefined();
+    }
+  );
+
   it("does not bind when managed branch resolution fails unexpectedly", async () => {
     const failure = Object.assign(new Error("GitHub unavailable"), {
       status: 503,

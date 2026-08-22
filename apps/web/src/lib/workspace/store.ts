@@ -604,17 +604,36 @@ export async function createResearchRepositoryItem(
         repository,
         repository.defaultBranch
       );
-      await createGithubRepositoryBranch(
-        input.installationId,
-        repository,
-        RESEARCH_REPOSITORY_BRANCH,
-        defaultBranchHead
-      );
-      headCommitSha = await getGithubRepositoryBranchHead(
-        input.installationId,
-        repository,
-        RESEARCH_REPOSITORY_BRANCH
-      );
+      let recoveredHeadCommitSha: string | undefined;
+      try {
+        await createGithubRepositoryBranch(
+          input.installationId,
+          repository,
+          RESEARCH_REPOSITORY_BRANCH,
+          defaultBranchHead
+        );
+      } catch (creationError) {
+        const status = githubErrorStatus(creationError);
+        if (status !== 409 && status !== 422) {
+          throw creationError;
+        }
+        try {
+          recoveredHeadCommitSha = await getGithubRepositoryBranchHead(
+            input.installationId,
+            repository,
+            RESEARCH_REPOSITORY_BRANCH
+          );
+        } catch {
+          throw creationError;
+        }
+      }
+      headCommitSha =
+        recoveredHeadCommitSha ??
+        (await getGithubRepositoryBranchHead(
+          input.installationId,
+          repository,
+          RESEARCH_REPOSITORY_BRANCH
+        ));
     }
 
     const now = new Date().toISOString();
