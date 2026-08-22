@@ -275,8 +275,6 @@ describe("research repository contracts", () => {
       "branch\\name",
       ".hidden/name",
       "feature/.hidden",
-      "-danger",
-      "feature/-danger",
       "feature..name",
       "@",
       "feature@{one",
@@ -295,6 +293,26 @@ describe("research repository contracts", () => {
           destinationBaseBranch,
         }).success
       ).toBe(false);
+    }
+  });
+
+  it("rejects branch-name components that begin with a hyphen", () => {
+    for (const destinationBaseBranch of ["-danger", "feature/-danger"]) {
+      expect(
+        PublicationBundleV1Schema.safeParse({
+          ...bundle,
+          destinationBaseBranch,
+        }).success
+      ).toBe(false);
+    }
+
+    for (const destinationBaseBranch of ["danger", "feature/danger-name"]) {
+      expect(
+        PublicationBundleV1Schema.safeParse({
+          ...bundle,
+          destinationBaseBranch,
+        }).success
+      ).toBe(true);
     }
   });
 
