@@ -76,6 +76,7 @@ import {
 } from "@/lib/teaching/invitation-helpers";
 import { readGithubResearchCredentials } from "./research-repository/credentials";
 import {
+  createGithubRepositoryBranch,
   getGithubInstallationRepository,
   getGithubRepositoryBranchHead,
 } from "./research-repository/github-app";
@@ -573,12 +574,6 @@ export async function createResearchRepositoryItem(
       "Research repositories must be private"
     );
   }
-  const headCommitSha = await getGithubRepositoryBranchHead(
-    input.installationId,
-    repository,
-    repository.defaultBranch
-  );
-
   return withUserLock(userId, async () => {
     const manifest = await readManifest(userId);
     const duplicate = Object.values(manifest.items).some(
@@ -590,6 +585,35 @@ export async function createResearchRepositoryItem(
       throw new ResearchRepositoryBindingError(
         "repository_already_bound",
         "This repository is already bound to a workspace item"
+      );
+    }
+
+    let headCommitSha: string;
+    try {
+      headCommitSha = await getGithubRepositoryBranchHead(
+        input.installationId,
+        repository,
+        RESEARCH_REPOSITORY_BRANCH
+      );
+    } catch (error) {
+      if (githubErrorStatus(error) !== 404) {
+        throw error;
+      }
+      const defaultBranchHead = await getGithubRepositoryBranchHead(
+        input.installationId,
+        repository,
+        repository.defaultBranch
+      );
+      await createGithubRepositoryBranch(
+        input.installationId,
+        repository,
+        RESEARCH_REPOSITORY_BRANCH,
+        defaultBranchHead
+      );
+      headCommitSha = await getGithubRepositoryBranchHead(
+        input.installationId,
+        repository,
+        RESEARCH_REPOSITORY_BRANCH
       );
     }
 

@@ -31,6 +31,7 @@ vi.mock("@octokit/auth-app", () => ({
 
 import {
   buildGithubAuthorizationUrl,
+  createGithubRepositoryBranch,
   createPkceChallenge,
   exchangeGithubOAuthCode,
   generatePkcePair,
@@ -262,6 +263,28 @@ describe("GitHub App OAuth helpers", () => {
         owner: "octocat",
         repo: "private",
         branch: "evaluchat/workspace",
+      })
+    );
+  });
+
+  it("creates a branch ref with installation auth", async () => {
+    const sha = "a".repeat(40);
+    harness.request.mockResolvedValue({ data: {} });
+
+    await createGithubRepositoryBranch(
+      99,
+      { owner: "octocat", name: "private" },
+      "evaluchat/workspace",
+      sha
+    );
+
+    expect(harness.request).toHaveBeenCalledWith(
+      "POST /repos/{owner}/{repo}/git/refs",
+      expect.objectContaining({
+        owner: "octocat",
+        repo: "private",
+        ref: "refs/heads/evaluchat/workspace",
+        sha,
       })
     );
   });

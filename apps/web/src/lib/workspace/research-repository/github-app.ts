@@ -378,6 +378,23 @@ export async function getGithubRepositoryBranchHead(
   return sha;
 }
 
+/** Create a repository branch with installation-scoped App credentials. */
+export async function createGithubRepositoryBranch(
+  installationId: number,
+  repository: Pick<GithubInstallationRepository, "owner" | "name">,
+  branch: string,
+  sha: string
+): Promise<void> {
+  const octokit = createGithubInstallationOctokit(installationId);
+  await octokit.request("POST /repos/{owner}/{repo}/git/refs", {
+    owner: repository.owner,
+    repo: repository.name,
+    ref: `refs/heads/${branch}`,
+    sha,
+    headers: { "x-github-api-version": GITHUB_API_VERSION },
+  });
+}
+
 /** Mint an installation token on demand. Callers must never persist it. */
 export async function mintGithubInstallationToken(
   installationId: number,
