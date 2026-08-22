@@ -17,15 +17,15 @@ This repo holds **contributor dev docs only**. Public product and research docs 
 
 ## Never write here
 
-- `docs/architecture/` — ADRs and feature design
-- `docs/research/` — threat models, governance, marketing copy
+- `docs/architecture/` — ADRs, feature design, platform security docs
+- `docs/research/` — research copy, marketing HTML
 - `docs/*.html`, `docs/assets/` — legacy static site (removed)
 - Orchestration plans or private strategy
 
 ## Public surfaces
 
-- Product docs → [evaluchat/knowledge](https://github.com/evaluchat/knowledge) → knowledge.evaluchat.org
-- Research / governance → [evaluchat/research](https://github.com/evaluchat/research) → research.evaluchat.org
+- Product docs (including platform security designs) → [evaluchat/knowledge](https://github.com/evaluchat/knowledge) → knowledge.evaluchat.org
+- Research methodology governance → [evaluchat/research](https://github.com/evaluchat/research) → research.evaluchat.org
 - Private plans → knowledge-catalog OKF `evaluchat` bundle
 
 Code + tests + `.env.example` stay in this repo; link to public OKF concepts via `sources:` URLs when documenting shipped behavior.

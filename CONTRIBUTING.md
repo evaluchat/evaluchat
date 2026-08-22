@@ -90,8 +90,8 @@ files only. Don't reformat unrelated files — it pollutes the PR.
 
 This repo holds **contributor dev docs only** (`docs/contributing/`, `docs/electron-desktop/`).
 
-- **Product behavior and feature design** → [evaluchat/knowledge](https://github.com/evaluchat/knowledge) (knowledge.evaluchat.org)
-- **Research methods, evidence, and governance** (including threat models) → [evaluchat/research](https://github.com/evaluchat/research) (research.evaluchat.org)
+- **Product behavior, feature design, and platform security** → [evaluchat/knowledge](https://github.com/evaluchat/knowledge) (knowledge.evaluchat.org)
+- **Research methodology governance** (review protocol, contribution ladder, evidence roles) → [evaluchat/research](https://github.com/evaluchat/research) (research.evaluchat.org)
 
 Do not add ADRs, feature specs, marketing HTML, or orchestration plans under `docs/` in this repository.
 

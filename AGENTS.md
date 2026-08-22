@@ -76,9 +76,9 @@ Unit tests: `cd apps/agents && npx vitest run` and `cd packages/shared && npx vi
 | README, CONTRIBUTING, `docs/contributing/` | `docs/architecture/`, `docs/research/`, `docs/*.html` |
 | Code + tests + `.env.example` | Feature ADRs, threat models, orchestration plans |
 
-Public product docs → [github.com/evaluchat/knowledge](https://github.com/evaluchat/knowledge)
+Public product docs (including platform security designs) → [github.com/evaluchat/knowledge](https://github.com/evaluchat/knowledge)
 
-Public research/governance → [github.com/evaluchat/research](https://github.com/evaluchat/research)
+Public research methodology governance → [github.com/evaluchat/research](https://github.com/evaluchat/research)
 
 Private plans/orchestration → knowledge-catalog OKF `evaluchat` bundle
 
