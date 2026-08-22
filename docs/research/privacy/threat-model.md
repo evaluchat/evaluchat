@@ -133,8 +133,9 @@ GitHub.
 
 ## Verification obligations for later issues
 
-- Prove repository mode performs no LangGraph checkpoint, tracing, log,
-  telemetry, browser-persistence, cache, backup, or queue body writes. Check
+- Prove repository mode performs no LangGraph checkpoint, LangGraph Store,
+  tracing, log, telemetry, browser-persistence, cache, backup, or queue body
+  writes. Check
   `localStorage`, `sessionStorage`, IndexedDB, the Cache API, service-worker
   caches, and persisted state middleware, plus request capture, APM breadcrumbs,
   feature-flag context, session recording, support tooling, metrics labels, and

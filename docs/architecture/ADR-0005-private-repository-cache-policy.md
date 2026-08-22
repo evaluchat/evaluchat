@@ -44,10 +44,12 @@ Installation removal or loss of repository access revokes the repository
 grant, not the user's authorization. GitHub may reject subsequent access or
 token refresh. The workspace then enters the status-model state matching the
 reported condition: `blocked` with `permission_lost` for lost repository access,
-or `read_only` with `authorization_required` for a refresh failure, and offers
-the corresponding reinstall, access-restoration, or reauthorization recovery.
-These events are not treated as user-authorization revocation, and do not by
-themselves assert that both user tokens are invalid.
+or `blocked` with `installation_suspended` for an unavailable installation, and
+offers the corresponding reinstall or access-restoration recovery. Only a
+refresh failure caused by user-grant invalidation maps to `read_only` with
+`authorization_required` and offers reauthorization. Repository-access and
+installation failures are not treated as user-authorization revocation, and do
+not by themselves assert that both user tokens are invalid.
 
 ## Consequences
 
