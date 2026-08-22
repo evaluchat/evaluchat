@@ -1,12 +1,3 @@
----
-type: Evidence
-id: synthetic-evidence
-title: Synthetic future observation
-language: en
-method: /methods/synthetic-method/synthetic-method.en.md
-future_minor_note: preserved by compatible readers
----
+<!-- Layout stub. Canonical content: https://github.com/evaluchat/research/blob/main/methods/synthetic-method/evidence/synthetic-evidence.en.md -->
 
-# Synthetic future observation
-
-An invented participant selected an invented future option.
+synthetic

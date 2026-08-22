@@ -1,11 +1,3 @@
----
-type: Evidence
-id: synthetic-evidence
-title: Synthetic observation
-language: en
-method: /methods/synthetic-method/synthetic-method.en.md
----
+<!-- Layout stub. Canonical content: https://github.com/evaluchat/research/blob/main/methods/synthetic-method/evidence/synthetic-evidence.en.md -->
 
-# Synthetic observation
-
-An invented participant selected the invented option in this fixture.
+synthetic

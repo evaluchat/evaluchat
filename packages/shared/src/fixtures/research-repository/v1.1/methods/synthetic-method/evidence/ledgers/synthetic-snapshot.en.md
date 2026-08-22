@@ -1,14 +1,3 @@
----
-type: Evidence Ledger
-id: synthetic-snapshot
-title: Synthetic future evidence ledger
-language: en
-method: /methods/synthetic-method/synthetic-method.en.md
-future_minor_note: preserved by compatible readers
----
+<!-- Layout stub. Canonical content: https://github.com/evaluchat/research/blob/main/methods/synthetic-method/evidence/ledgers/synthetic-snapshot.en.md -->
 
-# Synthetic future evidence ledger
-
-| Evidence             | Bucket   |
-| -------------------- | -------- |
-| `synthetic-evidence` | Included |
+synthetic

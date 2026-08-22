@@ -1,6 +1,13 @@
 {
   "contract": "evaluchat-research-repository-layout",
   "supportedReaderVersion": "1.0",
+  "canonicalContent": {
+    "repository": "evaluchat/research",
+    "branch": "main",
+    "methodRoot": "methods/synthetic-method",
+    "theoryQuestion": "theory/synthetic-question.en.md",
+    "note": "Research markdown SoT lives in the research catalog. Files under v1.0/ and v1.1/ here are layout path stubs for contract tests only."
+  },
   "compatibility": {
     "supportedVersionAccess": "read-write",
     "unsupportedMajorAccess": "read-only",

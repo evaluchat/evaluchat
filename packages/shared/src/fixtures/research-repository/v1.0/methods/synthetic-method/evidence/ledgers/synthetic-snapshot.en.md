@@ -1,13 +1,3 @@
----
-type: Evidence Ledger
-id: synthetic-snapshot
-title: Synthetic evidence ledger
-language: en
-method: /methods/synthetic-method/synthetic-method.en.md
----
+<!-- Layout stub. Canonical content: https://github.com/evaluchat/research/blob/main/methods/synthetic-method/evidence/ledgers/synthetic-snapshot.en.md -->
 
-# Synthetic evidence ledger
-
-| Evidence             | Bucket   |
-| -------------------- | -------- |
-| `synthetic-evidence` | Included |
+synthetic

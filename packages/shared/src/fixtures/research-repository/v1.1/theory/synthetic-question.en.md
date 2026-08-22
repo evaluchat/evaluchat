@@ -1,3 +1,6 @@
+<!-- Layout stub. Canonical content: https://github.com/evaluchat/research/blob/main/theory/synthetic-question.en.md -->
+
+synthetic
 ---
 type: Research Question
 id: synthetic-question
@@ -8,4 +11,4 @@ future_minor_note: preserved by compatible readers
 
 # Synthetic future-minor question
 
-How does an invented routine behave in a future synthetic layout?
+synthetic layout stub.

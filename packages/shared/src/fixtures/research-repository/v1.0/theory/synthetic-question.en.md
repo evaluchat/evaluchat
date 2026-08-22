@@ -1,10 +1,3 @@
----
-type: Research Question
-id: synthetic-question
-title: A synthetic question for contract testing
-language: en
----
+<!-- Layout stub. Canonical content: https://github.com/evaluchat/research/blob/main/theory/synthetic-question.en.md -->
 
-# Synthetic question
-
-How does an invented classroom routine behave in a synthetic example?
+synthetic

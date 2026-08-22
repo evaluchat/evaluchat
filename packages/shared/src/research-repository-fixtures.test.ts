@@ -6,6 +6,8 @@ import { LedgerSealManifestV1Schema } from "./research-repository.js";
 
 const fixturesRoot = join(__dirname, "fixtures/research-repository");
 
+/** Layout path stubs only — research markdown SoT is evaluchat/research (see fixture-metadata.json). */
+
 const prescribedLayout = [
   ".evaluchat/workspace.yml",
   ".gitignore",
@@ -22,6 +24,13 @@ const prescribedLayout = [
 ].sort();
 
 type FixtureMetadata = {
+  canonicalContent?: {
+    repository: string;
+    branch: string;
+    methodRoot: string;
+    theoryQuestion: string;
+    note: string;
+  };
   supportedReaderVersion: string;
   compatibility: {
     supportedVersionAccess: string;
@@ -81,6 +90,10 @@ describe("research repository layout fixtures", () => {
   it("documents writable v1.0 and read-only compatibility fallbacks", () => {
     const metadata = readMetadata();
 
+    expect(metadata.canonicalContent?.repository).toBe("evaluchat/research");
+    expect(metadata.canonicalContent?.methodRoot).toBe(
+      "methods/synthetic-method"
+    );
     expect(metadata.supportedReaderVersion).toBe("1.0");
     expect(metadata.compatibility.supportedVersionAccess).toBe("read-write");
     expect(metadata.compatibility.unsupportedMajorAccess).toBe("read-only");
