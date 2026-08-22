@@ -80,6 +80,6 @@ Public product docs (including platform security designs) → [github.com/evaluc
 
 Public research methodology governance → [github.com/evaluchat/research](https://github.com/evaluchat/research)
 
-Private plans/orchestration → knowledge-catalog OKF `evaluchat` bundle
+Private strategy and orchestration plans are not stored in this repository.
 
 Allowed paths under `docs/`: `docs/contributing/` and `docs/electron-desktop/` only. CI enforces this allowlist.
