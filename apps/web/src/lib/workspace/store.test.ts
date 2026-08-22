@@ -91,6 +91,10 @@ const harness = vi.hoisted(() => {
         null
     ),
     inviteWorkspaceParticipant: vi.fn(async () => undefined),
+    readGithubResearchCredentials: vi.fn(),
+    createGithubRepositoryBranch: vi.fn(),
+    getGithubInstallationRepository: vi.fn(),
+    getGithubRepositoryBranchHead: vi.fn(),
   };
 });
 
@@ -105,13 +109,23 @@ vi.mock("@/lib/teaching/invitation-helpers", () => ({
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   },
 }));
+vi.mock("./research-repository/credentials", () => ({
+  readGithubResearchCredentials: harness.readGithubResearchCredentials,
+}));
+vi.mock("./research-repository/github-app", () => ({
+  createGithubRepositoryBranch: harness.createGithubRepositoryBranch,
+  getGithubInstallationRepository: harness.getGithubInstallationRepository,
+  getGithubRepositoryBranchHead: harness.getGithubRepositoryBranchHead,
+}));
 
 import {
+  createResearchRepositoryItem,
   createWorkspaceItem,
   createMethodWorkspaceItem,
   deleteWorkspaceItem,
   ensureDefaultWorkspaceItem,
   getMethodParticipantReview,
+  getResearchRepositoryStatus,
   getMethodRun,
   getWorkspaceItem,
   listWorkspaceItems,
@@ -123,6 +137,7 @@ import {
   WorkspaceLockTimeoutError,
   WorkspaceThreadOwnershipError,
   reconcileWorkspaceItemThread,
+  ResearchRepositoryBindingError,
   workspaceLockAcquireTimeoutMs,
   workspaceLockRetryDelayMs,
   workspaceLockTtlMs,
@@ -314,6 +329,337 @@ describe("workspace item lifecycle", () => {
     const lockId = inviteLockId("cronjevh+test1708@gmail.com");
     expect(lockId).not.toMatch(/[.@+]/);
     expect(lockId).toBe("invite_cronjevh_test1708_gmail_com");
+  });
+});
+
+const repositorySha = "a".repeat(40);
+const workspaceBranchSha = "b".repeat(40);
+
+function connectedGithubCredentials(repositoryIds = [101]) {
+  return {
+    tokens: { accessToken: "ghu_access" },
+    installationId: 99,
+    repositoryIds,
+    displayMetadata: {
+      githubUserId: 7,
+      login: "octocat",
+      repositories: [{ id: 101, nameWithOwner: "octocat/private" }],
+    },
+  };
+}
+
+function repositoryWorkspaceItem(layoutVersion = "1.0") {
+  const now = "2026-08-22T10:00:00.000Z";
+  return {
+    id: "wi_repository",
+    ownerId: "user-1",
+    kind: "research_repository" as const,
+    status: "active" as const,
+    createdAt: now,
+    updatedAt: now,
+    binding: {
+      provider: "github" as const,
+      repositoryId: 101,
+      installationId: 99,
+      branch: "evaluchat/workspace" as const,
+      layoutVersion,
+      headCommitSha: repositorySha,
+      boundAt: now,
+    },
+  };
+}
+
+describe("research repository workspace items", () => {
+  beforeEach(() => {
+    harness.state.items.clear();
+    harness.state.threads.clear();
+    harness.readGithubResearchCredentials.mockReset();
+    harness.createGithubRepositoryBranch.mockReset();
+    harness.getGithubInstallationRepository.mockReset();
+    harness.getGithubRepositoryBranchHead.mockReset();
+    harness.readGithubResearchCredentials.mockResolvedValue(
+      connectedGithubCredentials()
+    );
+    harness.getGithubInstallationRepository.mockResolvedValue({
+      id: 101,
+      name: "private",
+      nameWithOwner: "octocat/private",
+      owner: "octocat",
+      private: true,
+      defaultBranch: "main",
+    });
+    harness.getGithubRepositoryBranchHead.mockResolvedValue(workspaceBranchSha);
+    workspaceLockRetryDelayMs.value = defaultLockRetryDelayMs;
+    workspaceLockAcquireTimeoutMs.value = defaultLockAcquireTimeoutMs;
+    workspaceLockTtlMs.value = defaultLockTtlMs;
+  });
+
+  it("binds a private repository from the user's installation", async () => {
+    const item = await createResearchRepositoryItem("user-1", {
+      repositoryId: 101,
+      installationId: 99,
+    });
+
+    expect(item).toMatchObject({
+      ownerId: "user-1",
+      kind: "research_repository",
+      status: "active",
+      binding: {
+        provider: "github",
+        repositoryId: 101,
+        installationId: 99,
+        branch: "evaluchat/workspace",
+        layoutVersion: "1.0",
+        headCommitSha: workspaceBranchSha,
+      },
+    });
+    expect(item.binding.boundAt).toBe(item.createdAt);
+    expect(harness.getGithubRepositoryBranchHead).toHaveBeenCalledWith(
+      99,
+      expect.objectContaining({ defaultBranch: "main" }),
+      "evaluchat/workspace"
+    );
+    expect(harness.createGithubRepositoryBranch).not.toHaveBeenCalled();
+    expect(harness.state.manifest.items[item.id]).toEqual(item);
+  });
+
+  it("creates a missing managed branch from the default head before binding", async () => {
+    harness.getGithubRepositoryBranchHead
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Not found"), { status: 404 })
+      )
+      .mockResolvedValueOnce(repositorySha)
+      .mockResolvedValueOnce(workspaceBranchSha);
+
+    const item = await createResearchRepositoryItem("user-1", {
+      repositoryId: 101,
+      installationId: 99,
+    });
+
+    expect(harness.getGithubRepositoryBranchHead).toHaveBeenNthCalledWith(
+      1,
+      99,
+      expect.objectContaining({ defaultBranch: "main" }),
+      "evaluchat/workspace"
+    );
+    expect(harness.getGithubRepositoryBranchHead).toHaveBeenNthCalledWith(
+      2,
+      99,
+      expect.objectContaining({ defaultBranch: "main" }),
+      "main"
+    );
+    expect(harness.createGithubRepositoryBranch).toHaveBeenCalledWith(
+      99,
+      expect.objectContaining({ owner: "octocat", name: "private" }),
+      "evaluchat/workspace",
+      repositorySha
+    );
+    expect(harness.getGithubRepositoryBranchHead).toHaveBeenNthCalledWith(
+      3,
+      99,
+      expect.objectContaining({ defaultBranch: "main" }),
+      "evaluchat/workspace"
+    );
+    expect(item.binding.headCommitSha).toBe(workspaceBranchSha);
+    expect(harness.state.manifest.items[item.id]).toEqual(item);
+  });
+
+  it.each([409, 422])(
+    "binds after a %i managed branch creation race",
+    async (status) => {
+      const rereadSha = "c".repeat(40);
+      harness.getGithubRepositoryBranchHead
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Not found"), { status: 404 })
+        )
+        .mockResolvedValueOnce(repositorySha)
+        .mockResolvedValueOnce(rereadSha);
+      harness.createGithubRepositoryBranch.mockRejectedValue(
+        Object.assign(new Error("Branch already exists"), { status })
+      );
+
+      const item = await createResearchRepositoryItem("user-1", {
+        repositoryId: 101,
+        installationId: 99,
+      });
+
+      expect(item.binding.headCommitSha).toBe(rereadSha);
+      expect(harness.getGithubRepositoryBranchHead).toHaveBeenCalledTimes(3);
+      expect(harness.state.manifest.items[item.id]).toEqual(item);
+    }
+  );
+
+  it.each([409, 422])(
+    "rethrows the original %i creation error when the branch reread fails",
+    async (status) => {
+      const creationError = Object.assign(new Error("Branch creation failed"), {
+        status,
+      });
+      const rereadError = Object.assign(new Error("GitHub unavailable"), {
+        status: 503,
+      });
+      harness.getGithubRepositoryBranchHead
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Not found"), { status: 404 })
+        )
+        .mockResolvedValueOnce(repositorySha)
+        .mockRejectedValueOnce(rereadError);
+      harness.createGithubRepositoryBranch.mockRejectedValue(creationError);
+
+      await expect(
+        createResearchRepositoryItem("user-1", {
+          repositoryId: 101,
+          installationId: 99,
+        })
+      ).rejects.toBe(creationError);
+      expect(harness.getGithubRepositoryBranchHead).toHaveBeenCalledTimes(3);
+      expect(harness.state.manifest).toBeUndefined();
+    }
+  );
+
+  it("does not bind when managed branch resolution fails unexpectedly", async () => {
+    const failure = Object.assign(new Error("GitHub unavailable"), {
+      status: 503,
+    });
+    harness.getGithubRepositoryBranchHead.mockRejectedValue(failure);
+
+    await expect(
+      createResearchRepositoryItem("user-1", {
+        repositoryId: 101,
+        installationId: 99,
+      })
+    ).rejects.toBe(failure);
+    expect(harness.createGithubRepositoryBranch).not.toHaveBeenCalled();
+    expect(harness.state.manifest).toBeUndefined();
+  });
+
+  it("rejects a public repository", async () => {
+    harness.getGithubInstallationRepository.mockResolvedValue({
+      id: 101,
+      name: "public",
+      nameWithOwner: "octocat/public",
+      owner: "octocat",
+      private: false,
+      defaultBranch: "main",
+    });
+
+    await expect(
+      createResearchRepositoryItem("user-1", {
+        repositoryId: 101,
+        installationId: 99,
+      })
+    ).rejects.toMatchObject({ code: "repository_public" });
+    expect(harness.getGithubRepositoryBranchHead).not.toHaveBeenCalled();
+    expect(harness.state.manifest).toBeUndefined();
+  });
+
+  it("rejects a repository outside the user's installation", async () => {
+    harness.readGithubResearchCredentials.mockResolvedValue(
+      connectedGithubCredentials([])
+    );
+
+    await expect(
+      createResearchRepositoryItem("user-1", {
+        repositoryId: 101,
+        installationId: 99,
+      })
+    ).rejects.toMatchObject({ code: "repository_unavailable" });
+    expect(harness.getGithubInstallationRepository).not.toHaveBeenCalled();
+  });
+
+  it("rejects an installation the user does not own", async () => {
+    await expect(
+      createResearchRepositoryItem("user-1", {
+        repositoryId: 101,
+        installationId: 100,
+      })
+    ).rejects.toMatchObject({ code: "installation_unavailable" });
+    expect(harness.getGithubInstallationRepository).not.toHaveBeenCalled();
+  });
+
+  it("allows only one item to bind a repository", async () => {
+    await createResearchRepositoryItem("user-1", {
+      repositoryId: 101,
+      installationId: 99,
+    });
+
+    await expect(
+      createResearchRepositoryItem("user-1", {
+        repositoryId: 101,
+        installationId: 99,
+      })
+    ).rejects.toBeInstanceOf(ResearchRepositoryBindingError);
+    expect(harness.getGithubRepositoryBranchHead).toHaveBeenCalledTimes(1);
+    expect(Object.keys(harness.state.manifest.items)).toHaveLength(1);
+  });
+
+  it("normalises stored repository items even while the flag is off", async () => {
+    const item = await createResearchRepositoryItem("user-1", {
+      repositoryId: 101,
+      installationId: 99,
+    });
+    vi.stubEnv("GITHUB_RESEARCH_WORKSPACES_ENABLED", "false");
+
+    await expect(listWorkspaceItems("user-1")).resolves.toEqual([item]);
+    vi.unstubAllEnvs();
+  });
+
+  it("reports a ready repository from the managed branch head", async () => {
+    harness.getGithubRepositoryBranchHead.mockResolvedValue(workspaceBranchSha);
+
+    await expect(
+      getResearchRepositoryStatus("user-1", repositoryWorkspaceItem())
+    ).resolves.toMatchObject({
+      workspaceId: "wi_repository",
+      repositoryId: 101,
+      state: "ready",
+      layoutVersion: "1.0",
+      headCommitSha: workspaceBranchSha,
+    });
+  });
+
+  it("blocks a repository that became public", async () => {
+    harness.getGithubInstallationRepository.mockResolvedValue({
+      id: 101,
+      name: "private",
+      nameWithOwner: "octocat/private",
+      owner: "octocat",
+      private: false,
+      defaultBranch: "main",
+    });
+
+    await expect(
+      getResearchRepositoryStatus("user-1", repositoryWorkspaceItem())
+    ).resolves.toMatchObject({
+      state: "blocked",
+      reason: "repository_public",
+    });
+  });
+
+  it("blocks a repository when the managed branch was deleted", async () => {
+    harness.getGithubRepositoryBranchHead.mockRejectedValue(
+      Object.assign(new Error("Not found"), { status: 404 })
+    );
+
+    await expect(
+      getResearchRepositoryStatus("user-1", repositoryWorkspaceItem())
+    ).resolves.toMatchObject({
+      state: "blocked",
+      reason: "branch_deleted",
+    });
+  });
+
+  it("opens an unsupported layout read-only", async () => {
+    harness.getGithubRepositoryBranchHead.mockResolvedValue(workspaceBranchSha);
+
+    await expect(
+      getResearchRepositoryStatus("user-1", repositoryWorkspaceItem("1.1"))
+    ).resolves.toMatchObject({
+      state: "read_only",
+      reason: "unsupported_layout_minor",
+      layoutVersion: "1.1",
+      headCommitSha: workspaceBranchSha,
+    });
   });
 });
 

@@ -31,9 +31,12 @@ vi.mock("@octokit/auth-app", () => ({
 
 import {
   buildGithubAuthorizationUrl,
+  createGithubRepositoryBranch,
   createPkceChallenge,
   exchangeGithubOAuthCode,
   generatePkcePair,
+  getGithubInstallationRepository,
+  getGithubRepositoryBranchHead,
   mintGithubInstallationToken,
   refreshGithubUserToken,
   refreshGithubUserTokenIfNeeded,
@@ -215,5 +218,74 @@ describe("GitHub App OAuth helpers", () => {
       installationId: 99,
       repositoryIds: [101],
     });
+  });
+
+  it("reads private repository metadata with installation auth", async () => {
+    harness.request.mockResolvedValue({
+      data: {
+        id: 101,
+        name: "private",
+        full_name: "octocat/private",
+        private: true,
+        default_branch: "main",
+        owner: { login: "octocat" },
+      },
+    });
+
+    await expect(getGithubInstallationRepository(99, 101)).resolves.toEqual({
+      id: 101,
+      name: "private",
+      nameWithOwner: "octocat/private",
+      owner: "octocat",
+      private: true,
+      defaultBranch: "main",
+    });
+    expect(harness.request).toHaveBeenCalledWith(
+      "GET /repositories/{repository_id}",
+      expect.objectContaining({ repository_id: 101 })
+    );
+  });
+
+  it("reads a branch head with installation auth", async () => {
+    const sha = "a".repeat(40);
+    harness.request.mockResolvedValue({ data: { commit: { sha } } });
+
+    await expect(
+      getGithubRepositoryBranchHead(
+        99,
+        { owner: "octocat", name: "private" },
+        "evaluchat/workspace"
+      )
+    ).resolves.toBe(sha);
+    expect(harness.request).toHaveBeenCalledWith(
+      "GET /repos/{owner}/{repo}/branches/{branch}",
+      expect.objectContaining({
+        owner: "octocat",
+        repo: "private",
+        branch: "evaluchat/workspace",
+      })
+    );
+  });
+
+  it("creates a branch ref with installation auth", async () => {
+    const sha = "a".repeat(40);
+    harness.request.mockResolvedValue({ data: {} });
+
+    await createGithubRepositoryBranch(
+      99,
+      { owner: "octocat", name: "private" },
+      "evaluchat/workspace",
+      sha
+    );
+
+    expect(harness.request).toHaveBeenCalledWith(
+      "POST /repos/{owner}/{repo}/git/refs",
+      expect.objectContaining({
+        owner: "octocat",
+        repo: "private",
+        ref: "refs/heads/evaluchat/workspace",
+        sha,
+      })
+    );
   });
 });

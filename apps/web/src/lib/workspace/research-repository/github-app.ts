@@ -34,6 +34,19 @@ type GithubRepository = {
   full_name?: unknown;
 };
 
+type GithubRepositoryResponse = {
+  id?: unknown;
+  name?: unknown;
+  full_name?: unknown;
+  private?: unknown;
+  default_branch?: unknown;
+  owner?: { login?: unknown } | null;
+};
+
+type GithubBranchResponse = {
+  commit?: { sha?: unknown } | null;
+};
+
 export type GithubResearchOAuthTokens = {
   accessToken: string;
   refreshToken?: string;
@@ -51,6 +64,15 @@ export type GithubResearchConnection = {
     installationAccount?: string;
     repositories: Array<{ id: number; nameWithOwner?: string }>;
   };
+};
+
+export type GithubInstallationRepository = {
+  id: number;
+  name: string;
+  nameWithOwner: string;
+  owner: string;
+  private: boolean;
+  defaultBranch: string;
 };
 
 function requiredEnvironment(name: string): string {
@@ -295,6 +317,81 @@ export function createGithubInstallationOctokit(
   return new Octokit({
     authStrategy: createAppAuth,
     auth: githubAppAuthOptions(installationId),
+  });
+}
+
+/** Read repository metadata with installation-scoped App credentials. */
+export async function getGithubInstallationRepository(
+  installationId: number,
+  repositoryId: number
+): Promise<GithubInstallationRepository> {
+  const octokit = createGithubInstallationOctokit(installationId);
+  const response = await octokit.request("GET /repositories/{repository_id}", {
+    repository_id: repositoryId,
+    headers: { "x-github-api-version": GITHUB_API_VERSION },
+  });
+  const repository = response.data as GithubRepositoryResponse;
+  if (
+    repository.id !== repositoryId ||
+    typeof repository.name !== "string" ||
+    !repository.name ||
+    typeof repository.full_name !== "string" ||
+    !repository.full_name ||
+    typeof repository.private !== "boolean" ||
+    typeof repository.default_branch !== "string" ||
+    !repository.default_branch ||
+    typeof repository.owner?.login !== "string" ||
+    !repository.owner.login
+  ) {
+    throw new Error("GitHub returned invalid repository metadata");
+  }
+  return {
+    id: repositoryId,
+    name: repository.name,
+    nameWithOwner: repository.full_name,
+    owner: repository.owner.login,
+    private: repository.private,
+    defaultBranch: repository.default_branch,
+  };
+}
+
+/** Resolve the current head of one branch without retaining an App token. */
+export async function getGithubRepositoryBranchHead(
+  installationId: number,
+  repository: Pick<GithubInstallationRepository, "owner" | "name">,
+  branch: string
+): Promise<string> {
+  const octokit = createGithubInstallationOctokit(installationId);
+  const response = await octokit.request(
+    "GET /repos/{owner}/{repo}/branches/{branch}",
+    {
+      owner: repository.owner,
+      repo: repository.name,
+      branch,
+      headers: { "x-github-api-version": GITHUB_API_VERSION },
+    }
+  );
+  const sha = (response.data as GithubBranchResponse).commit?.sha;
+  if (typeof sha !== "string" || !/^[0-9a-f]{40}$/.test(sha)) {
+    throw new Error("GitHub returned an invalid branch head");
+  }
+  return sha;
+}
+
+/** Create a repository branch with installation-scoped App credentials. */
+export async function createGithubRepositoryBranch(
+  installationId: number,
+  repository: Pick<GithubInstallationRepository, "owner" | "name">,
+  branch: string,
+  sha: string
+): Promise<void> {
+  const octokit = createGithubInstallationOctokit(installationId);
+  await octokit.request("POST /repos/{owner}/{repo}/git/refs", {
+    owner: repository.owner,
+    repo: repository.name,
+    ref: `refs/heads/${branch}`,
+    sha,
+    headers: { "x-github-api-version": GITHUB_API_VERSION },
   });
 }
 

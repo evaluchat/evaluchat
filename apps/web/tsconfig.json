@@ -18,7 +18,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@opencanvas/shared/github-research/crypto": [
+        "../../packages/shared/src/github-research/crypto.ts"
+      ],
+      "@opencanvas/shared/research-repository": [
+        "../../packages/shared/src/research-repository.ts"
+      ]
     },
     "target": "ES2017"
   },

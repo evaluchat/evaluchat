@@ -103,6 +103,9 @@ export function ownParticipantItemId(
 }
 
 export function workspaceItemTitle(item: WorkspaceItem): string {
+  if (item.kind === "research_repository") {
+    return "Private research repository";
+  }
   if (item.kind === "ledger_snapshot") return "Ledger Snapshot";
   if (item.kind === "ledger")
     return item.source.methodTitle || "Evidence Ledger";
@@ -115,6 +118,9 @@ export function workspaceItemTitle(item: WorkspaceItem): string {
 }
 
 export function workspaceItemDescription(item: WorkspaceItem): string {
+  if (item.kind === "research_repository") {
+    return `GitHub repository #${item.binding.repositoryId}`;
+  }
   if (item.kind === "ledger_snapshot") return item.snapshot.predicate;
   if (item.kind === "ledger") {
     return `${item.source.methodId}@${item.source.methodVersion}`;
@@ -130,6 +136,7 @@ export function workspaceItemDescription(item: WorkspaceItem): string {
 }
 
 export function workspaceItemKicker(item: WorkspaceItem): string | undefined {
+  if (item.kind === "research_repository") return "RESEARCH REPOSITORY";
   if (item.kind === "ledger") return "EVIDENCE LEDGER";
   if (item.kind === "ledger_snapshot") return "LEDGER SNAPSHOT";
   if (item.kind === "method" && !item.run) return "METHOD DRAFT";
@@ -161,6 +168,12 @@ export type WorkspaceItemType = {
 
 export function workspaceItemType(item: WorkspaceItem): WorkspaceItemType {
   switch (item.kind) {
+    case "research_repository":
+      return {
+        label: "Research repository",
+        colorClass: "border-teal-200 bg-teal-50 text-teal-700",
+        iconClass: "text-teal-600",
+      };
     case "form_template":
       return {
         label: "Form template",
