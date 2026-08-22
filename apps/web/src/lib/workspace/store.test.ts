@@ -138,6 +138,7 @@ import {
   WorkspaceThreadOwnershipError,
   reconcileWorkspaceItemThread,
   ResearchRepositoryBindingError,
+  updateResearchRepositoryBindingHead,
   workspaceLockAcquireTimeoutMs,
   workspaceLockRetryDelayMs,
   workspaceLockTtlMs,
@@ -616,6 +617,25 @@ describe("research repository workspace items", () => {
       layoutVersion: "1.0",
       headCommitSha: workspaceBranchSha,
     });
+  });
+
+  it("updates only the repository binding head during reconciliation", async () => {
+    const item = repositoryWorkspaceItem();
+    harness.state.manifest = {
+      initialized: true,
+      items: { [item.id]: item },
+    };
+    const reconciledHead = "c".repeat(40);
+
+    const updated = await updateResearchRepositoryBindingHead(
+      "user-1",
+      item.id,
+      reconciledHead
+    );
+
+    expect(updated.binding.headCommitSha).toBe(reconciledHead);
+    expect(harness.state.manifest.items[item.id]).toEqual(updated);
+    expect(JSON.stringify(harness.state.manifest)).not.toContain("content");
   });
 
   it("blocks a repository that became public", async () => {
