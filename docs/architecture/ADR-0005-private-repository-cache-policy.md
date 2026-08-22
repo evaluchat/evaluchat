@@ -34,11 +34,20 @@ switch, authorization loss, and terminal repository state. Browser extensions,
 screen capture, swap, and compromised endpoints remain outside guarantees that
 a web application can enforce and are disclosed as residual risk.
 
-App or repository-authorization revocation takes precedence over token-expiry
-draft recovery. GitHub App authorization revocation invalidates the associated
-access and refresh tokens; app or repository-authorization revocation therefore
-clears in-memory content and prevents refresh, even when refresh-token expiry
-would otherwise preserve uncommitted text briefly for copy or download.
+User authorization and App installation are separate GitHub grants. Revocation
+of the user's GitHub App authorization invalidates the associated access and
+refresh tokens; the client clears in-memory content and refuses refresh, even
+when refresh-token expiry would otherwise preserve uncommitted text briefly for
+copy or download.
+
+Installation removal or loss of repository access revokes the repository
+grant, not the user's authorization. GitHub may reject subsequent access or
+token refresh. The workspace then enters the status-model state matching the
+reported condition: `blocked` with `permission_lost` for lost repository access,
+or `read_only` with `authorization_required` for a refresh failure, and offers
+the corresponding reinstall, access-restoration, or reauthorization recovery.
+These events are not treated as user-authorization revocation, and do not by
+themselves assert that both user tokens are invalid.
 
 ## Consequences
 

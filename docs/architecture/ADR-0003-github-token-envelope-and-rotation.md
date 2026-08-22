@@ -18,10 +18,13 @@ six months for its refresh token. GitHub rotates both values during refresh.
 ## Decision
 
 The authorization-code exchange accepts only an expiring user-token response.
-At issuance, the flow rejects a response missing `refresh_token`, `expires_in`,
-or `refresh_token_expires_in` and requires reauthorization. GitHub omits these
-fields when user-token expiration is disabled; Evaluchat never persists that
-non-expiring credential response.
+At issuance, the flow requires non-empty string values for `access_token` and
+`refresh_token`, positive integer values for `expires_in` and
+`refresh_token_expires_in`, and `token_type: "bearer"`. Any response that is
+missing a field or contains an empty, mistyped, non-positive, or otherwise
+invalid value is rejected and requires reauthorization. GitHub omits the
+expiry and refresh fields when user-token expiration is disabled; Evaluchat
+never persists that non-expiring credential response.
 
 Persist access and refresh tokens only inside a dedicated server-side
 AES-256-GCM envelope. Each encrypted field records:
