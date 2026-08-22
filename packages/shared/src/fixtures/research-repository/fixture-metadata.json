@@ -6,8 +6,21 @@
     "branch": "main",
     "methodRoot": "methods/synthetic-method",
     "theoryQuestion": "theory/synthetic-question.en.md",
-    "note": "Research markdown SoT lives in the research catalog. Files under v1.0/ and v1.1/ here are layout path stubs for contract tests only."
+    "note": "Research markdown (methods, theory, findings, ledgers) lives only in the research catalog."
   },
+  "requiredManagedPaths": [
+    ".evaluchat/workspace.yml",
+    ".gitignore",
+    "CITATION.cff",
+    "index.md",
+    "findings/synthetic-finding.en.md",
+    "methods/synthetic-method/evidence-template.en.md",
+    "methods/synthetic-method/evidence/ledgers/synthetic-snapshot.en.md",
+    "methods/synthetic-method/evidence/ledgers/synthetic-snapshot.seal.yml",
+    "methods/synthetic-method/evidence/synthetic-evidence.en.md",
+    "methods/synthetic-method/synthetic-method.en.md",
+    "theory/synthetic-question.en.md"
+  ],
   "compatibility": {
     "supportedVersionAccess": "read-write",
     "unsupportedMajorAccess": "read-only",

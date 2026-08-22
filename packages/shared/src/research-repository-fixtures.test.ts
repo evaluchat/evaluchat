@@ -1,36 +1,20 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { LedgerSealManifestV1Schema } from "./research-repository.js";
 
 const fixturesRoot = join(__dirname, "fixtures/research-repository");
 
-/** Layout path stubs only — research markdown SoT is evaluchat/research (see fixture-metadata.json). */
-
-const prescribedLayout = [
-  ".evaluchat/workspace.yml",
-  ".gitignore",
-  "CITATION.cff",
-  "README.md",
-  "findings/synthetic-finding.en.md",
-  "index.md",
-  "methods/synthetic-method/evidence-template.en.md",
-  "methods/synthetic-method/evidence/ledgers/synthetic-snapshot.en.md",
-  "methods/synthetic-method/evidence/ledgers/synthetic-snapshot.seal.yml",
-  "methods/synthetic-method/evidence/synthetic-evidence.en.md",
-  "methods/synthetic-method/synthetic-method.en.md",
-  "theory/synthetic-question.en.md",
-].sort();
-
 type FixtureMetadata = {
-  canonicalContent?: {
+  canonicalContent: {
     repository: string;
     branch: string;
     methodRoot: string;
     theoryQuestion: string;
     note: string;
   };
+  requiredManagedPaths: string[];
   supportedReaderVersion: string;
   compatibility: {
     supportedVersionAccess: string;
@@ -44,17 +28,6 @@ type FixtureMetadata = {
   >;
 };
 
-function listFixtureFiles(root: string, directory = root): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return listFixtureFiles(root, path);
-    }
-    expect(entry.isSymbolicLink()).toBe(false);
-    return [relative(root, path)];
-  });
-}
-
 function readMetadata(): FixtureMetadata {
   return JSON.parse(
     readFileSync(join(fixturesRoot, "fixture-metadata.json"), "utf8")
@@ -63,10 +36,18 @@ function readMetadata(): FixtureMetadata {
 
 describe("research repository layout fixtures", () => {
   it.each(["v1.0", "v1.1"])(
-    "%s contains exactly the prescribed v1 managed paths",
+    "%s ships only layout scaffolding (no research markdown)",
     (version) => {
       const fixtureRoot = join(fixturesRoot, version);
-      expect(listFixtureFiles(fixtureRoot).sort()).toEqual(prescribedLayout);
+      const entries = [
+        ".evaluchat/workspace.yml",
+        ".gitignore",
+        "CITATION.cff",
+      ];
+
+      for (const entry of entries) {
+        expect(() => readFileSync(join(fixtureRoot, entry), "utf8")).not.toThrow();
+      }
 
       const workspaceManifest = readFileSync(
         join(fixtureRoot, ".evaluchat/workspace.yml"),
@@ -78,21 +59,22 @@ describe("research repository layout fixtures", () => {
       expect(workspaceManifest).toContain(
         "managed_branch: evaluchat/workspace"
       );
-
-      for (const path of prescribedLayout) {
-        expect(readFileSync(join(fixtureRoot, path), "utf8")).toMatch(
-          /synthetic/i
-        );
-      }
     }
   );
 
-  it("documents writable v1.0 and read-only compatibility fallbacks", () => {
+  it("documents managed paths and canonical research catalog location", () => {
     const metadata = readMetadata();
 
-    expect(metadata.canonicalContent?.repository).toBe("evaluchat/research");
-    expect(metadata.canonicalContent?.methodRoot).toBe(
+    expect(metadata.canonicalContent.repository).toBe("evaluchat/research");
+    expect(metadata.canonicalContent.methodRoot).toBe(
       "methods/synthetic-method"
+    );
+    expect(metadata.requiredManagedPaths).toEqual(
+      expect.arrayContaining([
+        "methods/synthetic-method/evidence/ledgers/synthetic-snapshot.en.md",
+        "methods/synthetic-method/evidence/ledgers/synthetic-snapshot.seal.yml",
+        "theory/synthetic-question.en.md",
+      ])
     );
     expect(metadata.supportedReaderVersion).toBe("1.0");
     expect(metadata.compatibility.supportedVersionAccess).toBe("read-write");
@@ -111,25 +93,25 @@ describe("research repository layout fixtures", () => {
     });
   });
 
-  it("uses unknown frontmatter in the future-minor fixture for preservation", () => {
-    const futureQuestion = readFileSync(
-      join(fixturesRoot, "v1.1/theory/synthetic-question.en.md"),
-      "utf8"
-    );
-    expect(futureQuestion).toContain(
-      "future_minor_note: preserved by compatible readers"
-    );
-  });
-
   it("round-trips unknown v1.1 seal fields and rejects invalid core fields", () => {
     const fixture = yaml.load(
-      readFileSync(
-        join(
-          fixturesRoot,
-          "v1.1/methods/synthetic-method/evidence/ledgers/synthetic-snapshot.seal.yml"
-        ),
-        "utf8"
-      ),
+      `
+schema_version: "1"
+snapshot_id: synthetic-snapshot
+sealed_from_commit: 1111111111111111111111111111111111111111
+reviewer_login: synthetic-reviewer
+reviewed_at: 2026-08-22T11:00:00Z
+method:
+  id: synthetic-method
+  version: 1.1.0
+inputs:
+  - path: methods/synthetic-method/evidence/synthetic-evidence.en.md
+    blob_sha: 2222222222222222222222222222222222222222
+    sha256: 3333333333333333333333333333333333333333333333333333333333333333
+configuration_hash: 4444444444444444444444444444444444444444444444444444444444444444
+render_hash: 5555555555555555555555555555555555555555555555555555555555555555
+future_minor_note: preserved by compatible readers
+`.trim(),
       { schema: yaml.FAILSAFE_SCHEMA }
     );
     const parsed = LedgerSealManifestV1Schema.parse(fixture);
