@@ -49,6 +49,7 @@ const BranchNameSchema = z
 
     return (
       branch !== "@" &&
+      !branch.startsWith("-") &&
       !branch.includes("..") &&
       !branch.includes("@{") &&
       !branch.endsWith(".") &&
@@ -56,7 +57,7 @@ const BranchNameSchema = z
       components.every(
         (component) =>
           component.length > 0 &&
-          !/^[.-]/.test(component) &&
+          !component.startsWith(".") &&
           !component.endsWith(".lock")
       )
     );
