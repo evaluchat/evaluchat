@@ -91,7 +91,7 @@ async function withUserLock<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   const predecessor = userOperationTails.get(userId) ?? Promise.resolve();
-  let release = () => {};
+  let release: () => void = () => undefined;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
