@@ -202,19 +202,10 @@ export async function resolveGithubResearchConnection(
     octokit.request("GET /user", {
       headers: { "x-github-api-version": GITHUB_API_VERSION },
     }),
-    octokit.paginate(
-      "GET /user/installations",
-      {
-        per_page: 100,
-        headers: { "x-github-api-version": GITHUB_API_VERSION },
-      },
-      (response: { data: unknown }) => {
-        const data = response.data as { installations?: unknown };
-        return Array.isArray(data.installations)
-          ? (data.installations as GithubInstallation[])
-          : [];
-      }
-    ),
+    octokit.paginate(octokit.rest.apps.listInstallationsForAuthenticatedUser, {
+      per_page: 100,
+      headers: { "x-github-api-version": GITHUB_API_VERSION },
+    }),
   ]);
   const user = userResponse.data as GithubUserResponse;
   if (typeof user.id !== "number" || typeof user.login !== "string") {
@@ -249,17 +240,11 @@ export async function resolveGithubResearchConnection(
   let repositories: GithubRepository[] = [];
   if (installationId !== undefined) {
     repositories = await octokit.paginate(
-      "GET /user/installations/{installation_id}/repositories",
+      octokit.rest.apps.listInstallationReposForAuthenticatedUser,
       {
         installation_id: installationId,
         per_page: 100,
         headers: { "x-github-api-version": GITHUB_API_VERSION },
-      },
-      (response: { data: unknown }) => {
-        const data = response.data as { repositories?: unknown };
-        return Array.isArray(data.repositories)
-          ? (data.repositories as GithubRepository[])
-          : [];
       }
     );
   }

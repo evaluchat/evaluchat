@@ -4,11 +4,21 @@ const harness = vi.hoisted(() => ({
   request: vi.fn(),
   paginate: vi.fn(),
   auth: vi.fn(),
+  listInstallationsForAuthenticatedUser: vi.fn(),
+  listInstallationReposForAuthenticatedUser: vi.fn(),
   Octokit: vi.fn(function OctokitMock() {
     return {
       request: harness.request,
       paginate: harness.paginate,
       auth: harness.auth,
+      rest: {
+        apps: {
+          listInstallationsForAuthenticatedUser:
+            harness.listInstallationsForAuthenticatedUser,
+          listInstallationReposForAuthenticatedUser:
+            harness.listInstallationReposForAuthenticatedUser,
+        },
+      },
     };
   }),
   createAppAuth: vi.fn(),
@@ -152,15 +162,13 @@ describe("GitHub App OAuth helpers", () => {
     });
     expect(harness.paginate).toHaveBeenNthCalledWith(
       1,
-      "GET /user/installations",
-      expect.objectContaining({ per_page: 100 }),
-      expect.any(Function)
+      harness.listInstallationsForAuthenticatedUser,
+      expect.objectContaining({ per_page: 100 })
     );
     expect(harness.paginate).toHaveBeenNthCalledWith(
       2,
-      "GET /user/installations/{installation_id}/repositories",
-      expect.objectContaining({ installation_id: 99, per_page: 100 }),
-      expect.any(Function)
+      harness.listInstallationReposForAuthenticatedUser,
+      expect.objectContaining({ installation_id: 99, per_page: 100 })
     );
   });
 

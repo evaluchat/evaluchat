@@ -46,7 +46,9 @@ describe("research repository layout fixtures", () => {
       ];
 
       for (const entry of entries) {
-        expect(() => readFileSync(join(fixtureRoot, entry), "utf8")).not.toThrow();
+        expect(() =>
+          readFileSync(join(fixtureRoot, entry), "utf8")
+        ).not.toThrow();
       }
 
       const workspaceManifest = readFileSync(
