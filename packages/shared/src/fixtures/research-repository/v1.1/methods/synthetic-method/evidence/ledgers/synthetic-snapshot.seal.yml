@@ -1,0 +1,15 @@
+schema_version: "1"
+snapshot_id: synthetic-snapshot
+sealed_from_commit: 1111111111111111111111111111111111111111
+reviewer_login: synthetic-reviewer
+reviewed_at: 2026-08-22T11:00:00Z
+method:
+  id: synthetic-method
+  version: 1.1.0
+inputs:
+  - path: methods/synthetic-method/evidence/synthetic-evidence.en.md
+    blob_sha: 2222222222222222222222222222222222222222
+    sha256: 3333333333333333333333333333333333333333333333333333333333333333
+configuration_hash: 4444444444444444444444444444444444444444444444444444444444444444
+render_hash: 5555555555555555555555555555555555555555555555555555555555555555
+future_minor_note: preserved by compatible readers
