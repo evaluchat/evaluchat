@@ -7,6 +7,7 @@ import {
 } from "./github-app";
 import {
   identifyRepositoryArtifactPath,
+  RepositoryLayoutError,
   validateRepositoryArtifactContent,
   validateRepositoryArtifactCount,
   validateRepositoryArtifactMode,
@@ -234,7 +235,10 @@ export async function commitArtifactBlobs(
   for (const file of input.files) {
     validateRepositoryArtifactContent(file.path, file.content);
     if (paths.has(file.path))
-      throw new Error(`Duplicate artifact path ${file.path}`);
+      throw new RepositoryLayoutError(
+        "INVALID_ARTIFACT_PATH",
+        `Duplicate artifact path ${file.path}`
+      );
     paths.add(file.path);
   }
 

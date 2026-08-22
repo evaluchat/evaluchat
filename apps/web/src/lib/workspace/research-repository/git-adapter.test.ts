@@ -17,6 +17,7 @@ import {
   listRepositoryArtifactRefs,
   StaleRepositoryError,
 } from "./git-adapter";
+import { RepositoryLayoutError } from "./layout";
 
 const repository = { owner: "octocat", name: "private" };
 const baseSha = "a".repeat(40);
@@ -204,6 +205,25 @@ describe("GitHub repository Git Data adapter", () => {
         ],
       })
     ).rejects.toThrow(/Symbolic-link-looking/);
+    expect(harness.getHead).not.toHaveBeenCalled();
+    expect(harness.request).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate artifact paths with a layout error code", async () => {
+    const duplicatePath = "index.md";
+
+    await expect(
+      commitArtifactBlobs(99, repository, "evaluchat/workspace", {
+        message: "Update notes",
+        baseSha,
+        files: [
+          { path: duplicatePath, content: "First\n" },
+          { path: duplicatePath, content: "Second\n" },
+        ],
+      })
+    ).rejects.toMatchObject<Partial<RepositoryLayoutError>>({
+      code: "INVALID_ARTIFACT_PATH",
+    });
     expect(harness.getHead).not.toHaveBeenCalled();
     expect(harness.request).not.toHaveBeenCalled();
   });

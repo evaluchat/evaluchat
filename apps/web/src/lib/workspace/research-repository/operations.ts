@@ -146,9 +146,11 @@ export async function claimRepositoryOperation(
       createdAt: now,
       updatedAt: now,
     });
-    // withUserLock only serializes bookkeeping in this process. Deterministic
-    // Store identity prevents cross-instance claims from replacing one another;
-    // the non-forced GitHub ref update remains the authoritative mutation CAS.
+    // withUserLock only serializes bookkeeping in this process. Store lifecycle
+    // writes are advisory bookkeeping with deterministic keys; the Git ref update
+    // (force:false) is the CAS of record for commits. Residual cross-instance
+    // status drift is bounded and corrected by reconcile-on-reclaim (GitHub-head
+    // reconciliation).
     await writeOperation(userId, operation);
     return operation;
   });

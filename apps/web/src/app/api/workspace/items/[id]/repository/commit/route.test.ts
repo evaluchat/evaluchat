@@ -265,9 +265,7 @@ describe("POST repository artifact commit", () => {
   });
 
   it("returns a redacted 4xx layout error without logging its path", async () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, "error").mockImplementation(vi.fn());
     harness.commitArtifacts.mockRejectedValue(
       new RepositoryLayoutError(
         "SYMLINK_ARTIFACT",
