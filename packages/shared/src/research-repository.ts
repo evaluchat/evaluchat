@@ -1,6 +1,3 @@
-// Zod is supplied by this package's existing @langchain/core runtime dependency;
-// the v0.8 contract scope intentionally excludes package-manifest changes.
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { z } from "zod";
 
 const IdentifierSchema = z
@@ -39,15 +36,32 @@ const BranchNameSchema = z
   .string()
   .min(1)
   .max(255)
-  .refine(
-    (branch) =>
-      !branch.startsWith("/") &&
-      !branch.endsWith("/") &&
+  .refine((branch) => {
+    const components = branch.split("/");
+    const hasForbiddenCharacter = Array.from(branch).some((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return (
+        codePoint <= 0x20 ||
+        codePoint === 0x7f ||
+        "~^:?*[\\".includes(character)
+      );
+    });
+
+    return (
+      branch !== "@" &&
       !branch.includes("..") &&
-      !branch.includes("//") &&
-      !branch.endsWith(".lock"),
-    "Expected a normalized Git branch name"
-  );
+      !branch.includes("@{") &&
+      !branch.endsWith(".") &&
+      !hasForbiddenCharacter &&
+      components.every(
+        (component) =>
+          component.length > 0 &&
+          !component.startsWith(".") &&
+          !component.startsWith("-") &&
+          !component.endsWith(".lock")
+      )
+    );
+  }, "Expected a valid Git branch name");
 
 const ArtifactKindSchema = z.enum([
   "workspace_manifest",
@@ -115,27 +129,48 @@ export type ResearchRepositoryWorkspaceItem = z.infer<
   typeof ResearchRepositoryWorkspaceItemSchema
 >;
 
+const RepositoryStatusReasonSchema = z.enum([
+  "unsupported_layout_major",
+  "unsupported_layout_minor",
+  "repository_public",
+  "repository_deleted",
+  "permission_lost",
+  "installation_suspended",
+  "branch_deleted",
+  "protection_failure",
+  "force_push",
+  "authorization_required",
+  "credential_corrupt",
+  "disconnected",
+]);
+
+type RepositoryStatusReason = z.infer<typeof RepositoryStatusReasonSchema>;
+
+/** The fixed state for every non-ready repository reason. */
+const RepositoryStatusStateByReason: Record<
+  RepositoryStatusReason,
+  "read_only" | "blocked" | "disconnected"
+> = {
+  unsupported_layout_major: "read_only",
+  unsupported_layout_minor: "read_only",
+  repository_public: "blocked",
+  repository_deleted: "blocked",
+  permission_lost: "blocked",
+  installation_suspended: "blocked",
+  branch_deleted: "blocked",
+  protection_failure: "blocked",
+  force_push: "blocked",
+  authorization_required: "read_only",
+  credential_corrupt: "blocked",
+  disconnected: "disconnected",
+};
+
 export const RepositoryStatusSchema = z
   .object({
     workspaceId: OpaqueIdSchema,
     repositoryId: GithubNumericIdSchema,
     state: z.enum(["ready", "read_only", "blocked", "disconnected"]),
-    reason: z
-      .enum([
-        "unsupported_layout_major",
-        "unsupported_layout_minor",
-        "repository_public",
-        "repository_deleted",
-        "permission_lost",
-        "installation_suspended",
-        "branch_missing",
-        "branch_protection_failed",
-        "force_push_detected",
-        "authorization_required",
-        "credential_corrupt",
-        "disconnected",
-      ])
-      .optional(),
+    reason: RepositoryStatusReasonSchema.optional(),
     layoutVersion: LayoutVersionSchema.optional(),
     headCommitSha: CommitShaSchema.optional(),
     checkedAt: TimestampSchema,
@@ -164,12 +199,22 @@ export const RepositoryStatusSchema = z
           message: "A ready repository requires its head commit",
         });
       }
-    } else if (status.reason === undefined) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["reason"],
-        message: "A non-ready repository requires a reason",
-      });
+    } else {
+      if (status.reason === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["reason"],
+          message: "A non-ready repository requires a reason",
+        });
+      } else if (
+        RepositoryStatusStateByReason[status.reason] !== status.state
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["state"],
+          message: `Reason ${status.reason} requires state ${RepositoryStatusStateByReason[status.reason]}`,
+        });
+      }
     }
   });
 
@@ -248,29 +293,46 @@ const LedgerSealManifestV1FileSchema = z
     render_hash: Sha256Schema,
     supersedes: IdentifierSchema.optional(),
   })
-  .strict();
+  .passthrough();
 
 /**
  * Parser for the snake-case `<snapshot-id>.seal.yml` contract. Its validated
  * TypeScript output follows the package's camel-case naming convention.
  */
 export const LedgerSealManifestV1Schema =
-  LedgerSealManifestV1FileSchema.transform((manifest) => ({
-    schemaVersion: manifest.schema_version,
-    snapshotId: manifest.snapshot_id,
-    sealedFromCommit: manifest.sealed_from_commit,
-    reviewerLogin: manifest.reviewer_login,
-    reviewedAt: manifest.reviewed_at,
-    method: manifest.method,
-    inputs: manifest.inputs.map((input) => ({
-      path: input.path,
-      blobSha: input.blob_sha,
-      sha256: input.sha256,
-    })),
-    configurationHash: manifest.configuration_hash,
-    renderHash: manifest.render_hash,
-    supersedes: manifest.supersedes,
-  }));
+  LedgerSealManifestV1FileSchema.transform((manifest) => {
+    const {
+      schema_version: schemaVersion,
+      snapshot_id: snapshotId,
+      sealed_from_commit: sealedFromCommit,
+      reviewer_login: reviewerLogin,
+      reviewed_at: reviewedAt,
+      method,
+      inputs,
+      configuration_hash: configurationHash,
+      render_hash: renderHash,
+      supersedes,
+      ...unknownFields
+    } = manifest;
+
+    return {
+      ...unknownFields,
+      schemaVersion,
+      snapshotId,
+      sealedFromCommit,
+      reviewerLogin,
+      reviewedAt,
+      method,
+      inputs: inputs.map((input) => ({
+        path: input.path,
+        blobSha: input.blob_sha,
+        sha256: input.sha256,
+      })),
+      configurationHash,
+      renderHash,
+      supersedes,
+    };
+  });
 
 export type LedgerSealManifestV1 = z.infer<typeof LedgerSealManifestV1Schema>;
 
@@ -374,15 +436,43 @@ export const RepositoryPublicationRefSchema = z
     destinationRepositoryId: GithubNumericIdSchema,
     branch: BranchNameSchema,
     pullRequestNumber: z.number().int().positive(),
-    pullRequestUrl: z
-      .string()
-      .url()
-      .regex(/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/),
+    pullRequestUrl: z.string().url(),
     status: z.enum(["draft", "ready", "merged", "closed"]),
     createdAt: TimestampSchema,
     updatedAt: TimestampSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((publication, context) => {
+    const pullRequestUrl = new URL(publication.pullRequestUrl);
+    const pathnameMatch =
+      /^\/[A-Za-z0-9.-]+\/[A-Za-z0-9._-]+\/pull\/([1-9]\d*)$/.exec(
+        pullRequestUrl.pathname
+      );
+
+    if (
+      pullRequestUrl.origin !== "https://github.com" ||
+      pullRequestUrl.username !== "" ||
+      pullRequestUrl.password !== "" ||
+      pullRequestUrl.search !== "" ||
+      pullRequestUrl.hash !== "" ||
+      pathnameMatch === null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["pullRequestUrl"],
+        message: "Expected an exact canonical GitHub pull-request URL",
+      });
+      return;
+    }
+
+    if (pathnameMatch[1] !== String(publication.pullRequestNumber)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["pullRequestUrl"],
+        message: "Pull-request URL number must match pullRequestNumber",
+      });
+    }
+  });
 
 export type RepositoryPublicationRef = z.infer<
   typeof RepositoryPublicationRefSchema

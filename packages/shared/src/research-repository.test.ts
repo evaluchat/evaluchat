@@ -35,6 +35,29 @@ const artifact = {
   contentSha256,
 };
 
+const bundle = {
+  schemaVersion: "1",
+  bundleId: "bundle-synthetic",
+  snapshotId: "synthetic-snapshot",
+  sourceSealCommitSha: commitSha,
+  destinationRepositoryId: 58001,
+  destinationBaseBranch: "main",
+  files: [
+    {
+      artifact,
+      destinationPath: artifact.path,
+      dependencyArtifactIds: [],
+    },
+  ],
+  bundleHash,
+  provenance: {
+    privateSealCommitSha: commitSha,
+    publiclyResolvable: false,
+  },
+  license: { spdxId: "CC-BY-4.0" },
+  createdAt: timestamp,
+};
+
 describe("research repository contracts", () => {
   it("parses a repository binding and workspace item", () => {
     expect(ResearchRepositoryBindingSchema.parse(binding)).toEqual(binding);
@@ -90,6 +113,54 @@ describe("research repository contracts", () => {
         workspaceId: "workspace-synthetic",
         repositoryId: 12001,
         state: "read_only",
+        checkedAt: timestamp,
+      }).success
+    ).toBe(false);
+  });
+
+  it("accepts only the documented repository status state/reason pairs", () => {
+    const allowedPairs = [
+      ["read_only", "unsupported_layout_major"],
+      ["read_only", "unsupported_layout_minor"],
+      ["read_only", "authorization_required"],
+      ["blocked", "repository_public"],
+      ["blocked", "repository_deleted"],
+      ["blocked", "permission_lost"],
+      ["blocked", "installation_suspended"],
+      ["blocked", "branch_deleted"],
+      ["blocked", "protection_failure"],
+      ["blocked", "force_push"],
+      ["blocked", "credential_corrupt"],
+      ["disconnected", "disconnected"],
+    ] as const;
+
+    for (const [state, reason] of allowedPairs) {
+      expect(
+        RepositoryStatusSchema.safeParse({
+          workspaceId: "workspace-synthetic",
+          repositoryId: 12001,
+          state,
+          reason,
+          checkedAt: timestamp,
+        }).success
+      ).toBe(true);
+    }
+
+    expect(
+      RepositoryStatusSchema.safeParse({
+        workspaceId: "workspace-synthetic",
+        repositoryId: 12001,
+        state: "blocked",
+        reason: "unsupported_layout_minor",
+        checkedAt: timestamp,
+      }).success
+    ).toBe(false);
+    expect(
+      RepositoryStatusSchema.safeParse({
+        workspaceId: "workspace-synthetic",
+        repositoryId: 12001,
+        state: "read_only",
+        reason: "repository_public",
         checkedAt: timestamp,
       }).success
     ).toBe(false);
@@ -170,29 +241,6 @@ describe("research repository contracts", () => {
   });
 
   it("validates a dependency-closed publication bundle pinned to its seal", () => {
-    const bundle = {
-      schemaVersion: "1",
-      bundleId: "bundle-synthetic",
-      snapshotId: "synthetic-snapshot",
-      sourceSealCommitSha: commitSha,
-      destinationRepositoryId: 58001,
-      destinationBaseBranch: "main",
-      files: [
-        {
-          artifact,
-          destinationPath: artifact.path,
-          dependencyArtifactIds: [],
-        },
-      ],
-      bundleHash,
-      provenance: {
-        privateSealCommitSha: commitSha,
-        publiclyResolvable: false,
-      },
-      license: { spdxId: "CC-BY-4.0" },
-      createdAt: timestamp,
-    };
-
     expect(PublicationBundleV1Schema.safeParse(bundle).success).toBe(true);
     expect(
       PublicationBundleV1Schema.safeParse({
@@ -213,7 +261,44 @@ describe("research repository contracts", () => {
     ).toBe(false);
   });
 
-  it("validates a public draft PR reference", () => {
+  it("rejects Git-invalid publication branch names", () => {
+    const invalidBranchNames = [
+      "branch name",
+      "branch\u0001name",
+      "branch\u007fname",
+      "branch~name",
+      "branch^name",
+      "branch:name",
+      "branch?name",
+      "branch*name",
+      "branch[name",
+      "branch\\name",
+      ".hidden/name",
+      "feature/.hidden",
+      "-danger",
+      "feature/-danger",
+      "feature..name",
+      "@",
+      "feature@{one",
+      "/feature",
+      "feature/",
+      "feature//name",
+      "feature.lock/name",
+      "feature/name.lock",
+      "feature.",
+    ];
+
+    for (const destinationBaseBranch of invalidBranchNames) {
+      expect(
+        PublicationBundleV1Schema.safeParse({
+          ...bundle,
+          destinationBaseBranch,
+        }).success
+      ).toBe(false);
+    }
+  });
+
+  it("requires an exact matching GitHub pull-request URL", () => {
     const publication = {
       publicationId: "publication-synthetic",
       operationId: "operation-synthetic",
@@ -232,11 +317,23 @@ describe("research repository contracts", () => {
     expect(RepositoryPublicationRefSchema.parse(publication)).toEqual(
       publication
     );
-    expect(
-      RepositoryPublicationRefSchema.safeParse({
-        ...publication,
-        pullRequestUrl: "https://example.test/pull/120",
-      }).success
-    ).toBe(false);
+    const invalidUrls = [
+      "https://example.test/evaluchat/research/pull/120",
+      "https://github.com/evaluchat/research/pull/121",
+      "https://github.com/evaluchat/research?x/pull/120",
+      "https://github.com/evaluchat/research/extra/pull/120",
+      "https://github.com/evaluchat/research/pull/120/extra",
+      "https://github.com/evaluchat/research/pull/120?view=files",
+      "https://github.com/evaluchat/research/pull/120#discussion",
+    ];
+
+    for (const pullRequestUrl of invalidUrls) {
+      expect(
+        RepositoryPublicationRefSchema.safeParse({
+          ...publication,
+          pullRequestUrl,
+        }).success
+      ).toBe(false);
+    }
   });
 });

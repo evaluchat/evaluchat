@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
+import { LedgerSealManifestV1Schema } from "./research-repository.js";
 
 const fixturesRoot = join(__dirname, "fixtures/research-repository");
 
@@ -104,5 +106,29 @@ describe("research repository layout fixtures", () => {
     expect(futureQuestion).toContain(
       "future_minor_note: preserved by compatible readers"
     );
+  });
+
+  it("round-trips unknown v1.1 seal fields and rejects invalid core fields", () => {
+    const fixture = yaml.load(
+      readFileSync(
+        join(
+          fixturesRoot,
+          "v1.1/methods/synthetic-method/evidence/ledgers/synthetic-snapshot.seal.yml"
+        ),
+        "utf8"
+      ),
+      { schema: yaml.FAILSAFE_SCHEMA }
+    );
+    const parsed = LedgerSealManifestV1Schema.parse(fixture);
+
+    expect((parsed as Record<string, unknown>).future_minor_note).toBe(
+      "preserved by compatible readers"
+    );
+    expect(
+      LedgerSealManifestV1Schema.safeParse({
+        ...(fixture as Record<string, unknown>),
+        sealed_from_commit: "not-a-commit",
+      }).success
+    ).toBe(false);
   });
 });
